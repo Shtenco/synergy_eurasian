@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sinergy.system/schemas/project.proposal/v1",
+  "title": "SINERGY ProductiveProjectProposal v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "project_id",
+    "jurisdiction",
+    "sector",
+    "capex",
+    "funding_currency",
+    "maturity_weeks",
+    "private_capital",
+    "expected_cash_flow",
+    "evidence_status"
+  ],
+  "properties": {
+    "schema": {"const": "project.proposal/v1"},
+    "project_id": {"type": "string", "minLength": 1},
+    "jurisdiction": {"type": "string", "minLength": 1},
+    "sector": {"type": "string", "minLength": 1},
+    "capex": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?$"},
+    "opex_annual": {"type": ["string", "null"], "pattern": "^[0-9]+(\\.[0-9]+)?$"},
+    "funding_currency": {"type": "string", "minLength": 3, "maxLength": 16},
+    "maturity_weeks": {"type": "integer", "minimum": 1},
+    "private_capital": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?$"},
+    "expected_cash_flow": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["period", "amount"],
+        "properties": {
+          "period": {"type": "string"},
+          "amount": {"type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$"}
+        }
+      }
+    },
+    "energy_requirement": {"type": ["string", "null"]},
+    "labor_requirement": {"type": ["string", "null"]},
+    "logistics_requirement": {"type": ["string", "null"]},
+    "fx_exposure": {"type": "object"},
+    "hedge_state": {"type": ["string", "null"]},
+    "risk_score": {"type": ["number", "null"]},
+    "first_loss_capital": {"type": ["string", "null"], "pattern": "^[0-9]+(\\.[0-9]+)?$"},
+    "dependencies": {"type": "array", "items": {"type": "string"}},
+    "milestones": {"type": "array", "items": {"type": "object"}},
+    "evidence_status": {"enum": ["SCENARIO", "MODEL_ESTIMATE", "OBSERVED_OPERATIONAL", "EXTERNALLY_SETTLED", "AUDITED"]},
+    "source_vintage": {"type": ["string", "null"]},
+    "metadata": {"type": "object"}
+  }
+}
