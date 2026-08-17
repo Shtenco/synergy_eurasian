@@ -1,0 +1,44 @@
+name: Project proposal v2 federation conformance
+
+on:
+  pull_request:
+    paths:
+      - "sinergy_eurasian/project.py"
+      - "schemas/project_proposal_v2.schema.json"
+      - "fixtures/conformance/project_proposal_v2_kz_energy_pilot.json"
+      - "tests/test_project_v2.py"
+      - "tests/test_project_v2_conformance_fixture.py"
+      - ".github/workflows/project-v2-federation-conformance.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: project-v2-federation-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  project-v2-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test runner only
+        run: python -m pip install --disable-pip-version-check pytest
+
+      - name: Compile project v2 producer
+        run: python -m py_compile sinergy_eurasian/project.py
+
+      - name: Run project v2 producer and shared-fixture tests
+        run: >-
+          python -m pytest -q
+          tests/test_project_v2.py
+          tests/test_project_v2_conformance_fixture.py
