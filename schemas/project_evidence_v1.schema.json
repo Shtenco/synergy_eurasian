@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sinergy.system/schemas/project.evidence/v1",
+  "title": "SINERGY ProjectEvidenceBundle v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "project_id", "as_of", "items", "digest"],
+  "properties": {
+    "schema": {"const": "project.evidence/v1"},
+    "project_id": {"type": "string", "minLength": 1},
+    "as_of": {"type": "string", "format": "date-time"},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidence_id",
+          "evidence_class",
+          "source_system",
+          "reference",
+          "observed_at",
+          "finality_level",
+          "evidence_digest"
+        ],
+        "properties": {
+          "evidence_id": {"type": "string", "minLength": 1},
+          "evidence_class": {
+            "enum": [
+              "MARKETPLACE_ORDER",
+              "WAREHOUSE_STOCK",
+              "CUSTOMS_DECLARATION",
+              "INVOICE",
+              "BANK_SETTLEMENT",
+              "BLOCKCHAIN_FINALITY",
+              "FISCAL_RECEIPT",
+              "ENERGY_METER",
+              "PRODUCTION_TELEMETRY",
+              "AUDIT_REPORT",
+              "OTHER"
+            ]
+          },
+          "source_system": {"type": "string", "minLength": 1},
+          "reference": {"type": "string", "minLength": 1},
+          "observed_at": {"type": "string", "format": "date-time"},
+          "finality_level": {"enum": ["OBSERVED", "SETTLED", "AUDITED"]},
+          "evidence_digest": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"},
+          "metadata": {"type": "object"}
+        }
+      }
+    },
+    "digest": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"}
+  }
+}
