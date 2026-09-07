@@ -1,3 +1,11 @@
-from .contracts import ProductiveProjectProposal, EurasianContractError
+from .contracts import (
+    EurasianContractError,
+    ProductiveGrowthAttestation,
+    ProductiveProjectProposal,
+)
 
-__all__ = ["ProductiveProjectProposal", "EurasianContractError"]
+__all__ = [
+    "EurasianContractError",
+    "ProductiveGrowthAttestation",
+    "ProductiveProjectProposal",
+]
