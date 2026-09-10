@@ -1,0 +1,65 @@
+{
+  "manifest_version": "4.0-example",
+  "generated_at": "2026-09-11T00:00:00Z",
+  "status": "EXAMPLE_NOT_COMPLETE_DATASET",
+  "datasets": [
+    {
+      "dataset_id": "EEC-EAEU-MUTUAL-TRADE",
+      "domain": "trade",
+      "publisher": "Eurasian Economic Commission",
+      "source_url": "https://eec.eaeunion.org/en/news/obrashchenie-predseda?PAGEN_1=62&visually_impaired=yes",
+      "effective_period": "2024",
+      "known_at": "2025-01-01T00:00:00Z",
+      "source_class": "B",
+      "observed_committed_planned": "OBSERVED",
+      "notes": "Example manifest entry. Verify publication/known_at from the source when building production point-in-time data."
+    },
+    {
+      "dataset_id": "EDB-ETN-OBSERVATORY-2026-07",
+      "domain": "logistics",
+      "publisher": "Eurasian Development Bank",
+      "source_url": "https://eabr.org/en/press/detail/edb-updates-the-eurasian-transport-network-402-projects-worth-345-billion-with-another-100-billion-i/",
+      "effective_period": "2026-07-01",
+      "known_at": "2026-07-23T00:00:00Z",
+      "source_class": "B",
+      "observed_committed_planned": "MIXED",
+      "notes": "402 implemented/planned projects; project-level status must be preserved rather than aggregated as commissioned capacity."
+    },
+    {
+      "dataset_id": "EEC-EURASIAN-ECONOMIC-PATHWAY-2030-2045",
+      "domain": "policy",
+      "publisher": "Eurasian Economic Commission",
+      "source_url": "https://eec.eaeunion.org/upload/medialibrary/564/tbfrz98itikq8l0iyyykxo1bjj611tkc/EEC_CUSTOMS-COOPERATION.pdf",
+      "effective_period": "2025-2045",
+      "known_at": "2026-01-01T00:00:00Z",
+      "source_class": "B",
+      "observed_committed_planned": "POLICY",
+      "notes": "Policy/roadmap reference, not production capacity."
+    },
+    {
+      "dataset_id": "EIIOM-V4-SCENARIOS",
+      "domain": "model",
+      "publisher": "SYNERGY EURASIAN",
+      "source_url": "config/scenarios_v4.json",
+      "effective_period": "2026-2045",
+      "known_at": "2026-09-11T00:00:00Z",
+      "source_class": "E",
+      "observed_committed_planned": "SCENARIO",
+      "notes": "Internal model assumptions. Must never be presented as external facts."
+    }
+  ],
+  "required_fields_for_production": [
+    "dataset_id",
+    "domain",
+    "publisher",
+    "source_url",
+    "effective_period",
+    "known_at",
+    "source_class",
+    "observed_committed_planned",
+    "retrieved_at",
+    "content_hash",
+    "license_or_access_class",
+    "revision_id"
+  ]
+}

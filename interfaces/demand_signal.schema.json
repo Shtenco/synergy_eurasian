@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/demand_signal.schema.json",
+  "title": "SYNERGY DemandSignal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["signal_id", "as_of", "known_at", "source", "geography", "demand", "status", "confidence"],
+  "properties": {
+    "signal_id": {"type": "string", "minLength": 3},
+    "as_of": {"type": "string", "format": "date-time"},
+    "known_at": {"type": "string", "format": "date-time"},
+    "source": {
+      "type": "object",
+      "required": ["authority", "reference", "source_class"],
+      "properties": {
+        "authority": {"type": "string"},
+        "reference": {"type": "string"},
+        "source_class": {"enum": ["A", "B", "C", "D", "E"]},
+        "content_hash": {"type": ["string", "null"]}
+      }
+    },
+    "geography": {
+      "type": "object",
+      "required": ["country"],
+      "properties": {
+        "country": {"type": "string"},
+        "region": {"type": ["string", "null"]},
+        "node_id": {"type": ["string", "null"]},
+        "market": {"type": ["string", "null"]}
+      }
+    },
+    "demand": {
+      "type": "object",
+      "required": ["commodity_or_service", "quantity", "unit", "time_horizon"],
+      "properties": {
+        "commodity_or_service": {"type": "string"},
+        "quantity": {"type": "number", "minimum": 0},
+        "unit": {"type": "string"},
+        "time_horizon": {"type": "string"},
+        "price": {"type": ["number", "null"]},
+        "currency": {"type": ["string", "null"]},
+        "contracted_pct": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "external_market": {"type": "boolean", "default": false}
+      }
+    },
+    "status": {"enum": ["OBSERVED", "CONTRACTED", "INDICATIVE", "FORECAST", "SCENARIO"]},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "notes": {"type": "string"}
+  }
+}

@@ -2,7 +2,7 @@ name: EIIOM CI
 
 on:
   push:
-    branches: [main, eiiom-masterplan-2045]
+    branches: [main, eiiom-masterplan-2045, eiiom-v4-federation-megasystem]
   pull_request:
     branches: [main]
 
@@ -26,11 +26,14 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
 
-      - name: Run invariant tests
+      - name: Run invariant and schema tests
         run: pytest -q
 
-      - name: Solve BASE scenario
+      - name: Audit federation authority boundaries
+        run: python src/federation_audit.py --config config/federation_v4.json
+
+      - name: Solve BASE-v2 scenario
         run: python src/eiiom_optimizer.py --config config/base_scenario.json --output outputs/base
 
-      - name: Print summary
+      - name: Print BASE summary
         run: cat outputs/base/summary.json
