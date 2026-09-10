@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/resource_state.schema.json",
+  "title": "SYNERGY ResourceState",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["resource_state_id", "resource_type", "node_id", "effective_time", "known_at", "capacity", "source", "status", "confidence"],
+  "properties": {
+    "resource_state_id": {"type": "string", "minLength": 3},
+    "resource_type": {"enum": ["POWER", "GRID", "WATER", "LAND", "LABOR", "SKILL", "LOGISTICS", "COMPUTE", "MATERIAL", "HOUSING", "CONSTRUCTION", "OTHER"]},
+    "node_id": {"type": "string", "minLength": 1},
+    "effective_time": {"type": "string", "format": "date-time"},
+    "known_at": {"type": "string", "format": "date-time"},
+    "capacity": {
+      "type": "object",
+      "required": ["available", "unit"],
+      "properties": {
+        "installed": {"type": ["number", "null"]},
+        "available": {"type": "number"},
+        "committed": {"type": ["number", "null"]},
+        "unit": {"type": "string"},
+        "availability_factor": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+      }
+    },
+    "cost": {
+      "type": ["object", "null"],
+      "properties": {
+        "value": {"type": "number"},
+        "currency": {"type": "string"},
+        "per_unit": {"type": "string"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["publisher", "reference", "source_class"],
+      "properties": {
+        "publisher": {"type": "string"},
+        "reference": {"type": "string"},
+        "source_class": {"enum": ["A", "B", "C", "D", "E"]},
+        "evidence_ids": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "status": {"enum": ["OBSERVED", "COMMITTED", "UNDER_CONSTRUCTION", "PLANNED", "ANNOUNCED", "SCENARIO"]},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "security_class": {"enum": ["PUBLIC", "PARTNER", "CONFIDENTIAL_BUSINESS", "RESTRICTED_INFRASTRUCTURE"]},
+    "notes": {"type": "string"}
+  }
+}
