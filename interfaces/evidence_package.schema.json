@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/evidence_package.schema.json",
+  "title": "SYNERGY EvidencePackage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evidence_id", "proposal_id", "milestone_id", "submitted_at",
+    "evidence_items", "verifier", "physical_result", "financial_result", "decision"
+  ],
+  "properties": {
+    "evidence_id": {"type": "string"},
+    "proposal_id": {"type": "string"},
+    "milestone_id": {"type": "string"},
+    "submitted_at": {"type": "string", "format": "date-time"},
+    "evidence_items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "uri_or_reference", "sha256", "issuer_or_source"],
+        "properties": {
+          "type": {"enum": [
+            "commissioning_act", "invoice", "bank_statement", "meter_reading",
+            "telemetry", "audit_report", "photo", "video", "satellite",
+            "warehouse_receipt", "export_document", "offtake_contract", "other"
+          ]},
+          "uri_or_reference": {"type": "string"},
+          "sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+          "issuer_or_source": {"type": "string"},
+          "captured_at": {"type": ["string", "null"], "format": "date-time"},
+          "independent": {"type": "boolean", "default": false}
+        }
+      }
+    },
+    "verifier": {
+      "type": "object",
+      "required": ["identity", "independent_from_sponsor", "conflict_disclosed"],
+      "properties": {
+        "identity": {"type": "string"},
+        "independent_from_sponsor": {"const": true},
+        "conflict_disclosed": {"const": true},
+        "signature_reference": {"type": ["string", "null"]}
+      }
+    },
+    "physical_result": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["metric", "unit", "planned", "verified"],
+        "properties": {
+          "metric": {"type": "string"},
+          "unit": {"type": "string"},
+          "planned": {"type": "number"},
+          "verified": {"type": "number"},
+          "measurement_method": {"type": "string"}
+        }
+      }
+    },
+    "financial_result": {
+      "type": "object",
+      "required": ["cash_verified", "modelled_gva_booked_as_cash"],
+      "properties": {
+        "cash_verified": {"type": "number", "minimum": 0},
+        "external_revenue_verified": {"type": "number", "minimum": 0},
+        "operating_cashflow_verified": {"type": ["number", "null"]},
+        "modelled_gva_booked_as_cash": {"const": false},
+        "currency": {"type": "string"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["milestone_passed", "eligible_for_financial_review"],
+      "properties": {
+        "milestone_passed": {"type": "boolean"},
+        "eligible_for_financial_review": {"type": "boolean"},
+        "note": {"type": "string"}
+      }
+    }
+  }
+}
