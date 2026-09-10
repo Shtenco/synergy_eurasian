@@ -1,0 +1,30 @@
+{
+  "example_id": "FAMILY-DELTA-001",
+  "status": "illustrative_only",
+  "currency": "RUB",
+  "monthly_income": 100000,
+  "monthly_necessary_expenses": 80000,
+  "delta": 20000,
+  "current_savings": 50000,
+  "reserve_policy": {
+    "target_months": 3,
+    "target_amount": 240000,
+    "current_coverage_pct": 20.83,
+    "rule": "Build reserve before increasing project-risk allocation."
+  },
+  "post_reserve_delta_allocation_example": {
+    "diversified_family_portfolio_pct": 50,
+    "synergy_project_instruments_pct": 15,
+    "family_goals_pct": 20,
+    "education_income_growth_pct": 10,
+    "reserve_topup_pct": 5
+  },
+  "safety_rules": [
+    "No investment from emergency reserve.",
+    "No borrowing to purchase investment instruments.",
+    "Pause/reduce automatic contributions after income shock.",
+    "SYNERGY allocation is a share of free Delta, not total income.",
+    "Instrument must pass legal availability, suitability and risk disclosure gates."
+  ],
+  "disclaimer": "Illustrative budgeting example, not individualized financial advice or an offer of securities."
+}
