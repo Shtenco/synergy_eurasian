@@ -1,0 +1,31 @@
+{
+  "model": "EIIOM-2045",
+  "version": "2.0-reference",
+  "status": "SOLVER_OUTPUT_SNAPSHOT",
+  "note": "Reference snapshot from the validated BASE-v2 research run. Regenerate with src/eiiom_optimizer.py after model changes; exact allocation may change when assumptions or constraints change.",
+  "total_capex_bn_usd": 650.0,
+  "annual_gva_equivalent_2045_bn_usd": 160.79798282691894,
+  "compute_it_mw": 1496.2450026444635,
+  "dc_shell_mw": 1496.2450026444635,
+  "capex_by_stage_bn_usd": {
+    "2026-30": 120.0,
+    "2031-40": 290.0,
+    "2041-45": 240.0
+  },
+  "capex_by_country_bn_usd": {
+    "RU": 320.4464701886731,
+    "KZ": 119.4424187002157,
+    "BY": 130.0,
+    "AM": 65.0,
+    "KG": 15.11111111111111
+  },
+  "compute_mw_by_country": {
+    "RU": 598.4980010577855,
+    "KZ": 897.7470015866779
+  },
+  "dc_mw_by_country": {
+    "RU": 598.4980010577855,
+    "KZ": 897.747001586678
+  },
+  "interpretation": "GVA-equivalent is a scenario objective/output proxy. It is not revenue, free cash flow, profit, NAV or guaranteed investor return."
+}
