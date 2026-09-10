@@ -1,0 +1,81 @@
+{
+  "model": "EIIOM-2045",
+  "version": "2.0",
+  "status": "research_scenario",
+  "countries": ["RU", "KZ", "BY", "AM", "KG"],
+  "stages": {
+    "2026-30": {"budget_bn_usd": 120.0, "time_weight": 1.0},
+    "2031-40": {"budget_bn_usd": 290.0, "time_weight": 0.78},
+    "2041-45": {"budget_bn_usd": 240.0, "time_weight": 0.58}
+  },
+  "sectors": [
+    "PowerGen", "Grid", "MineralRefining", "AdvancedMaterials", "PowerElectronics",
+    "DataCenterInfra", "Compute", "AICloud", "IndustrialAI", "Robotics", "MachineTools",
+    "SemiDesign", "Logistics", "STEM", "AgroGenomics", "SeedProduction", "PrecisionAg",
+    "AgroRobotics", "FoodProcessing", "WaterIrrigation", "RuralAIClusters", "UrbanRenovation",
+    "RuralHousing", "ConstructionTech"
+  ],
+  "annual_gva_equivalent_yield": {
+    "PowerGen": 0.10,
+    "Grid": 0.08,
+    "MineralRefining": 0.17,
+    "AdvancedMaterials": 0.22,
+    "PowerElectronics": 0.27,
+    "DataCenterInfra": 0.12,
+    "Compute": 0.18,
+    "AICloud": 0.30,
+    "IndustrialAI": 0.50,
+    "Robotics": 0.25,
+    "MachineTools": 0.20,
+    "SemiDesign": 0.36,
+    "Logistics": 0.11,
+    "STEM": 0.16,
+    "AgroGenomics": 0.32,
+    "SeedProduction": 0.22,
+    "PrecisionAg": 0.27,
+    "AgroRobotics": 0.30,
+    "FoodProcessing": 0.20,
+    "WaterIrrigation": 0.14,
+    "RuralAIClusters": 0.18,
+    "UrbanRenovation": 0.07,
+    "RuralHousing": 0.05,
+    "ConstructionTech": 0.20
+  },
+  "technology_curves": {
+    "dc_shell_mw_per_bn": {"2026-30": 130, "2031-40": 170, "2041-45": 220},
+    "compute_it_mw_per_bn": {"2026-30": 35, "2031-40": 70, "2041-45": 120},
+    "power_mw_per_bn": {"2026-30": 500, "2031-40": 650, "2041-45": 800},
+    "grid_mw_per_bn": {"2026-30": 1500, "2031-40": 2000, "2041-45": 2500},
+    "power_overhead_multiplier": 1.25
+  },
+  "existing_headroom_mw": {
+    "power": {"RU": 600, "KZ": 300, "BY": 150, "AM": 50, "KG": 50},
+    "grid": {"RU": 900, "KZ": 300, "BY": 200, "AM": 80, "KG": 80}
+  },
+  "policy_constraints": {
+    "max_country_compute_share": 0.60,
+    "max_country_dc_share": 0.60,
+    "minimum_stem_bn": 30.0,
+    "minimum_food_processing_bn": 25.0,
+    "minimum_water_irrigation_bn": 18.0,
+    "minimum_logistics_bn": 12.0,
+    "minimum_advanced_materials_bn": 15.0,
+    "minimum_mineral_refining_bn": 6.0,
+    "minimum_construction_tech_bn": 12.0,
+    "minimum_agro_genomics_bn": 8.0,
+    "minimum_seed_production_bn": 8.0
+  },
+  "scenario_targets_2045": {
+    "urban_renovation_million_m2": 100.0,
+    "rural_swing_housing_million_m2": 8.0,
+    "precision_agriculture_million_ha": 60.0,
+    "agro_robotics_million_ha": 15.0,
+    "rural_ai_clusters": 160
+  },
+  "productive_escrow": {
+    "implemented_in_this_repo": false,
+    "verified_flow_cap_years": 0.25,
+    "note": "Specification only. Any monetary release belongs to external regulated Financial OS and human/regulatory authorization."
+  },
+  "disclaimer": "All coefficients are scenario assumptions unless explicitly tied to an external source. GVA-equivalent is not revenue, free cash flow or guaranteed investment return."
+}
