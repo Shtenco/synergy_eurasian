@@ -1,0 +1,36 @@
+name: EIIOM CI
+
+on:
+  push:
+    branches: [main, eiiom-masterplan-2045]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Run invariant tests
+        run: pytest -q
+
+      - name: Solve BASE scenario
+        run: python src/eiiom_optimizer.py --config config/base_scenario.json --output outputs/base
+
+      - name: Print summary
+        run: cat outputs/base/summary.json
