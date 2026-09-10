@@ -1,0 +1,74 @@
+{
+  "proposal_id": "KZ-AGRO-004",
+  "model_run_id": "EIIOM-V2-BASE-DEMO",
+  "country": "KZ",
+  "sector": "RuralAIClusters",
+  "name": "Steppe AI Agro Cluster — demonstration archetype",
+  "description": "Illustrative integrated rural AI cluster combining precision agriculture, autonomous machinery service, seed trials, cold chain, processing, broadband and voluntary swing housing.",
+  "location": {
+    "country": "KZ",
+    "region": "TBD",
+    "city": "TBD",
+    "site_id": "TBD",
+    "lat": null,
+    "lon": null
+  },
+  "capex": {
+    "currency": "USD",
+    "amount": 250000000,
+    "estimate_class": "concept",
+    "contingency_pct": 25
+  },
+  "physical_output": [
+    {"metric": "precision_agriculture_area", "unit": "ha", "target": 150000, "baseline": null, "measurement_source": "farm_polygon_registry"},
+    {"metric": "cold_storage_capacity", "unit": "tonnes", "target": 50000, "baseline": 0, "measurement_source": "commissioning_act"},
+    {"metric": "temporary_housing_capacity", "unit": "households", "target": 1200, "baseline": 0, "measurement_source": "housing_registry"}
+  ],
+  "dependencies": [
+    {"kind": "grid_connection", "required_value": 35, "unit": "MW", "secured": false},
+    {"kind": "broadband_backhaul", "required_value": 2, "unit": "Gbps", "secured": false},
+    {"kind": "water_availability", "required_value": 1, "unit": "site_verified_plan", "secured": false}
+  ],
+  "economics": {
+    "model_status": "scenario",
+    "gva_equivalent_is_cash": false,
+    "expected_external_revenue": null,
+    "expected_operating_cashflow": null,
+    "payback_years": null,
+    "offtake_coverage_pct": null
+  },
+  "risk": {
+    "risk_class": "experimental",
+    "downside_case": "Lower crop prices, delayed infrastructure and slower resident/tenant uptake can make the integrated cluster uneconomic. Components must therefore be staged and independently gated.",
+    "stop_conditions": [
+      "water plan not independently verified",
+      "grid connection unavailable",
+      "housing/social services not ready before relocation",
+      "offtake and field-level economics fail pre-feasibility thresholds"
+    ]
+  },
+  "evidence_plan": [
+    {
+      "milestone_id": "M1-INFRA",
+      "description": "Grid, water, broadband and basic social infrastructure ready.",
+      "required_evidence_types": ["commissioning_act", "meter_reading", "audit_report"]
+    },
+    {
+      "milestone_id": "M2-AGRO",
+      "description": "First independently measured production cycle complete.",
+      "required_evidence_types": ["telemetry", "satellite", "warehouse_receipt", "audit_report"]
+    },
+    {
+      "milestone_id": "M3-COMMERCIAL",
+      "description": "Commercial cashflow verified.",
+      "required_evidence_types": ["bank_statement", "offtake_contract", "export_document"]
+    }
+  ],
+  "legal": {
+    "spv_identified": false,
+    "jurisdiction_review_required": true,
+    "retail_distribution_assumed": false,
+    "notes": "No financing or retail distribution until SPV, land, resident rights, instrument law, disclosure and licensing are reviewed."
+  },
+  "status": "model_candidate"
+}
