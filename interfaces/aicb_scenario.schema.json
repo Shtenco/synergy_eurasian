@@ -18,8 +18,8 @@
   "properties": {
     "scenario_id": {"type": "string", "minLength": 1},
     "status": {"enum": ["SCENARIO", "STRESS", "COUNTERFACTUAL"]},
-    "model_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]\\{64\\}$"},
-    "config_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]\\{64\\}$"},
+    "model_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "config_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
     "seed": {"type": "integer"},
     "horizon_months": {"type": "integer", "minimum": 1},
     "calibration_status": {"type": "string", "minLength": 1},
