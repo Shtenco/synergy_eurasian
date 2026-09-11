@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.local/schemas/aicb_scenario.schema.json",
+  "title": "AICB Scenario Evidence V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scenario_id",
+    "status",
+    "model_sha256",
+    "config_sha256",
+    "seed",
+    "horizon_months",
+    "calibration_status",
+    "assumptions",
+    "outputs"
+  ],
+  "properties": {
+    "scenario_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["SCENARIO", "STRESS", "COUNTERFACTUAL"]},
+    "model_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]\\{64\\}$"},
+    "config_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]\\{64\\}$"},
+    "seed": {"type": "integer"},
+    "horizon_months": {"type": "integer", "minimum": 1},
+    "calibration_status": {"type": "string", "minLength": 1},
+    "effective_time": {"type": ["string", "null"]},
+    "known_at": {"type": ["string", "null"]},
+    "assumptions": {"type": "object"},
+    "outputs": {"type": "object"}
+  }
+}
