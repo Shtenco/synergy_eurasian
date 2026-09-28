@@ -952,3 +952,37 @@ flowchart LR
 Любое сильное утверждение должно указывать на воспроизводимый тест, benchmark, ledger/evidence artifact или формально проверяемый контракт.
 
 <!-- SYNERGY-FEDERATION-PASSPORT:END -->
+
+---
+
+# 🏭 Глубокий доказательный паспорт EIIOM
+
+## Фактическая зрелость `main`
+
+Eurasian уже имеет большой spec/data layer: 30+ domain docs, schema interfaces, scenario configs, optimizer, federation audit и tests. При этом сам README честно помечает V4 как `MODEL_SPEC_READY / DATA_CALIBRATION_PENDING`.
+
+```mermaid
+flowchart LR
+    DATA[Observed resource/demand data] --> SCEN[Scenario configs]
+    SCEN --> OPT[EIIOM optimizer]
+    OPT --> PROP[ProjectProposal]
+    PROP --> AUTH[Human/regulatory authorization]
+    AUTH --> REAL[Real project/cashflow]
+    REAL --> FOS[Financial OS]
+```
+
+## Важная актуализация
+
+Старые документы вроде `docs/17_FEDERATION_46_SYSTEM_MAP.md` являются историческим срезом; текущая federation authority — 75-repo registry в `synergy_system`.
+
+## Evidence gates
+
+- source manifest for calibration data;
+- schema validation for every ProjectProposal;
+- scenario uncertainty/stress;
+- no optimizer output treated as funding authorization;
+- observed cashflow required before Financial OS recognition.
+
+## Следующий рубеж
+
+заменить placeholder/base assumptions на signed real datasets → calibrate V4 stochastic model → publish scenario sensitivity → independent reproduction.
