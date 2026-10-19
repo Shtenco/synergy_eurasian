@@ -1,988 +1,341 @@
-# SYNERGY EURASIAN — EIIOM-2045 / Real Economy OS
+<div align="center">
 
-> **Евразийская интеллектуально-производственная система**: семья → капитал → наука → энергия → материалы → compute → AI → промышленность → сельское хозяйство → жильё → логистика → экспорт → проверяемый cashflow → новый капитал.
+<img src="assets/readme/hero.svg" alt="SYNERGY EURASIAN — евразийская производственная система EIIOM-2045" width="100%" />
 
-**Current architecture:** EIIOM-v4 Federation MegaSystem  
-**Runnable coarse optimizer:** EIIOM-v2 LP  
-**v4 status:** `MODEL_SPEC_READY / DATA_CALIBRATION_PENDING`  
-**Federation:** 45 technical repositories + `synergy_project` master dossier  
-**Role of this repository:** canonical **Real Economy OS**
+<br />
+
+**Евразийская интеллектуально-производственная система**
+
+От наблюдаемого спроса и семейного капитала — к энергии, материалам, технологиям, предприятиям, экспорту и проверяемым денежным результатам.
+
+<br />
+
+![Status](https://img.shields.io/badge/EIIOM--v2-RESEARCH%20SOLVER-25d7bc?style=for-the-badge)
+![Status](https://img.shields.io/badge/EIIOM--v4-SPEC%20READY-57bfff?style=for-the-badge)
+![Status](https://img.shields.io/badge/DATASET--v4-CALIBRATION%20PENDING-f9c873?style=for-the-badge)
+![License](https://img.shields.io/badge/LICENSE-PROPRIETARY-a2aec8?style=for-the-badge)
+
+[Архитектура](#архитектура-системы) · [Страны ЕАЭС](#пять-стран-одна-производственная-сеть) · [EIIOM](#оптимизатор-eiiom-экономический-компилятор) · [Project Factory](#project-factory-проектный-конвейер) · [Финансы](#финансовая-архитектура-и-капитал) · [Доказательность](#научный-статус-и-границы-достоверности) · [Запуск](#быстрый-запуск)
+
+</div>
+
+> **Статус проекта.** EIIOM-v2 — исполняемый исследовательский LP-оптимизатор. EIIOM-v4 — подробно определённая архитектура пространственной стохастической оптимизации, для которой ещё требуются данные, реализация и независимые испытания. Численные результаты ниже относятся к **сценарию**, а не к построенным активам, привлечённым инвестициям или заработанной прибыли.
 
 ---
 
-## 1. Идея
+## Что такое SYNERGY EURASIAN
 
-`synergy_eurasian` должен отвечать не на вопрос «какую отрасль объявить приоритетной», а на более строгий вопрос:
+**SYNERGY EURASIAN / Real Economy OS** — исследовательская архитектура экономического планирования и проектного управления в пространстве пяти стран ЕАЭС: **России, Казахстана, Беларуси, Армении и Кыргызстана**. Система задумывается как связующее звено между спросом, реальными ресурсами, производственными цепочками, инвестиционными решениями, подтверждёнными результатами и повторным накоплением капитала.
 
-> **Куда направить следующий капитал, в каком месте и в какой последовательности, чтобы получить максимальный прирост проверяемой реальной стоимости при ограничениях энергии, сетей, материалов, воды, кадров, жилья, логистики, спроса, финансирования и риска?**
+Её задача — не объявить отдельные отрасли приоритетными, а вычислить, **какие проекты, в каком месте, в какой последовательности и при каких ограничениях** могут создавать проверяемый экономический результат. Подход объединяет промышленную и инфраструктурную экономику, вычислительные мощности, агробиотехнологии, цифровые сервисы, кадровый потенциал и финансовую дисциплину.
 
-Главный цикл:
+<img src="assets/readme/economy-loop.svg" width="100%" alt="Замкнутый цикл от спроса и ресурсов через EIIOM и проекты к реальным активам, расчётам и повторным инвестициям" />
+
+### Четыре масштаба одного проекта
+
+| Масштаб | Цель | Что учитывается |
+|:--|:--|:--|
+| **L0 · Человек и семья** | Финансовая устойчивость и рост человеческого капитала | Доход, расходы, долги, резерв, образование, добровольные инвестиции |
+| **L1 · Предприятие и проект** | Экономически жизнеспособная деятельность | Покупатели, мощности, себестоимость, CAPEX, OPEX, денежный поток |
+| **L2 · Регион и кластер** | Развитие связанных производственных цепочек | Электросети, вода, кадры, жильё, логистика, поставщики |
+| **L3 · ЕАЭС и внешний рынок** | Кооперация и внешняя покупательная способность | Международная торговля, FX, экспорт, коридоры, санкционные и правовые ограничения |
+
+Подробно: [контекст и цели](docs/00_CONTEXT_AND_VISION.md) · [архитектура](docs/01_SYSTEM_ARCHITECTURE.md) · [Grand Strategy 2045](docs/36_GRAND_STRATEGY_2045.md).
+
+---
+
+## Архитектура системы
+
+Центр EURASIAN — **EIIOM (Eurasian Intelligent Industrial Optimization Model)**, который получает наблюдаемые факты и проектные предложения, строит варианты инвестирования и передаёт их на отдельные стадии проверок. Он **не авторизует денежную эмиссию, платежи или ценные бумаги**.
+
+<img src="assets/readme/eiiom-compiler.svg" width="100%" alt="EIIOM-v2 LP, EIIOM-v4 MILP и DATASET-v4 — сопоставление готовности архитектур" />
+
+**Архитектурное разделение полномочий:**
 
 ```text
-OBSERVED DEMAND + REAL RESOURCES
-              ↓
-      EIIOM ECONOMIC COMPILER
-              ↓
-         PROJECT FACTORY
-              ↓
-        ProjectProposal
-              ↓
-UNDERWRITING / HUMAN / REGULATORY AUTHORIZATION
-              ↓
-         REAL SETTLEMENT
-              ↓
-           REAL ASSET
-              ↓
-       GOODS / SERVICES
-              ↓
-       PAYING CUSTOMERS
-              ↓
-     SETTLEMENT EVIDENCE
-              ↓
-         FINANCIAL OS
-              ↓
-      CASH / HardNAV / DELTA
-              ↓
-         REINVESTMENT
-              ↺
+Наблюдаемый спрос + реальные ресурсы + проекты + ограничения
+                         │
+                         ▼
+                  EIIOM / Real Economy OS
+             ProjectProposal + physical evidence
+                         │
+                         ▼
+             Технический и экономический аудит
+                         │
+                         ▼
+                  Financial OS
+        CapitalAuthorization / лимиты и учёт
+                         │
+                         ▼
+                 Payment / Settlement
+                SettlementReceipt
+                         │
+                         ▼
+              Независимые EvidencePackage
+                         │
+                         ▼
+             Реальные активы + продажи + HardNAV
 ```
+
+Интерфейсы закреплены в [`interfaces/`](interfaces), включая [`project_proposal.schema.json`](interfaces/project_proposal.schema.json), [`resource_state.schema.json`](interfaces/resource_state.schema.json), [`demand_signal.schema.json`](interfaces/demand_signal.schema.json) и [`evidence_package.schema.json`](interfaces/evidence_package.schema.json). Ролевое распределение всей экосистемы — в [`config/federation_v4.json`](config/federation_v4.json).
 
 ---
 
-# 2. Четыре масштаба одной экономики
+## Пять стран — одна производственная сеть
 
-## L0 — Человек / семья
+<img src="assets/readme/five-countries.svg" width="100%" alt="Гипотезы промышленной специализации России, Казахстана, Беларуси, Армении и Кыргызстана" />
+
+Система должна выявлять наиболее жизнеспособное размещение предприятий с учётом фактических ставок, кадров, материалов, энергообеспечения, таможенных и логистических издержек. Страновые специализации — **гипотезы**, а не жёстко заданная модель разделения труда.
+
+**Пример:** переработка сырья в Казахстане может быть связана с оборудованием из Беларуси, энергетикой и промышленным спросом России, инженерными решениями из Армении и транзитными маршрутами Кыргызстана. Выбор такой цепочки требует доказательств качества, цены, логистики и реального покупателя; географическая близость сама по себе не означает рентабельность.
+
+Документы: [экономическая карта](docs/18_EURASIAN_GEOECONOMIC_GRID.md) · [страновые портфели](docs/37_COUNTRY_PORTFOLIOS.md) · [статистическая база](docs/27_REALITY_BASELINE_2026.md).
+
+---
+
+## Семь промышленных суперцепочек
+
+В экономике важна не отдельная фабрика, а её **роль в целой системе ресурсов, оборудования, услуг и конечного спроса**. Электростанция без сети, завод без инженеров, ЦОД без контрактных нагрузок, агропроизводство без хранилищ или логистики — потенциально недоиспользованный капитал.
+
+<img src="assets/readme/seven-superchains.svg" width="100%" alt="Семь производственных цепочек: энергия, материалы, вычисления, агро, жильё, экспорт и наука" />
+
+**Полная отраслево-производственная карта** содержит 35 направлений: энергетика и сети, критические и специальные материалы, станки, робототехника, промышленный ИИ, дата-центры, электроника, агрогенетика, сельское хозяйство, водные системы, городское обновление, логистика, научная коммерциализация, оборотный капитал малого бизнеса и другие. Это не означает, что по всем направлениям уже существуют предприятия или готовые оптимизационные модели.
+
+См. [35 производственных направлений](docs/26_SECTOR_AND_VALUE_CHAIN_MASTER_MAP.md) и [архетипы проектов](docs/12_PROJECT_ARCHETYPES.md).
+
+---
+
+## Оптимизатор EIIOM: экономический компилятор
+
+### EIIOM-v2 — воспроизводимый линейный оптимизатор
+
+Исполняемая реализация [`src/eiiom_optimizer.py`](src/eiiom_optimizer.py) использует `scipy.optimize.linprog` и набор жёстких ограничений. Рассматриваются **5 стран × 24 отрасли × 3 временных этапа = 360 переменных распределения капитала**.
+
+В модели учитываются бюджет по этапам, лимиты концентрации, энергетика, передача мощности, ЦОД и compute, цепочки отдельных промышленных технологий, сельскохозяйственные и жилищные целевые показатели. Величины по странам и секторам из [`config/base_scenario.json`](config/base_scenario.json) являются **исследовательскими коэффициентами**, если отдельно не приведён внешний источник.
+
+### BASE-v2 — пример расчётного сценария
+
+<img src="assets/readme/base-v2-scenario.svg" width="100%" alt="Сценарное распределение 650 млрд долларов CAPEX по этапам 2026–2045 и пяти странам, не фактические инвестиции" />
+
+| Показатель модели | Референсное значение | Значение показателя |
+|:--|--:|:--|
+| Суммарный плановый CAPEX 2026–2045 | **$650 млрд** | Сценарный бюджет, **не привлечённые инвестиции** |
+| 2026–2030 / 2031–2040 / 2041–2045 | $120 / $290 / $240 млрд | Сценарное распределение |
+| Годовой *GVA-equivalent* в 2045 | **$160,8 млрд/год** | Целевая функция / модельный эквивалент, **не официальный ВВП** |
+| Модельный compute IT | ≈1 496 МВт | Не существующие мощности проекта |
+| Модернизация городской недвижимости | 100 млн м² | Заложенный сценарный ориентир |
+| Точное земледелие | 60 млн га | Заложенный сценарный ориентир |
+| Rural AI clusters | 160 | Заложенный сценарный ориентир |
+
+Источник приведённых сценарных величин: [`data/base_v2_reference_summary.json`](data/base_v2_reference_summary.json). Они **не являются прогнозом гарантированной доходности, активами на балансе, выручкой или реализованной добавленной стоимостью**.
+
+### EIIOM-v4 — следующий класс задачи
+
+[`EIIOM-v4 Stochastic Spatial MILP`](docs/23_EIIOM_V4_STOCHASTIC_MILP.md) должен принимать решения о запуске конкретных объектов, расширении мощностей и движении товаров в пространстве с учётом сценариев будущего, риска, задержек строительства, технических зависимостей и неполной информации.
+
+Основные обозначения:
 
 ```text
-Income - NecessaryExpenses = Delta
+BUILD[p,t]      — решение запустить проект p к моменту t
+CAPADD[p,t]     — прирост доступной производственной мощности
+FLOW[k,e,t,ω]   — движение товара k по маршруту e при сценарии ω
+PROD[p,k,t,ω]   — физический выпуск предприятия
+INV[k,n,t,ω]    — запасы на физическом узле
+HH_INVEST[h,p,t] — допустимые инвестиции семей
 ```
 
-Сначала резерв и финансовая устойчивость. Затем диверсифицированный капитал и только допустимая часть свободной Дельты — в долгосрочные productive instruments.
-
-## L1 — Бизнес / проект
+Ключевые уравнения:
 
 ```text
-ExternalRevenue
-- OPEX
-- Taxes
-- DebtService
-- Maintenance
-= BusinessDelta
+Производство + Импорт + Входящие поставки + Складской запас
+ = Промежуточное использование + Потребление + Экспорт
+ + Исходящие поставки + Остаток + Потери
+
+Потребность в ресурсе[i,p] ≥ Норма[i,p] × Выпуск[p]
+Выпуск[p] ≤ Доступная мощность[p] × Фактическая доступность[p]
 ```
 
-## L2 — Регион / кластер
-
-Энергия + grid + water + labor + housing + logistics + suppliers + industry + data.
-
-## L3 — ЕАЭС / Евразия / внешний мир
-
-Cross-border value chains, transport corridors, trade, FX, project finance, external markets and external cashflow.
-
-Единая идея Дельты масштабируется от семьи до whole-system capital allocation.
+> **Степень готовности:** EIIOM-v4 описан как спецификация, но общий калиброванный пространственный MILP и реальные результаты на индустриальной сети **пока не подтверждены**. Отдельно требуется реализовать non-anticipativity: агент не может знать информацию, ещё не доступную в момент решения.
 
 ---
 
-# 3. Пять стран — динамическая сеть
+## Project Factory: проектный конвейер
 
-| Страна | Стартовые portfolio hypotheses |
-|---|---|
-| Россия | energy/grid, heavy engineering, industrial AI, machine tools, robotics, materials, large industrial/agro scale |
-| Казахстан | materials/refining, uranium/copper downstream, dryland AI-agro, water, logistics, selective compute |
-| Беларусь | machine tools, robotics, agricultural machinery, industrial automation, food processing |
-| Армения | AI/software/math, semiconductor/EDA design, science commercialization, high-value agriculture |
-| Кыргызстан | hydro/water, mountain agriculture, processing, edge AI, rural clusters, new logistics connectivity |
+Модель создания крупных экономических активов начинается с отсева неподтверждённых идей, а не с максимизации выдачи кредита. Из 1 000 потенциальных инициатив зрелая проектная фабрика *планирует* получать 20–30 решений об инвестиционной готовности за год. Это **проектное целевое значение**, не операционная статистика.
 
-Это **не фиксированное политическое разделение труда**.
+<img src="assets/readme/project-factory.svg" width="100%" alt="Планируемая воронка Project Factory 1000 → 400 → 150 → 60 → 20–30" />
 
-В v4:
+У каждого проекта нужен цифровой паспорт, включая спрос, конкурентов, мощности, воду, электроэнергию, разрешения, землю, кадры, CAPEX/OPEX, сроки, покупателей, кредитные условия, источники подтверждения и сценарии провала. После проверки проект может быть передан в финансовый контур — **но не автоматически профинансирован**.
+
+Источники: [Project Factory 1000](docs/29_PROJECT_FACTORY_1000.md) · [архетипы проектов](docs/12_PROJECT_ARCHETYPES.md) · [риски и комплаенс](docs/08_GOVERNANCE_RISK_COMPLIANCE.md).
+
+---
+
+## Финансовая архитектура и капитал
+
+Основная идея — **Delta**: свободный подтверждённый финансовый ресурс после реальных расходов и обязательств. Она проявляется на уровне семьи, фирмы, проекта, региона и трансграничной системы. У этих уровней разные бухгалтерские смыслы — **переводы между ними нельзя суммировать как новую общественную прибыль**.
+
+<img src="assets/readme/capital-flywheel.svg" width="100%" alt="Финансовая Delta от домохозяйства к бизнесу, проекту, региону и ЕАЭС" />
+
+### Защита капитала семьи
+
+Сначала необходимые расходы и резерв на непредвиденные обстоятельства. Затем — диверсифицированные сбережения. Долгосрочное участие в проектах допускается только из доступного риск-бюджета и с учётом сроков, ликвидности и законодательства.
+
+### Резервирование, productive escrow и эмиссия
+
+В EURASIAN **продуктивная эскроу-эмиссия описана как интерфейс и политика**, но **не реализована в данном репозитории как платёжное или эмиссионное ядро**. Подтверждение проекта не является разрешением на создание денег. Система должна направлять доказательства в Financial OS, а тот — независимо учитывать обязательства, залог, нормативные ограничения и разрешённые транши.
 
 ```text
-Suitability[country, sector, time, scenario]
- = f(power, grid, logistics, skills, wages/productivity,
-     water, suppliers, finance, market access, law, risk)
+ProjectProposal → техническая проверка → EvidencePackage
+                                            ↓
+                                Financial OS / Risk Gate
+                                            ↓
+                                    CapitalAuthorization
+                                            ↓
+                                  Payment / Settlement
+                                            ↓
+                                Фактическая закупка актива
 ```
 
-Специализация должна меняться вместе с реальной экономикой.
+**Правила:** `эмиссия ≠ прибыль`, `капитализация собственного токена ≠ HardNAV`, `внутренний арбитраж ≠ внешняя выручка`, `денежное обещание ≠ фактическое поступление`.
+
+**Соседние проекты:** [synergy_financial_os](https://github.com/Shtenco/synergy_financial_os) · [synergy_pay_system](https://github.com/Shtenco/synergy_pay_system) · [synergy_ai_economy](https://github.com/Shtenco/synergy_ai_economy) · [synergy_system](https://github.com/Shtenco/synergy_system).
+
+Подробно: [народный капитал](docs/06_PEOPLES_CAPITAL_DELTA.md) · [P2P и взаимный кредит](docs/19_P2P_MUTUAL_CREDIT_AND_CAPITAL.md) · [капитальный маховик](docs/20_MULTI_SCALE_CAPITAL_FLYWHEEL.md) · [финансовые рынки](docs/24_EURASIAN_FINANCIAL_MARKET_AND_SETTLEMENT.md).
 
 ---
 
-# 4. 35 value-chain domains
+## Федерация технологий SYNERGY
 
-v4 расширяет 24 LP-сектора до полноценной карты:
+EURASIAN задумывается не как монолит: спрос может приходить от Business OS, научные технологии — из NEXUS, расчётные разрешения — из Financial OS, платёжные подтверждения — из MetaPay. Каждая подсистема имеет чётко описанные **права на факты и действия**.
 
-1. generation;
-2. grid;
-3. industrial heat;
-4. critical materials;
-5. advanced materials;
-6. power electronics;
-7. machine tools;
-8. robotics / Physical AI;
-9. industrial AI / digital twins;
-10. compute / data centers;
-11. semiconductor / electronics design;
-12. XPU / TURBO research;
-13. Data Fabric;
-14. SynergyNet;
-15. NEXUS / agents;
-16. cybersecurity / digital trust;
-17. civil remote sensing;
-18. agro genetics;
-19. precision agriculture;
-20. agro robotics;
-21. water;
-22. food processing;
-23. chemicals / fertilizers / industrial inputs;
-24. construction materials;
-25. construction technology;
-26. urban renovation;
-27. rural AI settlements;
-28. logistics;
-29. MetaPay / trade infrastructure;
-30. household finance;
-31. SME / supplier finance;
-32. education / training;
-33. science / commercialization;
-34. budget / procurement evidence;
-35. circular + service economy.
+<img src="assets/readme/federation.svg" width="100%" alt="Федерация SYNERGY: Real Economy OS, Financial OS, MetaPay, Science, Data Fabric, Human и Business OS" />
 
-Полная карта: [docs/26_SECTOR_AND_VALUE_CHAIN_MASTER_MAP.md](docs/26_SECTOR_AND_VALUE_CHAIN_MASTER_MAP.md)
+В [`config/federation_v4.json`](config/federation_v4.json) перечислены **46 репозиториев** с ролями. Наличие в реестре **не доказывает**, что 46 сервисов развернуты, интегрированы или имеют подтверждённую промышленную эффективность. Там, где полномочия отсутствуют, они явно не подразумеваются.
+
+См. [карта федерации](docs/17_FEDERATION_46_SYSTEM_MAP.md), [архитектура](docs/01_SYSTEM_ARCHITECTURE.md), [интерфейсы](interfaces/) и [инфраструктура](docs/21_EURASIAN_DIGITAL_INFRASTRUCTURE.md).
 
 ---
 
-# 5. Семь superchains
+## Control Tower: не один показатель успеха
 
-```text
-POWER → GRID → POWER ELECTRONICS → INDUSTRY / COMPUTE
+Главная аналитическая панель EURASIAN должна измерять **не одну модельную добавленную стоимость, а причинные механизмы экономического развития**: реальные мощности, спрос, доходы домохозяйств, занятость, инвестиции, инфляционные и бюджетные риски, внешний оборот и подтверждённые денежные потоки.
 
-MATERIALS → MACHINE TOOLS → COMPONENTS → ROBOTICS → FACTORIES
+<img src="assets/readme/control-tower.svg" width="100%" alt="Пять North Star показателей EURASIAN Control Tower" />
 
-POWER → COMPUTE → AI → DIGITAL TWINS → PHYSICAL PRODUCTIVITY
+| Уровень | Обязательные метрики |
+|:--|:--|
+| **Реальная экономика** | Выпуск и ВДС, производительность, загрузка мощностей, локализация, энергия на единицу продукции |
+| **Домохозяйства** | Медианный реальный доход, расходы, резерв, долговая нагрузка, благосостояние, доступность жилья |
+| **Компании и проекты** | Выручка, OPEX, CAPEX, DSCR, просрочка, сроки строительства, доля МСП в поставках |
+| **ЕАЭС** | Взаимная торговля, экспортная выручка, узкие места коридоров, критический импорт, FX-экспозиция |
+| **Государство** | Налоги, бюджет, госдолг, расходы на инфраструктуру, социальные результаты |
+| **Банковская система** | Ликвидность, капитал, кредитные потери, долгосрочные обязательства, динамика денег и ставок |
+| **Наука и технология** | TRL, число воспроизведённых пилотов, патенты, фактическая отдача внедрения |
 
-GENETICS → SEEDS → PRECISION FARMING → ROBOTICS → PROCESSING → FOOD EXPORT
-
-CONSTRUCTION MATERIALS → RENOVATION / HOUSING → HUMAN CAPITAL → PRODUCTIVITY
-
-FACTORY/FARM → LOGISTICS → CUSTOMS → METAPAY → EXTERNAL CUSTOMER → SETTLEMENT
-
-SCIENCE → EVIDENCE → TRL → PILOT → PRODUCTION → EXPORT / LICENSING
-```
+Источник KPI: [`docs/30_CONTROL_TOWER_AND_KPI.md`](docs/30_CONTROL_TOWER_AND_KPI.md). Панель — **спецификация измерения**, а не публичный dashboard с уже доказанными реальными KPI.
 
 ---
 
-# 6. EIIOM-v2: runnable coarse LP
+## Научный статус и границы достоверности
 
-Текущий рабочий solver остаётся воспроизводимым coarse model:
+<img src="assets/readme/safeguards.svg" width="100%" alt="Шесть защитных принципов системы: физика, бухгалтерия, человек, закон, данные, риски" />
 
-- 5 стран;
-- 24 сектора;
-- 3 фазы;
-- 360 decision variables;
-- power/grid/DC/compute dependencies;
-- agriculture/housing constraints;
-- concentration limits;
-- versioned assumptions.
+| Подсистема | Текущий проверяемый статус |
+|:--|:--|
+| EIIOM-v2 / SciPy LP | Исполняемый исследовательский код и тесты в репозитории |
+| Референсная модель 2026–2045 | Сценарий с опубликованными параметрами и solver snapshot |
+| EIIOM-v4 / пространственный MILP | Архитектурная спецификация; не готовый калиброванный runtime |
+| DATASET-v4 и промышленная статистика | Схемы и план калибровки; полноценная панель ещё не собрана |
+| Project Factory 1000 | Проектная воронка и операционная методология; не подтверждённый объём работ |
+| Федерация 46 репозиториев | Каталог компонентов и назначенных ролей; не доказательство полной интеграции |
+| Escrow / эмиссия / токенизация | Спецификация взаимодействий; не live settlement в EURASIAN |
+| Реальные фабрики, резервные активы, прибыль инвесторов | Не должны заявляться без внешних независимых доказательств |
 
-BASE-v2 research envelope:
+Ни один сценарный показатель, визуализация или макроэкономическая гипотеза в этом README **не является гарантией, прогнозом инвестиционного дохода, доказательством отсутствия инфляции или фактом строительства**.
 
-| Метрика | Scenario output/target |
-|---|---:|
-| gross CAPEX 2026–2045 | $650bn |
-| modeled annual GVA-equivalent 2045 | ~$160bn/y |
-| compute | ~1.5 GW IT |
-| urban renovation | 100m m² |
-| rural swing housing | 8m m² |
-| precision agriculture | 60m ha |
-| deep agro-robotics | 15m ha |
-| rural AI clusters | 160 |
+### Данные без заглядывания в будущее
 
-**GVA-equivalent ≠ revenue ≠ cash ≠ NAV ≠ investor return.**
+Для каждой записи DATASET-v4 нужны `effective_time` (время, к которому относится факт) и `known_at` (момент, когда он стал известен системе). При воспроизведении прошлого решения `known_at` не может быть позже времени принятия решения. Кроме того, статусы `OBSERVED`, `COMMITTED`, `UNDER_CONSTRUCTION`, `PLANNED`, `ANNOUNCED` и `SCENARIO` не смешиваются.
 
-Run:
+Подробнее: [DATASET-v4](docs/35_DATASET_V4.md) · [допущения и источники](docs/10_SOURCES_AND_ASSUMPTIONS.md) · [риски](docs/34_RESILIENCE_AND_STRESS_TESTING.md).
+
+---
+
+## Дорожная карта 2026–2045
+
+<img src="assets/readme/roadmap.svg" width="100%" alt="Этапы исследований: работающий v2, калибровка DATASET-v4, Project Factory, EIIOM-v4, масштабирование" />
+
+**Ближайший научный приоритет** — не нарисовать ещё больше проектных целей, а подать в оптимизатор реальные региональные физические данные, оценить ошибки сценариев и проверить портфели при дефиците ресурсов и ухудшении внешних условий.
+
+| Этап | Что должно быть сделано | Критерий перехода |
+|:--|:--|:--|
+| **M0: EIIOM-v2** | Воспроизводимый LP, ограничения и тесты | Повторяемая оптимизация и проверка инвариантов |
+| **M1: DATASET-v4** | Статистика стран, отраслей, предприятий, воды и энергии | Известные источники, единицы, временные срезы |
+| **M2: Project Factory** | Типизированные паспорта, доказательства, стадии отбора | Устойчивое исключение непригодных проектов |
+| **M3: EIIOM-v4** | Пространственный MILP с риском и supply chains | Closed OOS, сценарная устойчивость, независимая проверка |
+| **M4: Федеративный пилот** | Отдельные разрешения, расчёты, отчётность | Доказанный end-to-end trace без нарушения прав |
+| **2045: долгосрочная цель** | Масштабируемая кооперация и производительность | Реальные измеримые результаты, а не симуляционные цели |
+
+Подробно: [`docs/09_ROADMAP_2026_2045.md`](docs/09_ROADMAP_2026_2045.md) · [`docs/31_V4_EXECUTION_ROADMAP.md`](docs/31_V4_EXECUTION_ROADMAP.md).
+
+---
+
+## Быстрый запуск
+
+Требуются **Python 3.10+**, `numpy`, `scipy`, `pytest`, `jsonschema` (смотрите [`requirements.txt`](requirements.txt)). Команды запускаются из корня репозитория.
 
 ```bash
+git clone https://github.com/Shtenco/synergy_eurasian.git
+cd synergy_eurasian
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-pytest -q
+
+# Linux/macOS:
+source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+
+python -m pip install -r requirements.txt
+python -m pytest -q
 python src/eiiom_optimizer.py --config config/base_scenario.json --output outputs/base
 ```
 
----
+В `outputs/base/` генерируются `summary.json` и `allocation.csv`. Выполнение требует правомерного доступа к исходному коду и соблюдения лицензии репозитория.
 
-# 7. EIIOM-v4: stochastic spatial economic compiler
+### Что смотреть после запуска
 
-v4 introduces:
-
-```text
-countries
-regions
-physical nodes
-candidate projects
-commodities/services
-transport/grid/data edges
-time
-uncertainty scenarios
-household cohorts
-financing instruments
-labor skills
-water basins
-external markets
-```
-
-Decision families:
-
-```text
-BUILD[p,t] ∈ {0,1}
-CAPADD[p,t]
-FLOW[k,e,t,ω]
-PROD[p,k,t,ω]
-COMPUTE_ALLOC[workload,node,t,ω]
-EQUITY / DEBT / CFA-RWA
-HH_INVEST
-P2P_LOAN
-RENOVATE
-TEMP_ASSIGN voluntary only
-RND_STAGE
-```
-
-Objective concept:
-
-```text
-Expected Economic Value
-- λ * CVaR
-```
-
-with explicit physical/social/legal constraints.
-
-Specification: [docs/23_EIIOM_V4_STOCHASTIC_MILP.md](docs/23_EIIOM_V4_STOCHASTIC_MILP.md)
-
-Scenario matrix: [config/scenarios_v4.json](config/scenarios_v4.json)
-
-**No fake v4 optimum is published before spatial DATASET-v4 is calibrated.**
+| Файл | Что в нём находится |
+|:--|:--|
+| [`src/eiiom_optimizer.py`](src/eiiom_optimizer.py) | Исполняемая функция оптимизации `solve` |
+| [`config/base_scenario.json`](config/base_scenario.json) | Сценарные параметры, технологические кривые и ограничения |
+| [`data/base_v2_reference_summary.json`](data/base_v2_reference_summary.json) | Референсная таблица результатов v2 |
+| [`data/eiiom_v2_marginal_next_1bn.csv`](data/eiiom_v2_marginal_next_1bn.csv) | Предельные изменения сценарного распределения |
+| [`config/scenarios_v4.json`](config/scenarios_v4.json) | Матрица стресс-сценариев для следующего поколения |
+| [`tests/`](tests/) | Проверки схем, интеграционных контрактов и инвариантов |
 
 ---
 
-# 8. DATASET-v4 is the next main bottleneck
+## Документация и навигация по репозиторию
 
-Every material record has two times:
+Репозиторий уже содержит подробную документацию — она сохранена и доступна по прямым ссылкам.
 
-```text
-effective_time  — when it is true in the world
-known_at        — when EIIOM could actually know it
-```
-
-This prevents economic lookahead bias.
-
-Required dataset families:
-
-- households/demography aggregates;
-- labor/skills;
-- industry/plants;
-- trade/demand;
-- energy/grid;
-- compute/digital;
-- materials;
-- logistics;
-- agriculture;
-- water;
-- housing/cities;
-- finance;
-- science/TRL;
-- regulation.
-
-Statuses are never collapsed:
-
-```text
-OBSERVED
-COMMITTED
-UNDER_CONSTRUCTION
-PLANNED
-ANNOUNCED
-SCENARIO
-```
-
-See [docs/35_DATASET_V4.md](docs/35_DATASET_V4.md).
+| Раздел | Где читать |
+|:--|:--|
+| Видение, системная архитектура | [`docs/00_CONTEXT_AND_VISION.md`](docs/00_CONTEXT_AND_VISION.md), [`docs/01_SYSTEM_ARCHITECTURE.md`](docs/01_SYSTEM_ARCHITECTURE.md) |
+| Модель EIIOM, промышленность | [`docs/02_EIIOM_MODEL.md`](docs/02_EIIOM_MODEL.md), [`docs/26_SECTOR_AND_VALUE_CHAIN_MASTER_MAP.md`](docs/26_SECTOR_AND_VALUE_CHAIN_MASTER_MAP.md) |
+| Сельское хозяйство, биотехнологии | [`docs/03_AI_AGRICULTURE.md`](docs/03_AI_AGRICULTURE.md) |
+| Капитал, P2P, цифровые права | [`docs/04_FINANCE_AND_SYNA.md`](docs/04_FINANCE_AND_SYNA.md), [`docs/19_P2P_MUTUAL_CREDIT_AND_CAPITAL.md`](docs/19_P2P_MUTUAL_CREDIT_AND_CAPITAL.md) |
+| Человек, жильё, навыки | [`docs/05_HOUSING_RENOVATION.md`](docs/05_HOUSING_RENOVATION.md), [`docs/25_HUMAN_CAPITAL_AND_SOCIAL_INFRASTRUCTURE.md`](docs/25_HUMAN_CAPITAL_AND_SOCIAL_INFRASTRUCTURE.md) |
+| Пространственная оптимизация | [`docs/23_EIIOM_V4_STOCHASTIC_MILP.md`](docs/23_EIIOM_V4_STOCHASTIC_MILP.md) |
+| Проектная фабрика, мониторинг | [`docs/29_PROJECT_FACTORY_1000.md`](docs/29_PROJECT_FACTORY_1000.md), [`docs/30_CONTROL_TOWER_AND_KPI.md`](docs/30_CONTROL_TOWER_AND_KPI.md) |
+| Реальная статистика, ограничения | [`docs/27_REALITY_BASELINE_2026.md`](docs/27_REALITY_BASELINE_2026.md), [`docs/35_DATASET_V4.md`](docs/35_DATASET_V4.md) |
+| Экономическая стратегия | [`docs/36_GRAND_STRATEGY_2045.md`](docs/36_GRAND_STRATEGY_2045.md), [`docs/37_COUNTRY_PORTFOLIOS.md`](docs/37_COUNTRY_PORTFOLIOS.md) |
+| Прежняя полная версия главного README | [`docs/README_FULL_PRE_REDESIGN_2026.md`](docs/README_FULL_PRE_REDESIGN_2026.md) |
+| Дизайн-ассеты | [`assets/readme/`](assets/readme/) |
 
 ---
 
-# 9. Real 2026 baseline
+## Авторские права и ограничения использования
 
-EIIOM is anchored to real external datasets, not only internal scenarios.
+**Copyright © 2026 Evgeniy Koshtenko. All rights reserved.** Проект распространяется под собственной лицензией [`LICENSE`](LICENSE). Публичная доступность GitHub **не означает открытую лицензию** или разрешение на коммерческое использование. Права сторонних компонентов и уже выданные лицензии сохраняются в применимых пределах.
 
-Current examples:
-
-- EAEU mutual goods trade reached almost $100bn in 2024 according to EEC materials;
-- the formal Eurasian Economic Pathway provides a 2030/2045 integration horizon;
-- the EDB Eurasian Transport Network Observatory listed 402 planned/implemented transport projects worth about $345bn as of 1 July 2026, with about another $100bn in pipeline;
-- future common electricity-market rules create a new potential cross-border power edge, but country/grid constraints remain physical.
-
-All facts vs assumptions must be tagged.
-
-See [docs/27_REALITY_BASELINE_2026.md](docs/27_REALITY_BASELINE_2026.md).
-
----
-
-# 10. Project Factory
-
-Grand strategy must become a project pipeline.
-
-Mature capacity target:
-
-```text
-1000 raw opportunities
-→ 400 qualified
-→ 150 pre-feasibility
-→ 60 investable candidates
-→ 20–30 FID/funded projects
-```
-
-These numbers are operational scenario targets, not promises.
-
-Every project passes:
-
-```text
-demand
-→ resources
-→ alternatives
-→ technical concept
-→ commercial evidence
-→ finance
-→ legal
-→ evidence design
-→ ProjectProposal
-→ independent underwriting
-```
-
-See [docs/29_PROJECT_FACTORY_1000.md](docs/29_PROJECT_FACTORY_1000.md).
-
----
-
-# 11. AI Agriculture
-
-```text
-germplasm
-→ genomics / omics
-→ phenotyping
-→ soil/weather/management
-→ G×E AI
-→ cross ranking
-→ controlled + field trials
-→ official registration
-→ seed multiplication
-→ precision agriculture
-→ agro-robotics
-→ storage / processing
-→ export
-```
-
-AI narrows the search. It **does not replace biology, field trials or official registration**.
-
-See [docs/03_AI_AGRICULTURE.md](docs/03_AI_AGRICULTURE.md).
-
----
-
-# 12. Housing / rural clusters
-
-```text
-Urban renovation candidate
-→ voluntary temporary swing housing
-→ renovation/reconstruction
-→ legally protected return/replacement right
-→ rural housing remains permanent useful asset
-```
-
-Hard social constraints:
-
-- voluntary only;
-- no housing-forced labor;
-- return rights;
-- services before occupancy;
-- quality/area protection;
-- accessibility and dispute procedure.
-
-See [docs/05_HOUSING_RENOVATION.md](docs/05_HOUSING_RENOVATION.md).
-
----
-
-# 13. Household capital / Delta / P2P
-
-Household first:
-
-```text
-Income - NecessaryExpenses = Free Delta
-```
-
-Then:
-
-```text
-reserve → diversified capital → suitability-gated productive exposure
-```
-
-P2P layer uses independent savings tranches and maturity matching:
-
-```text
-savings tranche
-→ productive SME/equipment credit
-→ external customer revenue
-→ principal + interest repayment
-→ capital reuse
-```
-
-Principal is never income. New investor money is never operating return.
-
-See:
-
-- [docs/06_PEOPLES_CAPITAL_DELTA.md](docs/06_PEOPLES_CAPITAL_DELTA.md)
-- [docs/19_P2P_MUTUAL_CREDIT_AND_CAPITAL.md](docs/19_P2P_MUTUAL_CREDIT_AND_CAPITAL.md)
-- [docs/20_MULTI_SCALE_CAPITAL_FLYWHEEL.md](docs/20_MULTI_SCALE_CAPITAL_FLYWHEEL.md)
-
----
-
-# 14. Financial engines around the real economy
-
-SYNERGY federation has three external-value research engines:
-
-### MIDAS
-
-Bounded institutional trading intelligence. Only reconciled **realized external PnL** may enter accounting.
-
-### MetaPay
-
-Compliance-first FX/payment/route/settlement graph. A quote/spread is not profit until execution + settlement + reconciliation.
-
-### Print Machine / AMM / QE research
-
-Opportunity/liquidity amplifier only.
-
-```text
-mint != profit
-internal AMM mark != HardNAV
-flash principal != owned capital
-bridge TVL != wealth
-```
-
-Real Economy OS never recognizes them directly. Financial OS is the economic judge.
-
-See [docs/13_RESEARCH_PERIMETER.md](docs/13_RESEARCH_PERIMETER.md).
-
----
-
-# 15. Productive Escrow / SYNA
-
-These are **financing architecture specifications**, not functions executed in this repository.
-
-Potential SYNA-CAP role:
-
-```text
-Eligible Audited Assets - Liabilities = Eligible NAV
-NAV/unit = Eligible NAV / units outstanding
-```
-
-Own-token market cap is excluded from collateral.
-
-Productive Escrow concept:
-
-```text
-verified milestone
-→ external Financial OS review
-→ bounded regulated liquidity authorization
-→ real production/cashflow
-→ repayment / sterilization
-```
-
-EIIOM itself cannot mint, release or self-authorize money.
-
-See [docs/04_FINANCE_AND_SYNA.md](docs/04_FINANCE_AND_SYNA.md).
-
----
-
-# 16. 46-repository federation
-
-Machine-readable federation: [config/federation_v4.json](config/federation_v4.json)
-
-Static audit:
-
-```bash
-python src/federation_audit.py --config config/federation_v4.json
-```
-
-Core authority separation:
-
-```text
-Architecture          → synergy_system
-Real Economy          → synergy_eurasian
-Accounting / HardNAV  → synergy_financial_os
-Settlement            → synergy_pay_system
-Science candidates    → nexus_science_agent
-Transport             → synergynet
-Runtime orchestration → synergy_meta_os
-Trust commitment      → blockchain / metachain
-```
-
-Full map: [docs/17_FEDERATION_46_SYSTEM_MAP.md](docs/17_FEDERATION_46_SYSTEM_MAP.md)
-
----
-
-# 17. Eight/nine canonical exchange objects
-
-v4 standardizes cross-repository semantics:
-
-```text
-DemandSignal
-ResourceState
-TechnologyCandidate
-ProjectProposal
-CapitalAuthorization
-PaymentIntent
-SettlementReceipt
-EvidencePackage
-AccountingSnapshot
-```
-
-Schemas already included for:
-
-- [interfaces/demand_signal.schema.json](interfaces/demand_signal.schema.json)
-- [interfaces/resource_state.schema.json](interfaces/resource_state.schema.json)
-- [interfaces/technology_candidate.schema.json](interfaces/technology_candidate.schema.json)
-- [interfaces/project_proposal.schema.json](interfaces/project_proposal.schema.json)
-- [interfaces/evidence_package.schema.json](interfaces/evidence_package.schema.json)
-
----
-
-# 18. Digital infrastructure
-
-```text
-POWER / GRID
-→ PHYSICAL COMPUTE
-→ META-OS
-→ DATA FABRIC
-→ SYNERGYNET
-→ AI SERVICES
-→ PQ TRUST COMMITMENTS
-```
-
-SynergyNet moves evidence/data but has no financial authority. MetaChain commits already-authoritative bytes but does not determine economic truth. XPU/TURBO remain gated R&D until matched benchmarks.
-
-See [docs/21_EURASIAN_DIGITAL_INFRASTRUCTURE.md](docs/21_EURASIAN_DIGITAL_INFRASTRUCTURE.md).
-
----
-
-# 19. Science → industry
-
-```text
-question
-→ sources
-→ evidence graph
-→ hypothesis
-→ falsification
-→ independent replication
-→ laboratory
-→ prototype
-→ pilot
-→ TRL
-→ IP/FTO
-→ economic pre-feasibility
-→ ProjectProposal
-→ commercial scale
-```
-
-See [docs/22_SCIENCE_TO_INDUSTRY_PIPELINE.md](docs/22_SCIENCE_TO_INDUSTRY_PIPELINE.md).
-
----
-
-# 20. Eurasian geoeconomic grid
-
-EIIOM does not assume frictionless geography. It explicitly models:
-
-- Northern Eurasian routes;
-- INSTC;
-- Trans-Caspian / Middle Corridor;
-- Central Asian connectors;
-- air/high-value freight;
-- digital corridors;
-- external markets only where legally accessible.
-
-Each edge contains capacity, transit time, cost, reliability and legal/compliance status.
-
-See [docs/18_EURASIAN_GEOECONOMIC_GRID.md](docs/18_EURASIAN_GEOECONOMIC_GRID.md).
-
----
-
-# 21. Human capital is physical infrastructure
-
-Factory capacity is limited by:
-
-- engineers;
-- technicians;
-- agronomists;
-- AI/data talent;
-- construction workforce;
-- project finance/audit skills;
-- housing/health/education/mobility.
-
-EIIOM-v4 will calculate shadow value of critical skills just like shadow value of MW or water.
-
-See [docs/25_HUMAN_CAPITAL_AND_SOCIAL_INFRASTRUCTURE.md](docs/25_HUMAN_CAPITAL_AND_SOCIAL_INFRASTRUCTURE.md).
-
----
-
-# 22. Resilience before maximum base-case value
-
-Stress universe includes:
-
-- WACC/FX;
-- energy/grid;
-- compute supply;
-- drought/water;
-- logistics closures;
-- cyber/bridge failures;
-- labor shortages;
-- household income shock;
-- MIDAS zero/negative alpha;
-- MetaPay spread disappearance;
-- collapse of internal token marks.
-
-Core economy must remain solvent without speculative engines.
-
-See [docs/34_RESILIENCE_AND_STRESS_TESTING.md](docs/34_RESILIENCE_AND_STRESS_TESTING.md).
-
----
-
-# 23. Control Tower
-
-The dashboard follows causality:
-
-```text
-CAPITAL
-→ PROJECT
-→ CAPACITY
-→ UTILIZATION
-→ OUTPUT
-→ SALES
-→ SETTLEMENT
-→ CASH/NAV
-→ REINVESTMENT
-```
-
-Grey/insufficient evidence is never green.
-
-See [docs/30_CONTROL_TOWER_AND_KPI.md](docs/30_CONTROL_TOWER_AND_KPI.md).
-
----
-
-# 24. Non-negotiable economic constitution
-
-```text
-model != fact
-forecast != evidence
-GVA != cash
-settlement != revenue
-new investor capital != operating profit
-mint != profit
-own-token price != collateral
-internal AMM mark != external PnL
-flash principal != owned capital
-bridge TVL != wealth
-backtest != realized PnL
-public announcement != commissioned capacity
-AI recommendation != authorization
-blockchain commitment != economic truth
-project sponsor != independent verifier
-```
-
-And:
-
-```text
-EligibleRealAssets
-  > ExternalLiabilities
-  + StableLiabilities
-  + QEOutstanding
-```
-
-One asset cannot collateralize multiple claims without explicit seniority and accounting.
-
----
-
-# 25. Documentation map
-
-Core v1/v2 foundations:
-
-- [00 Context & Vision](docs/00_CONTEXT_AND_VISION.md)
-- [01 System Architecture](docs/01_SYSTEM_ARCHITECTURE.md)
-- [02 EIIOM Model](docs/02_EIIOM_MODEL.md)
-- [03 AI Agriculture](docs/03_AI_AGRICULTURE.md)
-- [04 Finance & SYNA](docs/04_FINANCE_AND_SYNA.md)
-- [05 Housing Renovation](docs/05_HOUSING_RENOVATION.md)
-- [06 People's Capital / Delta](docs/06_PEOPLES_CAPITAL_DELTA.md)
-- [07 Investor UX](docs/07_INVESTOR_UX.md)
-- [08 Governance / Risk / Compliance](docs/08_GOVERNANCE_RISK_COMPLIANCE.md)
-- [09 Roadmap 2026–2045](docs/09_ROADMAP_2026_2045.md)
-- [10 Sources & Assumptions](docs/10_SOURCES_AND_ASSUMPTIONS.md)
-- [11 Investment Positioning](docs/11_INVESTMENT_POSITIONING.md)
-- [12 Project Archetypes](docs/12_PROJECT_ARCHETYPES.md)
-- [13 Research Perimeter](docs/13_RESEARCH_PERIMETER.md)
-- [14 Crowd-Investment Lessons](docs/14_CROWD_INVESTMENT_LESSONS.md)
-- [15 Developer Guide](docs/15_DEVELOPER_GUIDE.md)
-- [16 Regulatory Snapshot](docs/16_CROWD_INVESTMENT_REGULATORY_STATUS.md)
-
-Federation v4:
-
-- [17 Federation 46 Map](docs/17_FEDERATION_46_SYSTEM_MAP.md)
-- [18 Geoeconomic Grid](docs/18_EURASIAN_GEOECONOMIC_GRID.md)
-- [19 P2P Mutual Credit](docs/19_P2P_MUTUAL_CREDIT_AND_CAPITAL.md)
-- [20 Multi-Scale Capital Flywheel](docs/20_MULTI_SCALE_CAPITAL_FLYWHEEL.md)
-- [21 Digital Infrastructure](docs/21_EURASIAN_DIGITAL_INFRASTRUCTURE.md)
-- [22 Science → Industry](docs/22_SCIENCE_TO_INDUSTRY_PIPELINE.md)
-- [23 Stochastic Spatial MILP](docs/23_EIIOM_V4_STOCHASTIC_MILP.md)
-- [24 Financial Market / Settlement](docs/24_EURASIAN_FINANCIAL_MARKET_AND_SETTLEMENT.md)
-- [25 Human Capital](docs/25_HUMAN_CAPITAL_AND_SOCIAL_INFRASTRUCTURE.md)
-- [26 Sector Master Map](docs/26_SECTOR_AND_VALUE_CHAIN_MASTER_MAP.md)
-- [27 Reality Baseline 2026](docs/27_REALITY_BASELINE_2026.md)
-- [28 Institutional Design](docs/28_INSTITUTIONAL_DESIGN.md)
-- [29 Project Factory 1000](docs/29_PROJECT_FACTORY_1000.md)
-- [30 Control Tower / KPI](docs/30_CONTROL_TOWER_AND_KPI.md)
-- [31 Execution Roadmap](docs/31_V4_EXECUTION_ROADMAP.md)
-- [32 Climate / Energy / Water](docs/32_CLIMATE_ENERGY_WATER_SECURITY.md)
-- [33 Public Investment / Budget OS](docs/33_PUBLIC_INVESTMENT_AND_BUDGET_OS.md)
-- [34 Resilience / Stress](docs/34_RESILIENCE_AND_STRESS_TESTING.md)
-- [35 DATASET-v4](docs/35_DATASET_V4.md)
-- [36 Grand Strategy 2045](docs/36_GRAND_STRATEGY_2045.md)
-- [37 Country Portfolios](docs/37_COUNTRY_PORTFOLIOS.md)
-
----
-
-# 26. Current execution target
-
-The next real bottleneck is:
-
-```text
-DATASET-v4
-→ 3 pilot regions
-→ ≥50 real physical/economic nodes
-→ ≥100 edges
-→ ≥20 real project candidates
-→ first spatial stochastic solve
-→ 3 end-to-end ProjectProposal/Evidence traces
-```
-
-See [docs/31_V4_EXECUTION_ROADMAP.md](docs/31_V4_EXECUTION_ROADMAP.md).
-
----
-
-# 27. North Star
-
-```text
-REAL ECONOMY
-+ VERIFIABLE POINT-IN-TIME DATA
-+ PROJECT FACTORY
-+ CANONICAL ACCOUNTING
-+ BOUNDED AI
-+ HUMAN GOVERNANCE
-+ MULTI-CURRENCY SETTLEMENT
-+ RESILIENT INFRASTRUCTURE
-+ CRYPTOGRAPHIC EVIDENCE
-= SYNERGY EURASIAN
-```
-
-**Status:** R&D / architecture / simulation / sandbox candidate. Nothing in this repository is an offer of securities, guarantee of return, monetary authorization or substitute for national law and regulation.
-
----
-
-<!-- NEXUS-REPORTS-BENCHMARKS:START -->
-## NEXUS — отчёты и бенчмарки
-
-> Канонический реестр: [NEXUS_REPORTS_BENCHMARKS_REGISTRY.md](https://github.com/Shtenco/synergy_gllm_nexus/blob/main/NEXUS_REPORTS_BENCHMARKS_REGISTRY.md)  
-> Канонический research runtime: [Shtenco/synergy_gllm_nexus](https://github.com/Shtenco/synergy_gllm_nexus)  
-> Активная исследовательская ветка: [unified-v3-generalization-first](https://github.com/Shtenco/synergy_gllm_nexus/tree/unified-v3-generalization-first)  
-> Последнее синхронное обновление README: **2026-09-19**
-
-### Ключевые подтверждённые результаты
-
-| Линия / benchmark | Результат | Что проверялось |
-|---|---:|---|
-| **R7-L D192 / Blind-18** | **3072/3072 = 100%**, 48/48 held-out operators | настоящий few-shot unseen-operator transfer, без Authority и без inference weight updates |
-| **R7.2 / Blind-20** | historical **320/320 = 100% harness-assisted**; autonomous exact **254/320 = 79.375%** | final head in old harness used benchmark-side true intent; deployable path uses predicted intent |
-| **R7.6 / Blind-23** | **56/58 = 96.55%** | post-freeze semantic/paraphrase transfer |
-| **R7.10 / Blind-27** | **150/160 = 93.75%** | fresh 8-domain frozen blind |
-| **R7.18 / Blind-31** | **156/200 = 78%** | broad post-freeze OOD |
-| **R7.44 / Blind-62** | **3066/3200 = 95.81%** | context/state composite |
-| **R7.44.1 / Blind-63** | **2400/2400 = 100%** | context contract |
-| **R7.44.2 / Blind-64** | **2400/2400 = 100%** | context contract |
-| **R7.44.3 / Blind-65** | **2400/2400 = 100%** | context contract; Dialogue-65 25/25 |
-| **Ω-1.5R2 / Blind-4** | strict triple **50.37% / 66.63%** | role/subject/object/graph transfer |
-| **Unified v2 UB1** | **904/970 = 93.1959%** | integration benchmark; exposed-development, не pristine blind |
-| **Unified v2 UB2** | **2104/2140 = 98.3178%** | regression benchmark; regex baseline повторяет score, paraphrase stress ≈26.17% |
-| **v3 P0.1 META-OOS C** | **99.44%** | synthetic OOS внутри одной high-level generator family |
-| **HARD-OOS D** | **21.91%**, representation failure **100%** | zero-shot перенос на новый AST/rule-language basis; benchmark уже consumed |
-| **v3-MoE P1** | useful Top-K recall **99.62%**, negative transfer **0.48%**, strict routing **98.80%** | learned MoE routing на mixed synthetic META-OOS |
-| **NEXUS-MOE-B1** | learned **94.44%**, best single **33.33%**, naive **59.17%**, oracle **95.83%** | frozen one-shot на 7 exact-runnable historical experts; learned negative transfer **1.45%** |
-| **FTX1** | **BLIND sealed / unopened** | главный one-shot end-to-end far-transfer benchmark |
-
-### Полный набор канонических отчётов
-
-1. [2026-09-15 — Ω-1.3 local 100K](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-15-omega13-local-100k.md)
-2. [2026-09-15 — Ω-1.4 local 100K](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-15-omega14-local-100k.md)
-3. [2026-09-16 — NEXUS cross-generation audit](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-16-nexus-cross-generation-audit.md)
-4. [2026-09-16 — Full 78-generation evidence ledger](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-16-nexus-full-78-ledger.md)
-5. [2026-09-16 — Ω-1.5R2 Blind-4 one-shot JSON](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-16-omega15r2-blind4-one-shot.json)
-6. [2026-09-16 — Ω-1.6 research-agent landscape](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-16-omega16-research-agent-landscape.md)
-7. [2026-09-16 — Unified NEXUS rebuild v1](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-16-unified-nexus-rebuild-v1.md)
-8. [2026-09-17 — FTX1 freeze report](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-17-nexus-ftx1-freeze-report.md)
-9. [2026-09-17 — Unified v3 P0 report](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-17-nexus-unified-v3-p0-report.md)
-10. [2026-09-17 — Unified v2 RC1 final](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-17-unified-v2-rc1-final.md)
-11. [2026-09-18 — Unified v3 P0.1 training report](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-18-nexus-unified-v3-p01-training-report.md)
-12. [2026-09-18 — HARD-OOS D frozen zero-shot report](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-18-nexus-v3-hard-oos-d-zero-shot-report.md)
-13. [2026-09-18 — v3-MoE P1 training report](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-18-nexus-v3-moe-p1-training-report.md)
-14. [2026-09-19 — Artifact-Complete audit + NEXUS-MOE-B1](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/2026-09-19-nexus-v3-moe-artifact-complete-b1-report.md)
-15. [Unified v2 P0 report](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/UNIFIED_V2_P0_REPORT.md)
-16. [Unified v2 P0 / UB1 summary JSON](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/docs/results/UNIFIED_V2_P0_UB1_SUMMARY.json)
-
-### Frozen benchmark suites и manifests
-
-**CROSSGEN-1**
-- [Freeze manifest](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/crossgen1/CROSSGEN1_FREEZE_MANIFEST.json)
-- [Schema](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/crossgen1/schema.py)
-
-**Ω / Unified frozen**
-- [Ω-1.4 Blind-2 freeze](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/frozen/OMEGA14_BLIND2_FREEZE_MANIFEST.json)
-- [Ω-1.5 Blind-3 freeze](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/frozen/OMEGA15_BLIND3_FREEZE_MANIFEST.json)
-- [Ω-1.5R2 preblind final freeze](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/frozen/OMEGA15R2_PREBLIND_FINAL_FREEZE.json)
-- [Ω-1.5R2 Blind-4 freeze](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/frozen/OMEGA15R2_BLIND4_FREEZE_MANIFEST.json)
-- [Unified rebuild v1 freeze](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/frozen/UNIFIED_REBUILD_V1_FREEZE_MANIFEST.json)
-- [Unified integration benchmark freeze](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/frozen/UNIFIED_REBUILD_V1_INTEGRATION_BENCH_FREEZE.json)
-- [Unified preblind checkpoint freeze](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/frozen/UNIFIED_REBUILD_V1_PREBLIND_CHECKPOINT_FREEZE.json)
-
-**Unified v2 UB2**
-- [UB2 README](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/ub2/README.md)
-- [Freeze manifest](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/ub2/frozen/NEXUS_UB2_FREEZE_MANIFEST.json)
-- [Preblind freeze](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/ub2/frozen/UNIFIED_V2_PREBLIND_FREEZE.json)
-- [Source-commit freeze](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/ub2/frozen/UNIFIED_V2_PREBLIND_SOURCE_COMMIT.json)
-- [Blind result](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/ub2/results/UNIFIED_V2_UB2_BLIND_RESULT.json)
-- [Generator](https://github.com/Shtenco/synergy_gllm_nexus/tree/unified-v3-generalization-first/benchmarks/ub2/generator)
-- [Scoring](https://github.com/Shtenco/synergy_gllm_nexus/tree/unified-v3-generalization-first/benchmarks/ub2/scoring)
-- [Validators](https://github.com/Shtenco/synergy_gllm_nexus/tree/unified-v3-generalization-first/benchmarks/ub2/validators)
-
-**NEXUS-FTX1**
-- [FTX1 README](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/ftx1/README.md)
-- [Frozen manifest](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/ftx1/frozen/NEXUS_FTX1_FREEZE_MANIFEST.json)
-- [Public generator](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/ftx1/public_generator.py)
-- [Schema](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/ftx1/schema.py)
-- [Scoring](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/ftx1/scoring.py)
-- [Validators](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/ftx1/validators.py)
-- [Red-team](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/ftx1/redteam.py)
-- **BLIND остаётся sealed/unopened.**
-
-### Benchmark runners
-
-- [Belief](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/run_belief_benchmark.py)
-- [General](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/run_benchmark.py)
-- [Compiler](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/run_compiler_benchmark.py)
-- [Consolidation](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/run_consolidation_benchmark.py)
-- [Continual](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/run_continual_benchmark.py)
-- [Forgetting](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/run_forgetting_benchmark.py)
-- [Graph Cortex](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/run_graph_cortex_benchmark.py)
-- [Research](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/run_research_benchmark.py)
-- [Temporal](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/run_temporal_benchmark.py)
-- [Unified v2 preblind UB1](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/benchmarks/run_unified_v2_preblind_ub1.py)
-
-### v3 артефакты
-
-**P0.1 META-OOS**
-- [Manifest](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_meta/p01_first_hard/manifest.json)
-- [Metrics](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_meta/p01_first_hard/metrics.json)
-- [Ranker](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_meta/p01_first_hard/ranker.pt)
-
-**HARD-OOS D**
-- [Manifest](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_hard_oos_d/manifest.json)
-- [Corpus summary](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_hard_oos_d/corpus_summary.json)
-- [Topology inventory](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_hard_oos_d/topology_inventory.json)
-- [Zero-shot metrics](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_hard_oos_d/zero_shot_metrics.json)
-- [Baselines](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_hard_oos_d/baseline_metrics.json)
-- [Consumed marker](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_hard_oos_d/consumed.json)
-
-**v3-MoE P1**
-- [Manifest](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_moe/p1/manifest.json)
-- [Metrics](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_moe/p1/metrics.json)
-- [Router](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_moe/p1/router.pt)
-- [Novelty](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_moe/p1/novelty.pt)
-- [Calibrator](https://github.com/Shtenco/synergy_gllm_nexus/blob/unified-v3-generalization-first/artifacts/v3_moe/p1/calibrator.pt)
-
-### Научная политика
-
-- Few-shot unseen-operator induction и zero-shot перенос на новый язык правил — разные уровни transfer.
-- UB2 хранится как regression benchmark, но его 98.3178% не считается доказательством общего интеллекта.
-- HARD-OOS D уже **consumed** и не может повторно считаться clean OOS после D-informed обучения.
-- FTX1 BLIND остаётся закрытым до one-shot protocol.
-- v3-MoE P1 пока доказывает качество **routing**, а не окончательный end-to-end прирост answer accuracy.
-
-<!-- NEXUS-REPORTS-BENCHMARKS:END -->
-
-
-<!-- SYNERGY-FEDERATION-PASSPORT:START -->
----
-
-## 🧭 SYNERGY federation passport
-
-**Домен:** 🏭 Real economy / industrial layer  
-**Архитектурный родитель:** [`synergy_financial_os`](https://github.com/Shtenco/synergy_financial_os)  
-**Архитектурный корень:** [`synergy_system`](https://github.com/Shtenco/synergy_system)
-
-```mermaid
-flowchart LR
-    SYS[🧭 synergy_system] --> P[synergy_financial_os]
-    P --> THIS[synergy_eurasian]
-    THIS --> E[📦 Evidence / outputs]
-```
-
-Архитектурная принадлежность не заменяет доказанную интеграцию. Runtime-связь должна подтверждаться контрактами, manifests, deployment-конфигурацией или тестами.
-
-### Федерационный принцип
-
-Каждый репозиторий отвечает только за свой тип истины и не должен незаметно присваивать полномочия соседнего домена.
-
-### Навигация
-
-- [📚 Атлас 75 репозиториев](https://github.com/Shtenco/synergy_system/blob/main/docs/SYNERGY_REPOSITORY_ATLAS.md)
-- [🧾 Registry](https://github.com/Shtenco/synergy_system/blob/main/registry/SYNERGY_REPOSITORIES.json)
-- [🧭 Architecture root](https://github.com/Shtenco/synergy_system)
-
-### Evidence rule
-
-Любое сильное утверждение должно указывать на воспроизводимый тест, benchmark, ledger/evidence artifact или формально проверяемый контракт.
-
-<!-- SYNERGY-FEDERATION-PASSPORT:END -->
-
----
-
-# 🏭 Глубокий доказательный паспорт EIIOM
-
-## Фактическая зрелость `main`
-
-Eurasian уже имеет большой spec/data layer: 30+ domain docs, schema interfaces, scenario configs, optimizer, federation audit и tests. При этом сам README честно помечает V4 как `MODEL_SPEC_READY / DATA_CALIBRATION_PENDING`.
-
-```mermaid
-flowchart LR
-    DATA[Observed resource/demand data] --> SCEN[Scenario configs]
-    SCEN --> OPT[EIIOM optimizer]
-    OPT --> PROP[ProjectProposal]
-    PROP --> AUTH[Human/regulatory authorization]
-    AUTH --> REAL[Real project/cashflow]
-    REAL --> FOS[Financial OS]
-```
-
-## Важная актуализация
-
-Старые документы вроде `docs/17_FEDERATION_46_SYSTEM_MAP.md` являются историческим срезом; текущая federation authority — 75-repo registry в `synergy_system`.
-
-## Evidence gates
-
-- source manifest for calibration data;
-- schema validation for every ProjectProposal;
-- scenario uncertainty/stress;
-- no optimizer output treated as funding authorization;
-- observed cashflow required before Financial OS recognition.
-
-## Следующий рубеж
-
-заменить placeholder/base assumptions на signed real datasets → calibrate V4 stochastic model → publish scenario sensitivity → independent reproduction.
+<p align="center"><strong>SYNERGY EURASIAN — капитал имеет смысл тогда, когда превращается в проверяемую реальную производительность, устойчивость и благосостояние.</strong></p>
