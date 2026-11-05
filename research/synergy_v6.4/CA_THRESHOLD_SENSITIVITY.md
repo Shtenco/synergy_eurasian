@@ -13,8 +13,9 @@ remaining capacity of the two eligible suppliers:
 - `ca_t75`: 75%
 
 Each of 100 seeds in the volatile and severe regimes was replayed against the
-same exogenous environment for each policy. The 800 policy-seed combinations
-are included in the audit manifest.
+same exogenous environment for each of eight policies: four baseline policies
+and four adaptive CA thresholds. The 1,600 policy-seed combinations are
+included in the audit manifest.
 
 In the severe regime, mean output was 138.03 units for Independent, 170.03 for
 Market, and 170.03 for CA thresholds 50%, 60%, and 75%. Mean accrued operating
