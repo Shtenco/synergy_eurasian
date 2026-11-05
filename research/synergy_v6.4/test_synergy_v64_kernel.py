@@ -24,7 +24,7 @@ class TestSimulationInvariants(unittest.TestCase):
         for regime in ("normal", "volatile", "severe"):
             for seed in range(20):
                 env = k.make_environment(7000 + seed, regime)
-                for policy in ("independent", "market", "dao", "ca", "hybrid"):
+                for policy in ("independent", "market", "dao", "ca", "hybrid", "ca_t60"):
                     result = k.simulate(policy, env, final_price=15.0, return_trace=True)
                     self.assertLess(abs(result["conservation_error"]), 1e-7)
                     self.assertGreaterEqual(min(result["cash_by_node"].values()), -1e-9)
