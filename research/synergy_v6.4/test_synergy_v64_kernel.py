@@ -32,6 +32,12 @@ class TestSimulationInvariants(unittest.TestCase):
                     self.assertAlmostEqual(result["fifo_qty_in"], result["fifo_qty_out"], places=7)
                     self.assertGreaterEqual(result["fixed_arrears"], -1e-9)
 
+    def test_adaptive_ca_policy_preserves_accounting_invariants(self):
+        env = k.make_environment(99124, "severe")
+        result = k.simulate("ca_t60", env, final_price=15.0, return_trace=True)
+        self.assertLess(abs(result["conservation_error"]), 1e-7)
+        self.assertGreaterEqual(min(result["cash_by_node"].values()), -1e-9)
+
     def test_seed_is_deterministic(self):
         env = k.make_environment(99123, "severe")
         first = k.simulate("market", env, final_price=15.0, return_trace=True)
