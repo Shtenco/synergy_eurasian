@@ -3,18 +3,16 @@
   "status": "research prototype; synthetic assumptions; not production-ready",
   "main_runs": 1500,
   "price_sweep_runs": 6200,
-  "total_distinct_simulation_runs": 7700,
+  "adaptive_ca_sensitivity_runs": 800,
+  "total_distinct_simulation_runs": 8500,
+  "verification_reruns": 800,
   "invariant_test_scenarios": 300,
-  "unit_tests": 5,
-  "policies": ["independent", "market", "dao", "ca", "hybrid"],
+  "unit_tests": 6,
+  "policies": ["independent", "market", "dao", "ca", "ca_t40", "ca_t50", "ca_t60", "ca_t75", "hybrid"],
   "regimes": ["normal", "volatile", "severe"],
   "main_seed_range": [2000, 2099],
   "main_horizon_days": 60,
   "main_final_price": 15.0,
-  "price_grid": {
-    "normal_volatile": [10.5, 11, 12, 13, 14, 15, 16, 17, 18],
-    "severe": [10.5, 11, 12, 13, 14, 15, 16, 17, 18, 18.5, 19, 20, 22]
-  },
   "max_cash_conservation_error_main": 1.9963408703915775e-10,
   "limitations": [
     "7 aggregate nodes, not 147 individual agents",
