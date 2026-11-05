@@ -111,6 +111,12 @@ def choose_supplier(policy, buyer, candidates, capacities_left, costs, primary):
         return primary if primary in avail else None
     if policy == "ca":
         return primary if primary in avail else next((s for s in candidates if s != primary and s in avail), None)
+    if policy.startswith("ca_t"):
+        threshold = float(policy.split("_t", 1)[1]) / 100.0
+        total_left = sum(capacities_left.get(s, 0.0) for s in avail)
+        if primary in avail and capacities_left[primary] >= threshold * total_left:
+            return primary
+        return max(avail, key=lambda s:(capacities_left[s], -costs[s]))
     if policy == "market":
         max_left = max(capacities_left[s] for s in avail)
         return min(avail, key=lambda s:(costs[s] + 3.0*(1.0-capacities_left[s]/max_left), -capacities_left[s]))
