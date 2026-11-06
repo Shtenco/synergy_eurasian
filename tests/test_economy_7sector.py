@@ -123,7 +123,7 @@ def test_leontief_rejects_nonproductive_or_invalid_input_output_matrices():
     try:
         leontief_results(malformed)
     except ValueError as exc:
-        assert "square" in str(exc) or "dimensions" in str(exc)
+        assert "square" in str(exc) or "dimensions" in str(exc) or "rectangular" in str(exc)
     else:
         raise AssertionError("Non-square Leontief matrix was accepted")
 
