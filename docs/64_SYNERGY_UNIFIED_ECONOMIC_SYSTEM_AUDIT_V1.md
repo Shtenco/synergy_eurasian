@@ -277,3 +277,8 @@ Two findings have now been addressed in executable code:
 - F-22: V4 optimizer now validates finite budgets/weights/project metrics, positive normalization denominators, project criticality, integer lag/diffusion fields, sector caps/floors and project capacity before calling the LP solver.
 
 The new adversarial tests for these controls are committed in `research/sues-audit-v1`. They are not considered accepted until the exact branch-head CI run completes successfully.
+
+
+### F-26 — Federation audit is static metadata validation (MEDIUM)
+
+The federation audit reports 46 repositories and 9 canonical economic objects and checks the configured repository/authority map. It does not authenticate live GitHub repository state, inspect deployed permissions, validate runtime service boundaries, prove legal authority, or verify that external financial systems enforce the declared ownership. A passing static audit is a configuration consistency check, not an operational security or compliance certification.
