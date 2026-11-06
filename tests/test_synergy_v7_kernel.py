@@ -724,3 +724,10 @@ def test_v741_milp_optimizer_rejects_storage_limit_below_safety_stock():
     with pytest.raises(ValueError,match="below safety stock"):
         optimize_production_schedule([recipe],demand,[],[],2,{"r":1},
           minimum_inventory={"finished":2},storage_limits={"finished":1})
+
+
+def test_v741_milp_optimizer_rejects_unknown_holding_cost_product():
+    recipe=ProductionRecipe("r","finished",1,"unit",(),(),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
+    with pytest.raises(ValueError,match="holding_costs contains unknown"):
+        optimize_production_schedule([recipe],demand,[],[],2,{"r":1},holding_costs={"ghost":1})
