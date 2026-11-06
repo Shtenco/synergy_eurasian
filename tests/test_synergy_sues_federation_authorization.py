@@ -195,3 +195,9 @@ def test_unlisted_identity_cannot_disrupt_authorization_with_malformed_decision(
         "2026-11-06T10:01:00+00:00")
     assert policy().authorize(request, [outsider, approval], registry,
         "2026-11-06T10:02:00+00:00").allowed
+
+def test_policy_requires_immutable_scope_tuples():
+    engine = FederationAuthorizationPolicy()
+    with pytest.raises(ValueError, match="immutable tuples"):
+        engine.register_rule(AuthorizationRule("mutable", "tenant:one", "ALLOW",
+            "JOURNAL_POST", "LEDGER", ["org:requester"], ("org:approver",), 1))
