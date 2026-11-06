@@ -16,7 +16,7 @@ The code intentionally does not infer FX rates, unit conversions, periods or evi
 
 ## 2. Double-entry journal
 
-Each journal entry has a functional currency and at least two lines. Each line stores:
+Each journal entry has a functional currency and at least two lines. A journal can be scoped to one entity and rejects cross-entity postings; consolidated elimination journals use a distinct consolidation entity ID. Each line stores:
 - transaction-currency amount;
 - functional-currency valuation;
 - debit/credit side;
