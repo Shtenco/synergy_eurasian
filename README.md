@@ -359,3 +359,4 @@ V7 establishes append-only domain events, stable graph identities, evidence-qual
 - [V7.1 production feasibility implementation](src/synergy_v7/production.py)
 
 V7.1 adds discrete-period recipes, integer batch orders, material inventory, delivery receipts, demand priorities, lead times and shared resource-capacity checks. It validates proposed schedules; it does not yet optimize them.
+- [V7.1 production plan schema](interfaces/synergy_v7_production_plan.schema.json)
