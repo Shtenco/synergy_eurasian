@@ -420,3 +420,10 @@ def test_intercompany_elimination_refuses_unmapped_period_and_wrong_accounts():
     with pytest.raises(ValueError, match="Missing effective date"):
         post_intercompany_eliminations(journal, rows, {}, datetime(2026, 12, 31, tzinfo=timezone.utc),
             "event", "idem")
+
+    wrong_accounts = Journal("USD")
+    wrong_accounts.add_account(account("seller-revenue", "4100", AccountType.REVENUE, NormalBalance.CREDIT))
+    wrong_accounts.add_account(account("buyer-expense", "5100", AccountType.REVENUE, NormalBalance.CREDIT))
+    with pytest.raises(ValueError, match="revenue debit and expense credit"):
+        post_intercompany_eliminations(wrong_accounts, rows, {"2026-Q4": date(2026, 12, 31)},
+            datetime(2026, 12, 31, tzinfo=timezone.utc), "event-wrong", "idem-wrong")
