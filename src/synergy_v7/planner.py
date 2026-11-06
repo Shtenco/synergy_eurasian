@@ -47,6 +47,11 @@ def optimize_production_schedule(
     time_limit_seconds: float=30.0,
     minimum_inventory: dict[str,float] | None = None,
     storage_limits: dict[str,float] | None = None,
+    cash_opening_balance: float | None = None,
+    cash_minimum_balance: float | dict[int,float] | None = None,
+    cash_inflows_by_period: dict[int,float] | None = None,
+    collection_lag_by_demand: dict[str,int] | None = None,
+    collection_fraction_by_demand: dict[str,float] | None = None,
 ) -> dict:
     """Maximize demand value less production/holding costs under physical constraints.
 
@@ -69,6 +74,33 @@ def optimize_production_schedule(
         if not isinstance(limit,int) or limit<0: raise ValueError(f"batch limit for {rid} must be a non-negative integer")
     batch_costs=batch_costs or {}; holding_costs=holding_costs or {}
     minimum_inventory=minimum_inventory or {}; storage_limits=storage_limits or {}
+    cash_enabled=any(x is not None for x in (cash_opening_balance,cash_minimum_balance,cash_inflows_by_period,collection_lag_by_demand,collection_fraction_by_demand))
+    cash_opening_balance=0.0 if cash_opening_balance is None else cash_opening_balance
+    cash_inflows_by_period=cash_inflows_by_period or {}
+    collection_lag_by_demand=collection_lag_by_demand or {}
+    collection_fraction_by_demand=collection_fraction_by_demand or {}
+    if not math.isfinite(cash_opening_balance) or cash_opening_balance<0:
+        raise ValueError("cash_opening_balance must be finite and non-negative")
+    if set(cash_inflows_by_period)-set(range(horizon_periods)):
+        raise ValueError("cash_inflows_by_period contains period outside horizon")
+    for period,amount in cash_inflows_by_period.items():
+        if not math.isfinite(amount) or amount<0: raise ValueError(f"Invalid cash inflow for period {period}")
+    if set(collection_lag_by_demand)-{d.demand_id for d in demand_rows}:
+        raise ValueError("collection_lag_by_demand contains unknown demand_id")
+    if set(collection_fraction_by_demand)-{d.demand_id for d in demand_rows}:
+        raise ValueError("collection_fraction_by_demand contains unknown demand_id")
+    for demand_id,lag in collection_lag_by_demand.items():
+        if not isinstance(lag,int) or lag<0: raise ValueError(f"Collection lag for {demand_id} must be a non-negative integer")
+    for demand_id,fraction in collection_fraction_by_demand.items():
+        if not math.isfinite(fraction) or not 0<=fraction<=1:
+            raise ValueError(f"Collection fraction for {demand_id} must be in [0,1]")
+    if isinstance(cash_minimum_balance,dict):
+        if set(cash_minimum_balance)-set(range(horizon_periods)):
+            raise ValueError("cash_minimum_balance contains period outside horizon")
+        for period,amount in cash_minimum_balance.items():
+            if not math.isfinite(amount) or amount<0: raise ValueError(f"Invalid minimum cash for period {period}")
+    elif cash_minimum_balance is not None and (not math.isfinite(cash_minimum_balance) or cash_minimum_balance<0):
+        raise ValueError("cash_minimum_balance must be finite and non-negative")
     if set(batch_costs)-set(rmap): raise ValueError("batch_costs contains unknown recipe_id")
     for k,v in batch_costs.items():
         if not math.isfinite(v) or v<0: raise ValueError(f"Invalid batch cost for {k}")
@@ -139,10 +171,20 @@ def optimize_production_schedule(
         for period in range(horizon_periods):
             inv_index[(p,period)]=len(upper); upper.append(storage_limits.get(p,math.inf)); integrality.append(0)
             objective.append(holding_costs.get(p,0.0))
+    cash_index={}
+    if cash_enabled:
+        for period in range(horizon_periods):
+            cash_index[period]=len(upper); upper.append(math.inf); integrality.append(0)
+            objective.append(0.0)
     nvars=len(upper); lower=np.zeros(nvars); upper=np.asarray(upper,dtype=float)
     for p in products:
         for period in range(horizon_periods):
             lower[inv_index[(p,period)]]=minimum_inventory.get(p,0.0)
+    if cash_enabled:
+        for period in range(horizon_periods):
+            minimum=(cash_minimum_balance.get(period,0.0) if isinstance(cash_minimum_balance,dict)
+                else (cash_minimum_balance or 0.0))
+            lower[cash_index[period]]=minimum
     rows=[]; cols=[]; vals=[]; row_lb=[]; row_ub=[]; row_names=[]
     def add_constraint(coeffs,lb,ub,name):
         row=len(row_lb); row_names.append(name); row_lb.append(lb); row_ub.append(ub)
@@ -182,6 +224,33 @@ def optimize_production_schedule(
                     if req.unit!=cap.unit: raise ValueError(f"Resource unit mismatch for {resource} in period {period}")
                     coeff[idx]=coeff.get(idx,0.0)+req.quantity_per_batch
         if coeff: add_constraint(coeff,-math.inf,cap.available_quantity,f"resource::{resource}::{period}")
+    if cash_enabled:
+        # Cash is paid for production at start period and inventory holding at
+        # period end. Demand value enters cash only at the modeled collection period.
+        deferred_collections=[]
+        for d in demand_rows:
+            collection_period=d.due_period+collection_lag_by_demand.get(d.demand_id,0)
+            if collection_period>=horizon_periods:
+                deferred_collections.append(d.demand_id)
+        for period in range(horizon_periods):
+            coeff={cash_index[period]:1.0}
+            if period>0: coeff[cash_index[period-1]]=-1.0
+            for rid,r in rmap.items():
+                idx=x_index.get((rid,period))
+                if idx is not None and batch_costs.get(rid,0.0):
+                    coeff[idx]=coeff.get(idx,0.0)+batch_costs.get(rid,0.0)
+            for p in products:
+                cost=holding_costs.get(p,0.0)
+                if cost: coeff[inv_index[(p,period)]]=coeff.get(inv_index[(p,period)],0.0)+cost
+            for d in demand_rows:
+                collection_period=d.due_period+collection_lag_by_demand.get(d.demand_id,0)
+                if collection_period==period:
+                    cash_value=d.unit_value*collection_fraction_by_demand.get(d.demand_id,1.0)
+                    coeff[y_index[d.demand_id]]=coeff.get(y_index[d.demand_id],0.0)-cash_value
+            rhs=cash_inflows_by_period.get(period,0.0)+(cash_opening_balance if period==0 else 0.0)
+            add_constraint(coeff,rhs,rhs,f"cash_balance::{period}")
+    else:
+        deferred_collections=[]
     matrix=coo_matrix((vals,(rows,cols)),shape=(len(row_lb),nvars)).tocsr()
     constraints=LinearConstraint(matrix,np.asarray(row_lb),np.asarray(row_ub))
     result=milp(c=np.asarray(objective),integrality=np.asarray(integrality),
@@ -229,12 +298,24 @@ def optimize_production_schedule(
             resource_usage.append({"resource_id":resource,"period":period,"used":used,
                 "available":cap.available_quantity if cap else 0.0,"unit":unit,
                 "utilization":used/cap.available_quantity if cap and cap.available_quantity else None})
+    ending_cash=([max(0.0,float(sol[cash_index[t]])) for t in range(horizon_periods)] if cash_enabled else None)
     return {"feasible":True,"optimality_proven":int(result.status)==0,"solver_status":int(result.status),
         "solver_message":str(result.message),"objective_currency":objective_currency,
         "objective_value":served_value-production_cost_total-holding_cost_total,
         "served_value":served_value,"production_cost":production_cost_total,"holding_cost":holding_cost_total,
         "schedule":schedule,"demand":demand_report,"inventory":inventory_report,
-        "resource_usage":resource_usage,"excluded_nonfirm_receipts":excluded_receipts,
+        "resource_usage":resource_usage,"ending_cash_by_period":ending_cash,
+        "deferred_collection_demands":deferred_collections if cash_enabled else [],
+        "cash_constraint_enabled":cash_enabled,
+        "cash_model":{"opening_balance":cash_opening_balance if cash_enabled else None,
+            "minimum_balance":cash_minimum_balance if cash_enabled else None,
+            "exogenous_inflows":cash_inflows_by_period if cash_enabled else {},
+            "collection_lags":collection_lag_by_demand if cash_enabled else {},
+            "collection_fractions":collection_fraction_by_demand if cash_enabled else {},
+            "production_cost_paid_at_start_period":True,
+            "holding_cost_paid_at_end_period":True,
+            "cash_receipts_are_scenario_assumptions_not_bank_reconciled_actuals":True},
+        "excluded_nonfirm_receipts":excluded_receipts,
         "out_of_horizon_receipts":out_of_horizon_receipts,"blocked_recipe_periods":blocked,
         "mip_gap":float(result.mip_gap) if getattr(result,"mip_gap",None) is not None else None,
         "assumptions":{"integer_batches":True,"discrete_periods":True,"firm_capacity_only":True,
