@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/synergy_sues_economic_contracts.schema.json",
+  "title": "SYNERGY Unified Economic System — typed economic contracts",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/money" },
+    { "$ref": "#/$defs/quantity" },
+    { "$ref": "#/$defs/economic_period" },
+    { "$ref": "#/$defs/fx_rate" },
+    { "$ref": "#/$defs/evidence_record" }
+  ],
+  "$defs": {
+    "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "currency"],
+      "properties": {
+        "amount": { "type": "string", "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$" },
+        "currency": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{2,11}$" }
+      }
+    },
+    "quantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "unit"],
+      "properties": {
+        "amount": { "type": "string", "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$" },
+        "unit": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_./*-]{0,31}$" }
+      }
+    },
+    "economic_period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["period_id", "start", "end"],
+      "properties": {
+        "period_id": { "type": "string", "minLength": 1 },
+        "start": { "type": "string", "format": "date" },
+        "end": { "type": "string", "format": "date" }
+      }
+    },
+    "fx_rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rate_id", "base_currency", "quote_currency", "rate", "observed_at", "source_ref"],
+      "properties": {
+        "rate_id": { "type": "string", "minLength": 1 },
+        "base_currency": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{2,11}$" },
+        "quote_currency": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{2,11}$" },
+        "rate": { "type": "string", "pattern": "^(?=.*[1-9])(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$" },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "source_ref": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evidence_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "source_ref", "status", "captured_at", "effective_from"],
+      "properties": {
+        "evidence_id": { "type": "string", "minLength": 1 },
+        "source_ref": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["OBSERVED", "VERIFIED", "UNDERWRITTEN", "SCENARIO"] },
+        "captured_at": { "type": "string", "format": "date-time" },
+        "effective_from": { "type": "string", "format": "date" },
+        "effective_to": { "type": ["string", "null"], "format": "date" },
+        "content_sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+        "issuer_id": { "type": ["string", "null"] }
+      }
+    }
+  }
+}
