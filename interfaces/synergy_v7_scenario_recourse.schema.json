@@ -9,7 +9,8 @@
   ],
   "properties": {
     "base_plan": {
-      "$ref": "synergy_v7_production_optimizer.schema.json"
+      "type": "object",
+      "description": "Validated separately against the production optimizer schema by the scenario CLI."
     },
     "risk_alpha": {
       "type": "number",
