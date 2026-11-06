@@ -1245,3 +1245,13 @@ def test_v77_scenario_set_rejects_non_normalized_probabilities_and_unknown_ids()
     scenario=EconomicShockScenario("bad",1.0,demand_quantity_multipliers={"missing":0.5})
     with pytest.raises(ValueError,match="Unknown demand_id"):
         apply_scenario(base,scenario)
+
+
+def test_v77_scenario_cli_example_validates_schema_and_runs(capsys):
+    from synergy_v7.scenario_recourse_cli import main
+    fixture=ROOT/"examples"/"synergy_v7_7_scenario_recourse.json"
+    code=main([str(fixture)])
+    captured=capsys.readouterr()
+    assert code==0
+    assert '"formal_two_stage_stochastic_milp": false' in captured.out
+    assert '"complete": true' in captured.out
