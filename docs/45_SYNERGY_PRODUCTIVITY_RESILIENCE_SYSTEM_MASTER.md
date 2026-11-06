@@ -169,3 +169,7 @@ V7.6.5 derives period borrowing-base ceilings from eligible receivables and inve
 ### V7.6.6 update — collateral aging, dilution and auditability
 
 V7.6.6 adds receivable aging haircuts, inventory aging haircuts, receivable dilution reserves, receivable/inventory-specific fixed reserves and an asset-level audit trail with evidence IDs and explicit exclusion reasons. All additions are optional and preserve V7.6.5 input compatibility. This improves traceability and conservative valuation but does not independently authenticate the evidence or certify lender eligibility. See [V7.6.6 specification](docs/61_SYNERGY_V7_6_6_ADVANCED_COLLATERAL_RISK.md).
+
+### V7.7 update — scenario-wise adaptive recourse and mean-CVaR
+
+V7.7 adds an evaluator that perturbs demand, resources, receipts, cash flows, supplier commitments and collateral by declared scenarios, re-runs the existing production/finance MILP independently for each scenario, and reports expected loss and discrete CVaR. This is deliberately labelled a wait-and-see benchmark: it does not enforce non-anticipativity and is not a formal two-stage stochastic MILP. Infeasible or unproven scenario solves withhold aggregate risk metrics. See [V7.7 specification](docs/62_SYNERGY_V7_7_SCENARIO_RECOURSE.md).
