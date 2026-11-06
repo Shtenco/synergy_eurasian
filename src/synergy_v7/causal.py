@@ -43,6 +43,9 @@ def matched_pair_difference_in_differences(
     if outcome_direction not in {"HIGHER_IS_BETTER","LOWER_IS_BETTER"}:
         raise ValueError("Unsupported outcome_direction")
     if len({x.observation_id for x in rows})!=len(rows): raise ValueError("Duplicate observation_id")
+    unit_ids=[x.unit_id for x in rows]
+    if len(unit_ids)!=len(set(unit_ids)):
+        raise ValueError("Each experimental unit must belong to exactly one matched pair")
     pairs={}
     for x in rows:
         slot=pairs.setdefault(x.matched_pair_id,{})
