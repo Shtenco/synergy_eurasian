@@ -60,13 +60,21 @@ The SUES trade subledger records receivable/payable documents and partial settle
 
 Credit notes, write-offs, discounts, disputes, ECL provisions, taxes and payment-provider fees require separate explicit workflows and account mappings. They are not inferred from a generic reduction in open balance.
 
-## 9. Deliberate limitations
+## 9. FIFO inventory subledger
+
+The inventory kernel tracks lot-level remaining quantity and functional-currency cost. Receipts create FIFO lots; issues and write-offs consume oldest lots and return the associated cost; internal location transfers consume source lots and create destination lots preserving the transferred cost. Pools are keyed by item and location and reject mixed units. Insufficient stock and duplicate movement/lot IDs are rejected before inventory is mutated.
+
+Receipt postings debit inventory and credit an explicitly selected offset account (for example GRNI); issues/write-offs debit an explicitly selected WIP/COGS/loss account and credit inventory. Internal same-entity location transfers do not create new GL expense or revenue. Inventory costs must already be valued in the entity functional currency; procurement FX valuation must be explicit upstream.
+
+The current kernel does not yet implement full BOM consumption, production output capitalization, standard-cost variances, landed-cost allocation, lot expiry/quality, reservations, serial tracking, lower-of-cost/NRV, or inventory close/revaluation. Those are next-stage extensions.
+
+## 10. Deliberate limitations
 
 This is an in-memory reference kernel, not yet a production ledger. It does not yet implement persistence, concurrent posting locks, account-period close, tax rules, accrual automation, subledger reconciliation, FX revaluation, consolidation, intercompany elimination, authorization/signatures or statutory reporting. It does not hold customer funds or initiate payments.
 
 The journal balances one entity's functional currency. Multi-entity consolidation must translate subsidiary trial balances under a documented FX policy and eliminate matched intercompany balances and transactions.
 
-## 10. Acceptance tests
+## 11. Acceptance tests
 
 The tests cover:
 - rejection of mixed-currency and mixed-unit arithmetic;
@@ -79,6 +87,7 @@ The tests cover:
 - bank statement opening/movement/closing and journal cash reconciliation;
 - closing/average/historical-rate translation with CTA;
 - AR/AP document, partial settlement, FX and GL-control reconciliation;
+- FIFO lot valuation, internal transfer cost conservation and inventory-to-GL postings;
 - foreign-currency functional valuation;
 - idempotency and duplicate prevention;
 - single reversal and trial-balance conservation.
@@ -89,7 +98,7 @@ Run:
 python -m pytest -q tests/test_synergy_sues.py
 ```
 
-## 11. Next increments
+## 12. Next increments
 
 1. Add chart-of-accounts hierarchy and normal-balance reporting.
 2. Add journal-to-AR/AP and bank-statement reconciliation.
