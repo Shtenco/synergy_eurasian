@@ -238,8 +238,13 @@ def execute_production_order(
         raise ValueError("Raw inventory, WIP and finished-goods accounts must be distinct")
     if journal.entity_id is not None and journal.entity_id != order.entity_id:
         raise ValueError("Production order entity differs from journal owner")
-    if any(x.order_id == order.order_id for x in ()):
-        raise ValueError("Duplicate production order")
+    prefix = f"production:{order.order_id}:"
+    if any(row.movement_id.startswith(prefix) for row in inventory.movements):
+        raise ValueError(f"Production order already executed: {order.order_id}")
+    expected_entries = {f"inventory:{prefix}issue:{row.item_id}" for row in order.components}
+    expected_entries.add(f"{prefix}capitalize")
+    if expected_entries & {row.entry_id for row in journal.entries}:
+        raise ValueError(f"Production order already journalized: {order.order_id}")
 
     required: list[tuple[BOMComponent, Quantity]] = []
     for component in order.components:
