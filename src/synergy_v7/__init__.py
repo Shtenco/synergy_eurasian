@@ -32,6 +32,7 @@ from .collateral import (ReceivableCollateral, InventoryCollateral,
     BorrowingBasePolicy, calculate_borrowing_base)
 from .scenario_recourse import (EconomicShockScenario, apply_scenario,
     weighted_cvar, evaluate_scenario_set)
+from .two_stage_optimizer import TwoStageScenario, optimize_two_stage_recourse
 
 __all__ = ["DomainEvent","EventStore","GraphNode","GraphEdge","EconomicGraph",
     "PhysicalFlow","physical_flow_summary","ResourceCapacity","ResourceCommitment",
@@ -42,5 +43,5 @@ __all__ = ["DomainEvent","EventStore","GraphNode","GraphEdge","EconomicGraph",
     "DocumentAdjustment","DisputeEvent","CreditRiskAssessment","build_trade_ledger",
     "BankStatementLine","CashAllocation","reconcile_bank_statement","OutputObservation",
     "DeliveryAcceptance","InvoiceDeliveryAllocation","CollectionAttribution","CostObservation",
-    "evaluate_realization_chain","SupplierPaymentCommitment","aggregate_supplier_payment_commitments","ReceivableCollateral","InventoryCollateral","BorrowingBasePolicy","calculate_borrowing_base","EconomicShockScenario","apply_scenario","weighted_cvar","evaluate_scenario_set","PlanDemand","optimize_production_schedule","ResourceShock","ReceiptDelay","stress_test_fixed_schedule","CausalObservation","matched_pair_difference_in_differences","WorkingCapitalSnapshot",
+    "evaluate_realization_chain","SupplierPaymentCommitment","aggregate_supplier_payment_commitments","ReceivableCollateral","InventoryCollateral","BorrowingBasePolicy","calculate_borrowing_base","EconomicShockScenario","apply_scenario","weighted_cvar","evaluate_scenario_set","TwoStageScenario","optimize_two_stage_recourse","PlanDemand","optimize_production_schedule","ResourceShock","ReceiptDelay","stress_test_fixed_schedule","CausalObservation","matched_pair_difference_in_differences","WorkingCapitalSnapshot",
     "working_capital_cash_impact","CashWaterfallInput","run_cash_waterfall"]
