@@ -8,7 +8,7 @@ from synergy_sues.inventory import InventoryLedger
 from synergy_sues.journal import Account, AccountType, Journal, NormalBalance
 from synergy_sues.production import (
     BOMComponent, GRNIMatcher, GoodsReceipt, ProductionOrder,
-    PurchaseOrderLine, SupplierInvoiceLine, execute_production_order,
+    ProductionCostEvent, ProductionCostType, PurchaseOrderLine, SupplierInvoiceLine, execute_production_order,
     post_grni_invoice, post_grni_receipt,
 )
 
@@ -27,6 +27,8 @@ def production_journal():
     add_account(journal, "finished", "1500", AccountType.ASSET, NormalBalance.DEBIT)
     add_account(journal, "grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT)
     add_account(journal, "ap", "2200", AccountType.LIABILITY, NormalBalance.CREDIT)
+    add_account(journal, "labor_payable", "2300", AccountType.LIABILITY, NormalBalance.CREDIT)
+    add_account(journal, "energy_payable", "2400", AccountType.LIABILITY, NormalBalance.CREDIT)
     return journal
 
 
@@ -138,5 +140,54 @@ def test_zero_cost_bom_is_rejected_before_inventory_mutation():
     )
     with pytest.raises(ValueError, match="Zero-cost production batch"):
         execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW)
+    assert inventory.summary() == before
+    assert journal.entries == ()
+
+
+
+def test_evidence_backed_labor_and_energy_costs_are_capitalized_into_finished_goods():
+    journal = production_journal()
+    inventory = InventoryLedger("USD")
+    inventory.receive("raw-receipt-costed", "steel-lot-costed", "steel", "factory",
+        Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 1), "receipt:steel-costed")
+    inventory.post_to_journal("raw-receipt-costed", journal, "raw", "grni", "co1", NOW)
+    order = ProductionOrder(
+        "batch-costed", "co1", "machine-part", Quantity("2", "unit"), "factory",
+        (BOMComponent("steel", Quantity("2", "kg")),),
+        date(2026, 11, 6), "production-order:batch-costed",
+    )
+    costs = (
+        ProductionCostEvent("labor-1", "batch-costed", "co1", ProductionCostType.LABOR,
+            Money("20", "USD"), date(2026, 11, 6), "payroll:batch-costed", "evidence:time-sheet"),
+        ProductionCostEvent("energy-1", "batch-costed", "co1", ProductionCostType.ENERGY,
+            Money("10", "USD"), date(2026, 11, 6), "utility:batch-costed", "evidence:meter"),
+    )
+    result = execute_production_order(
+        order, inventory, journal, "raw", "wip", "finished", NOW,
+        costs, {ProductionCostType.LABOR: "labor_payable", ProductionCostType.ENERGY: "energy_payable"},
+    )
+    assert result.direct_material_cost == Money("40", "USD")
+    assert result.conversion_cost == Money("30", "USD")
+    assert result.capitalized_cost == Money("70", "USD")
+    assert result.output_movement.cost == Money("70", "USD")
+    assert journal.trial_balance()["balanced"]
+    assert journal.trial_balance()["total_debits"] == journal.trial_balance()["total_credits"] == "240"
+
+
+def test_production_cost_events_require_mapping_before_inventory_is_consumed():
+    journal = production_journal()
+    inventory = InventoryLedger("USD")
+    inventory.receive("raw-receipt-unmapped", "steel-lot-unmapped", "steel", "factory",
+        Quantity("2", "kg"), Money("20", "USD"), date(2026, 11, 1), "receipt:steel-unmapped")
+    before = inventory.summary()
+    order = ProductionOrder(
+        "batch-unmapped", "co1", "machine-part", Quantity("1", "unit"), "factory",
+        (BOMComponent("steel", Quantity("1", "kg")),),
+        date(2026, 11, 6), "production-order:batch-unmapped",
+    )
+    event = ProductionCostEvent("labor-unmapped", "batch-unmapped", "co1", ProductionCostType.LABOR,
+        Money("5", "USD"), date(2026, 11, 6), "payroll:unmapped", "evidence:unmapped")
+    with pytest.raises(ValueError, match="Missing credit account mapping"):
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, (event,), {})
     assert inventory.summary() == before
     assert journal.entries == ()
