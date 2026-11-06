@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/synergy_sues_v7_projector.schema.json",
+  "title": "SYNERGY SUES V7 graph event projector contracts",
+  "oneOf": [
+    { "$ref": "#/$defs/node_registered_v1" },
+    { "$ref": "#/$defs/edge_registered_v1" },
+    { "$ref": "#/$defs/projection_record" }
+  ],
+  "$defs": {
+    "node_registered_v1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "node_type"],
+      "properties": {
+        "node_id": { "type": "string", "minLength": 1 },
+        "node_type": { "type": "string", "minLength": 1 },
+        "attributes": { "type": "object" }
+      }
+    },
+    "edge_registered_v1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["edge_id", "source_id", "target_id", "relation"],
+      "properties": {
+        "edge_id": { "type": "string", "minLength": 1 },
+        "source_id": { "type": "string", "minLength": 1 },
+        "target_id": { "type": "string", "minLength": 1 },
+        "relation": { "type": "string", "minLength": 1 },
+        "attributes": { "type": "object" }
+      }
+    },
+    "projection_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projection_id", "projection_type", "source_event_id",
+        "source_event_hash", "event_type", "schema_version",
+        "projector_version", "payload_json"
+      ],
+      "properties": {
+        "projection_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "projection_type": { "enum": ["GRAPH_NODE", "GRAPH_EDGE"] },
+        "source_event_id": { "type": "string", "minLength": 1 },
+        "source_event_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "event_type": { "enum": ["NODE_REGISTERED", "EDGE_REGISTERED"] },
+        "schema_version": { "type": "integer", "const": 1 },
+        "projector_version": { "type": "integer", "minimum": 1 },
+        "payload_json": { "type": "string", "minLength": 2 }
+      }
+    }
+  }
+}
