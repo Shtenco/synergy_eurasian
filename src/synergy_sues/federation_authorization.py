@@ -50,6 +50,8 @@ class FederationAuthorizationPolicy:
             raise ValueError("rule identity, tenant, effect, action and resource_type are required")
         if rule.effect not in {"ALLOW", "DENY"}:
             raise ValueError("rule effect must be ALLOW or DENY")
+        if not isinstance(rule.subject_ids, tuple) or not isinstance(rule.approver_ids, tuple):
+            raise ValueError("subject_ids and approver_ids must be immutable tuples")
         if isinstance(rule.min_approvals, bool) or not isinstance(rule.min_approvals, int) or rule.min_approvals < 0:
             raise ValueError("min_approvals must be a non-negative integer")
         if rule.effect == "DENY" and rule.min_approvals:
