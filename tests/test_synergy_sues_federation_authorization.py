@@ -57,8 +57,9 @@ def request_payload():
         "resource_type": "LEDGER", "resource_id": "ledger:alpha"}
 
 
-def approval_payload(decision="APPROVE"):
-    return {"request_id": "req-1", "action": "JOURNAL_POST",
+def approval_payload(request, decision="APPROVE"):
+    return {"request_id": "req-1", "request_event_id": request.event["event_id"],
+        "request_event_hash": request.event["event_hash"], "action": "JOURNAL_POST",
         "resource_type": "LEDGER", "resource_id": "ledger:alpha",
         "requester_identity_id": "org:requester", "decision": decision}
 
@@ -76,7 +77,7 @@ def test_signed_request_and_distinct_signed_approval_authorize(tmp_path):
     request = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
         keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "request")
     approval = signed_event(tmp_path, "org:approver", "tenant:one", "key-1",
-        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(), "approval",
+        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(request), "approval",
         "2026-11-06T10:01:00+00:00")
     decision = policy().authorize(request, [approval], registry, "2026-11-06T10:02:00+00:00")
     assert decision.allowed is True
@@ -101,7 +102,7 @@ def test_requester_cannot_approve_own_action(tmp_path):
     request = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
         keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "request")
     self_approval = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
-        keys["org:requester"], "AUTHORIZATION_APPROVAL", approval_payload(), "self",
+        keys["org:requester"], "AUTHORIZATION_APPROVAL", approval_payload(request), "self",
         "2026-11-06T10:01:00+00:00")
     decision = policy(min_approvals=1, approvers=("org:requester",)).authorize(
         request, [self_approval], registry, "2026-11-06T10:02:00+00:00")
@@ -114,15 +115,15 @@ def test_authorized_rejection_vetoes_but_unlisted_identity_cannot(tmp_path):
     request = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
         keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "request")
     outsider_reject = signed_event(tmp_path, "org:outsider", "tenant:one", "key-1",
-        keys["org:outsider"], "AUTHORIZATION_APPROVAL", approval_payload("REJECT"), "outsider",
+        keys["org:outsider"], "AUTHORIZATION_APPROVAL", approval_payload(request, "REJECT"), "outsider",
         "2026-11-06T10:01:00+00:00")
     approved = signed_event(tmp_path, "org:approver", "tenant:one", "key-1",
-        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(), "approval",
+        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(request), "approval",
         "2026-11-06T10:01:00+00:00")
     assert policy().authorize(request, [outsider_reject, approved], registry,
         "2026-11-06T10:02:00+00:00").allowed
     authorized_reject = signed_event(tmp_path, "org:approver", "tenant:one", "key-1",
-        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload("REJECT"), "reject",
+        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(request, "REJECT"), "reject",
         "2026-11-06T10:01:00+00:00")
     result = policy().authorize(request, [approved, authorized_reject], registry,
         "2026-11-06T10:02:00+00:00")
@@ -146,13 +147,13 @@ def test_approval_must_match_request_scope_and_be_signed_after_request(tmp_path)
     registry, keys = setup_registry()
     request = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
         keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "request")
-    wrong_scope = approval_payload()
+    wrong_scope = approval_payload(request)
     wrong_scope["resource_id"] = "ledger:other"
     approval = signed_event(tmp_path, "org:approver", "tenant:one", "key-1",
         keys["org:approver"], "AUTHORIZATION_APPROVAL", wrong_scope, "wrong",
         "2026-11-06T10:01:00+00:00")
     early = signed_event(tmp_path, "org:approver", "tenant:one", "key-1",
-        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(), "early",
+        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(request), "early",
         "2026-11-06T09:59:00+00:00")
     result = policy().authorize(request, [approval, early], registry, "2026-11-06T10:02:00+00:00")
     assert result.reason == "insufficient_approvals"
@@ -166,7 +167,7 @@ def test_authorization_rejects_tampered_or_wrong_event_type(tmp_path):
     with pytest.raises(ValueError, match="event hash"):
         policy().authorize(altered, [], registry, "2026-11-06T10:02:00+00:00")
     approval_as_request = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
-        keys["org:requester"], "AUTHORIZATION_APPROVAL", approval_payload(), "not-request")
+        keys["org:requester"], "AUTHORIZATION_APPROVAL", approval_payload(request), "not-request")
     with pytest.raises(ValueError, match="AUTHORIZATION_REQUEST"):
         policy().authorize(approval_as_request, [], registry, "2026-11-06T10:02:00+00:00")
 
@@ -187,12 +188,12 @@ def test_unlisted_identity_cannot_disrupt_authorization_with_malformed_decision(
     registry, keys = setup_registry()
     request = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
         keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "request")
-    malformed = approval_payload("MAYBE")
+    malformed = approval_payload(request, "MAYBE")
     outsider = signed_event(tmp_path, "org:outsider", "tenant:one", "key-1",
         keys["org:outsider"], "AUTHORIZATION_APPROVAL", malformed, "outsider-invalid",
         "2026-11-06T10:01:00+00:00")
     approval = signed_event(tmp_path, "org:approver", "tenant:one", "key-1",
-        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(), "approval",
+        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(request), "approval",
         "2026-11-06T10:01:00+00:00")
     assert policy().authorize(request, [outsider, approval], registry,
         "2026-11-06T10:02:00+00:00").allowed
@@ -202,3 +203,21 @@ def test_policy_requires_immutable_scope_tuples():
     with pytest.raises(ValueError, match="immutable tuples"):
         engine.register_rule(AuthorizationRule("mutable", "tenant:one", "ALLOW",
             "JOURNAL_POST", "LEDGER", ["org:requester"], ("org:approver",), 1))
+
+
+def test_approval_cannot_be_replayed_against_a_different_signed_request_event(tmp_path):
+    registry, keys = setup_registry()
+    first_request = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
+        keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "request-one")
+    second_request = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
+        keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "request-two")
+    approval = signed_event(tmp_path, "org:approver", "tenant:one", "key-1",
+        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(first_request),
+        "approval-for-first", "2026-11-06T10:01:00+00:00")
+    assert first_request.event["event_hash"] != second_request.event["event_hash"]
+    assert policy().authorize(first_request, [approval], registry,
+        "2026-11-06T10:02:00+00:00").allowed
+    decision = policy().authorize(second_request, [approval], registry,
+        "2026-11-06T10:02:00+00:00")
+    assert decision.allowed is False
+    assert decision.reason == "insufficient_approvals"
