@@ -53,7 +53,7 @@ Journal bridge:
 - component issue: Dr WIP / Cr Raw-material inventory;
 - completed batch: Dr Finished-goods inventory / Cr WIP.
 
-The output inventory lot receives exactly the accumulated direct-material cost. The execution result checks that finished-goods cost equals the material cost consumed.
+The output inventory lot receives direct-material cost plus evidence-backed conversion-cost events. Each conversion event has an order/entity identity, a cost type, a positive functional-currency amount, an effective date, a source reference and an evidence reference. A configured credit account is required for each cost type. The execution result reconciles finished-goods cost to direct materials plus conversion costs.
 
 ## 4. Accounting conservation identities
 
@@ -95,7 +95,7 @@ The tests in tests/test_synergy_sues_production.py cover:
 1. GRNI-to-AP foreign-currency posting with dated FX and realized FX variance.
 2. Purchase price, quantity, freight/landed-cost and tax variance workflows.
 3. Multi-level BOM, routing, work centers, partial completions and WIP ageing.
-4. Labor and overhead absorption from observed time/energy/machine evidence.
+4. Calculate labor and overhead from measured time, machine-hours, energy quantities and approved rates; reconcile these calculations to source invoices/payroll.
 5. Scrap, yield, rework and by-product accounting.
 6. Production-event adapters to V7 event envelope and realization chain.
 7. Multi-entity close, transfer pricing and intercompany inventory profit elimination.
