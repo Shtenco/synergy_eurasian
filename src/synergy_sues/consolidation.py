@@ -232,8 +232,10 @@ def post_intercompany_eliminations(
                     raise ValueError(f"One explicit credit account_id is required for {category}")
                 if period_id not in effective_dates_by_period:
                     raise ValueError(f"Missing effective date for intercompany period: {period_id}")
-                debit_account = account_map[next(iter(debit_accounts))]
-                credit_account = account_map[next(iter(credit_accounts))]
+                debit_account = account_map.get(next(iter(debit_accounts)))
+                credit_account = account_map.get(next(iter(credit_accounts)))
+                if debit_account is None or credit_account is None:
+                    raise ValueError("Elimination references an unknown consolidation account")
                 if category == "P_AND_L":
                     if (debit_account.account_type != AccountType.REVENUE
                             or debit_account.normal_balance != NormalBalance.CREDIT
