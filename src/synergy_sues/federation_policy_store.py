@@ -308,8 +308,8 @@ class SQLiteAuthorizationPolicyStore:
         received_at: datetime | str | None = None,
     ) -> PolicyChangeResult:
         """Validate signatures/quorum and atomically apply one expected-version change."""
-        if not self.verify():
-            raise ValueError("authorization policy history integrity verification failed")
+        if not self.verify(registry):
+            raise ValueError("authorization policy history or historical signature verification failed")
         approvals = tuple(approvals)
         tenant_id, change_id, expected_version, operation, rule_id, rule_doc, approval_events = (
             self._validate_change(request, approvals, registry, received_at)
@@ -420,13 +420,15 @@ class SQLiteAuthorizationPolicyStore:
         received_at: datetime | str | None = None,
     ) -> AuthorizationDecision:
         requester = registry.verify(request, received_at)
+        if not self.verify(registry):
+            raise ValueError("authorization policy history or historical signature verification failed")
         snapshot = self.snapshot(requester.tenant_id)
         decision = self._policy_from_snapshot(snapshot).authorize(
             request, approvals, registry, received_at
         )
         return replace(decision, policy_version=snapshot.version, policy_hash=snapshot.policy_hash)
 
-    def verify(self) -> bool:
+    def verify(self, registry: TrustedKeyRegistry | None = None) -> bool:
         with self._session() as db:
             rows = db.execute(
                 "SELECT * FROM authorization_policy_changes ORDER BY tenant_id,version"
@@ -451,6 +453,8 @@ class SQLiteAuthorizationPolicyStore:
                         or not isinstance(policy_doc, list)):
                     return False
                 request_envelope = self._decode_envelope(request)
+                if registry is not None:
+                    registry.verify(request_envelope, received_at=request_envelope.signed_at)
                 change_event = request_envelope.event
                 _event_hash(change_event)
                 change_payload = change_event.get("payload")
@@ -472,6 +476,8 @@ class SQLiteAuthorizationPolicyStore:
                 approval_event_ids: set[str] = set()
                 for approval_document in approvals:
                     approval_envelope = self._decode_envelope(approval_document)
+                    if registry is not None:
+                        registry.verify(approval_envelope, received_at=approval_envelope.signed_at)
                     approval_event = approval_envelope.event
                     _event_hash(approval_event)
                     approval_payload = approval_event.get("payload")
