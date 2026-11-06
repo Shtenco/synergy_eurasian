@@ -41,8 +41,10 @@ def evaluate_document(document,schema_path=None):
         ar=[ReceivableCollateral(**x) for x in document.get("receivable_collateral",[])]
         stock=[InventoryCollateral(**x) for x in document.get("inventory_collateral",[])]
         collateral_report=calculate_borrowing_base(ar,stock,policy,document.get("objective_currency","USD"))
-        for period,row in collateral_report["periods"].items():
-            amount=row["net_borrowing_base"]
+        # A missing collateral snapshot is not an unlimited borrowing base.
+        # Treat absent periods as zero until a complete, dated collateral snapshot exists.
+        for period in range(document["horizon_periods"]):
+            amount=collateral_report["periods"].get(period,{}).get("net_borrowing_base",0.0)
             borrowing_base[period]=min(borrowing_base.get(period,document["credit_limit"]),amount)
     for period,amount in supplier_report["cash_outflows_by_period"].items():
         cash_outflows[period]=cash_outflows.get(period,0.0)+amount
