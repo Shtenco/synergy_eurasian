@@ -678,3 +678,15 @@ def test_v74_milp_optimizer_rejects_missing_limits_and_unit_mismatch():
     caps=[ResourceCapacity("power","0",1,"kWh","OBSERVED","meter")]
     with pytest.raises(ValueError,match="unit mismatch"):
         optimize_production_schedule([recipe],demand,[],caps,2,{"r":1})
+
+
+def test_v74_milp_cli_fixture_is_schema_valid_and_reproducible():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_4_milp_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    r=evaluate_document(document)
+    assert r["feasible"] and r["optimality_proven"]
+    assert r["demand"][0]["fulfilled"]==12
+    assert r["objective_value"]==pytest.approx(1171)
