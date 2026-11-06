@@ -9,10 +9,14 @@ from .production import (MaterialRequirement, ResourceRequirement, ProductionRec
 from .finance import (WorkingCapitalSnapshot, working_capital_cash_impact,
     CashWaterfallInput, run_cash_waterfall)
 
+from .trade_ledger import (TradeDocument, SettlementEvent, DocumentAdjustment,
+    DisputeEvent, CreditRiskAssessment, build_trade_ledger)
+
 __all__ = ["DomainEvent","EventStore","GraphNode","GraphEdge","EconomicGraph",
     "PhysicalFlow","physical_flow_summary","ResourceCapacity","ResourceCommitment",
     "validate_resource_capacity","graph_from_events","BenefitClaim","BenefitLedger",
     "cashflow_npv","empirical_cvar","pareto_frontier","MaterialRequirement",
     "ResourceRequirement","ProductionRecipe","ProductionOrder","InventoryReceipt",
-    "ProductDemand","evaluate_production_plan","WorkingCapitalSnapshot",
+    "ProductDemand","evaluate_production_plan","TradeDocument","SettlementEvent",
+    "DocumentAdjustment","DisputeEvent","CreditRiskAssessment","build_trade_ledger","WorkingCapitalSnapshot",
     "working_capital_cash_impact","CashWaterfallInput","run_cash_waterfall"]
