@@ -1,0 +1,166 @@
+{
+  "confidence_level": 0.95,
+  "outcome_direction": "HIGHER_IS_BETTER",
+  "observations": [
+    {
+      "observation_id": "pair0-tp",
+      "matched_pair_id": "pair0",
+      "unit_id": "treated-0",
+      "group": "TREATED",
+      "period": "PRE",
+      "outcome": 100,
+      "evidence_id": "meter:t0",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair0-tq",
+      "matched_pair_id": "pair0",
+      "unit_id": "treated-0",
+      "group": "TREATED",
+      "period": "POST",
+      "outcome": 115,
+      "evidence_id": "meter:t1",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair0-cp",
+      "matched_pair_id": "pair0",
+      "unit_id": "control-0",
+      "group": "CONTROL",
+      "period": "PRE",
+      "outcome": 90,
+      "evidence_id": "meter:c0",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair0-cq",
+      "matched_pair_id": "pair0",
+      "unit_id": "control-0",
+      "group": "CONTROL",
+      "period": "POST",
+      "outcome": 100,
+      "evidence_id": "meter:c1",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair1-tp",
+      "matched_pair_id": "pair1",
+      "unit_id": "treated-1",
+      "group": "TREATED",
+      "period": "PRE",
+      "outcome": 100,
+      "evidence_id": "meter:t0",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair1-tq",
+      "matched_pair_id": "pair1",
+      "unit_id": "treated-1",
+      "group": "TREATED",
+      "period": "POST",
+      "outcome": 114,
+      "evidence_id": "meter:t1",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair1-cp",
+      "matched_pair_id": "pair1",
+      "unit_id": "control-1",
+      "group": "CONTROL",
+      "period": "PRE",
+      "outcome": 90,
+      "evidence_id": "meter:c0",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair1-cq",
+      "matched_pair_id": "pair1",
+      "unit_id": "control-1",
+      "group": "CONTROL",
+      "period": "POST",
+      "outcome": 100,
+      "evidence_id": "meter:c1",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair2-tp",
+      "matched_pair_id": "pair2",
+      "unit_id": "treated-2",
+      "group": "TREATED",
+      "period": "PRE",
+      "outcome": 100,
+      "evidence_id": "meter:t0",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair2-tq",
+      "matched_pair_id": "pair2",
+      "unit_id": "treated-2",
+      "group": "TREATED",
+      "period": "POST",
+      "outcome": 116,
+      "evidence_id": "meter:t1",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair2-cp",
+      "matched_pair_id": "pair2",
+      "unit_id": "control-2",
+      "group": "CONTROL",
+      "period": "PRE",
+      "outcome": 90,
+      "evidence_id": "meter:c0",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair2-cq",
+      "matched_pair_id": "pair2",
+      "unit_id": "control-2",
+      "group": "CONTROL",
+      "period": "POST",
+      "outcome": 100,
+      "evidence_id": "meter:c1",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair3-tp",
+      "matched_pair_id": "pair3",
+      "unit_id": "treated-3",
+      "group": "TREATED",
+      "period": "PRE",
+      "outcome": 100,
+      "evidence_id": "meter:t0",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair3-tq",
+      "matched_pair_id": "pair3",
+      "unit_id": "treated-3",
+      "group": "TREATED",
+      "period": "POST",
+      "outcome": 115,
+      "evidence_id": "meter:t1",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair3-cp",
+      "matched_pair_id": "pair3",
+      "unit_id": "control-3",
+      "group": "CONTROL",
+      "period": "PRE",
+      "outcome": 90,
+      "evidence_id": "meter:c0",
+      "source_class": "OBSERVED"
+    },
+    {
+      "observation_id": "pair3-cq",
+      "matched_pair_id": "pair3",
+      "unit_id": "control-3",
+      "group": "CONTROL",
+      "period": "POST",
+      "outcome": 100,
+      "evidence_id": "meter:c1",
+      "source_class": "OBSERVED"
+    }
+  ]
+}
