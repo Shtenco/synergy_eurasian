@@ -1,5 +1,5 @@
 import pytest
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from synergy_sues.event_transport import DurableEventStore
 from synergy_sues.federation_identity import (
@@ -7,13 +7,15 @@ from synergy_sues.federation_identity import (
     generate_ed25519_keypair, sign_event,
 )
 
-def event(tmp_path):
-    class E:
+@dataclass(frozen=True)
+class E:
         event_id="e1"; aggregate_type="PROJECT"; aggregate_id="p1"; sequence=1
         event_type="NODE_REGISTERED"; effective_at="2026-11-06T09:00:00+00:00"
         recorded_at="2026-11-06T09:01:00+00:00"; payload={"node":"p1"}
         source_ref="src:e1"; evidence_ids=("ev1",); idempotency_key="i1"
         previous_hash=""; event_hash=""
+
+def event(tmp_path):
     return DurableEventStore(str(tmp_path/"e.db")).append(E(), now=datetime(2026,11,6,9,1,tzinfo=timezone.utc))
 
 def setup():
