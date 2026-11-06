@@ -383,3 +383,11 @@ V7.2.1 adds dated AR/AP documents, partial settlement replay, credit adjustments
 - [V7.2.2 command-line evaluator](src/synergy_v7/reconciliation_cli.py)
 
 V7.2.2 links explicitly approved bank statement allocations to AR/AP documents, preserves unmatched residuals for review and reports gross cash control totals by currency. It does not guess invoice matches or classify unexplained cash as revenue.
+
+- [V7.3 Realized Production-to-Cash Evidence Chain](docs/51_SYNERGY_V7_3_REALIZATION_EVIDENCE_CHAIN.md)
+- [V7.3 realization engine](src/synergy_v7/realization.py)
+- [V7.3 input schema](interfaces/synergy_v7_realization_chain.schema.json)
+- [V7.3 integrated evidence fixture](examples/synergy_v7_3_realization_chain_demo.json)
+- [V7.3 command-line evaluator](src/synergy_v7/realization_cli.py)
+
+V7.3 connects measured output to customer acceptance, invoice lines and explicit cash-collection attribution. It reports baseline deltas, invoiced revenue, collected cash and cost categories separately; a pre/post output change is not automatically treated as causal proof.
