@@ -38,8 +38,13 @@
 - [SUES V7 Projector Contracts — versioned graph-event payloads and projection records](interfaces/synergy_sues_v7_projector.schema.json)
 - [SUES Durable Event Transport — durable event log, transactional outbox/inbox contracts](interfaces/synergy_sues_event_transport.schema.json)
 - [SUES Durable Event Store & Transactional Inbox/Outbox V1](docs/70_SYNERGY_SUES_DURABLE_EVENT_STORE_AND_TRANSACTIONAL_INBOX_OUTBOX_V1.md)
+- [SUES Federation Identity & Signed Event Envelope V1](docs/71_SYNERGY_SUES_FEDERATION_IDENTITY_AND_SIGNED_EVENT_ENVELOPE_V1.md)
+- [SUES Federation Authorization Policy V1](docs/72_SYNERGY_SUES_FEDERATION_AUTHORIZATION_POLICY_V1.md)
+- [SUES Authorized Action Execution V1](docs/73_SYNERGY_SUES_AUTHORIZED_ACTION_EXECUTION_V1.md)
+- [SUES Signed Versioned Authorization Policy Store V1](docs/74_SYNERGY_SUES_SIGNED_VERSIONED_AUTHORIZATION_POLICY_STORE_V1.md)
+- [SUES Signed Versioned Policy Store Schema](interfaces/synergy_sues_authorization_policy_store.schema.json)
 
-**Статус:** исследовательская ветка `research/sues-audit-v1`, PR #11. Новые SUES-модули — reference implementation. V7 adapter сохраняет и проверяет исходные события/доказательства; версионированные projectors пока формируют только graph read models для двух реализованных типов событий; Durable Event Store и transactional inbox/outbox добавляют постоянный журнал и повторяемую доставку. Ни один из этих слоёв не выполняет автоматические бухгалтерские проводки. Производственный контур ограничен полными партиями; автоматический расчёт ставок и durable transactional storage ещё не реализованы. Это не промышленная бухгалтерская система, платёжная инфраструктура или лицензированный финансовый продукт. PR #9 и PR #10 сохраняются отдельно до завершения аудита и интеграционных тестов.
+**Статус:** исследовательская ветка `research/sues-audit-v1`, PR #11. Новые SUES-модули — reference implementation. V7 adapter сохраняет и проверяет исходные события/доказательства; версионированные projectors пока формируют только graph read models для двух реализованных типов событий; Durable Event Store и transactional inbox/outbox добавляют постоянный журнал и повторяемую доставку. Federation security adds signed identity, deny-by-default authorization and one-time execution; the new policy store adds independently approved, versioned policy changes and a local hash-chained history. Ни один из этих слоёв не выполняет автоматические бухгалтерские проводки. Производственный контур ограничен полными партиями; автоматический расчёт ставок и durable transactional storage ещё не реализованы. Это не промышленная бухгалтерская система, платёжная инфраструктура или лицензированный финансовый продукт. PR #9 и PR #10 сохраняются отдельно до завершения аудита и интеграционных тестов.
 
 ---
 
@@ -376,3 +381,5 @@ Ed25519 signatures authenticate events from keys provisioned in an explicit trus
 
 - [Execution Receipt Schema](interfaces/synergy_sues_execution_receipt.schema.json)
 - [Execution Outbox Schema](interfaces/synergy_sues_execution_outbox.schema.json)
+- [SUES Signed Versioned Authorization Policy Store V1](docs/74_SYNERGY_SUES_SIGNED_VERSIONED_AUTHORIZATION_POLICY_STORE_V1.md) — two-person signed administration, versioned snapshots, compare-and-swap and tamper-evident history.
+- [Signed Versioned Policy Store Schema](interfaces/synergy_sues_authorization_policy_store.schema.json)
