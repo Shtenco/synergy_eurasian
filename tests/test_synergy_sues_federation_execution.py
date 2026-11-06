@@ -130,11 +130,15 @@ def test_handler_failure_rolls_back_effect_and_request_consumption(tmp_path):
     def failing(db, request, decision):
         db.execute("CREATE TABLE IF NOT EXISTS protected_effects (request_id TEXT)")
         db.execute("INSERT INTO protected_effects VALUES('partial')")
+        AuthorizedActionExecutor.enqueue_outbox(db, "idem:external", "PAY_SYSTEM", "PAYMENT_RELEASE",
+            {"payment_id": "p-1"})
         raise RuntimeError("handler failed")
 
     with pytest.raises(RuntimeError, match="handler failed"):
         executor.execute(request, [approval], policy, registry, failing, now())
     assert executor.receipts() == ()
+    with sqlite3.connect(tmp_path / "executor.db") as db:
+        assert db.execute("SELECT COUNT(*) FROM execution_outbox").fetchone()[0] == 0
     assert executor.execute(request, [approval], policy, registry, insert_effect, now()).executed
     with sqlite3.connect(tmp_path / "executor.db") as db:
         assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 1
@@ -181,3 +185,46 @@ def test_executor_requires_file_backed_database_and_json_safe_result(tmp_path):
         executor.execute(request, [approval], policy, registry,
             lambda *_: float("nan"), now())
     assert executor.receipts() == ()
+
+
+def test_external_intent_is_transactionally_enqueued_and_idempotent(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys)
+    path = str(tmp_path / "executor.db")
+    executor = AuthorizedActionExecutor(path)
+
+    def handler(db, request, decision):
+        payload = {"payment_id": "p-1", "amount": "10.00", "currency": "USD"}
+        first = AuthorizedActionExecutor.enqueue_outbox(
+            db, "idem:payment:p-1", "PAY_SYSTEM", "PAYMENT_RELEASE", payload)
+        second = AuthorizedActionExecutor.enqueue_outbox(
+            db, "idem:payment:p-1", "PAY_SYSTEM", "PAYMENT_RELEASE", payload)
+        assert first == second
+        return {"outbox_message_id": first}
+
+    result = executor.execute(request, [approval], policy, registry, handler, now())
+    assert result.executed
+    with sqlite3.connect(path) as db:
+        row = db.execute("SELECT message_id,status,payload_json FROM execution_outbox").fetchone()
+    assert row[1] == "PENDING"
+    assert '"payment_id":"p-1"' in row[2]
+
+
+def test_outbox_idempotency_conflict_rolls_back_protected_action(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys)
+    path = str(tmp_path / "executor.db")
+    executor = AuthorizedActionExecutor(path)
+
+    def conflicting(db, request, decision):
+        AuthorizedActionExecutor.enqueue_outbox(db, "idem:one", "PAY_SYSTEM",
+            "PAYMENT_RELEASE", {"payment_id": "p-1"})
+        AuthorizedActionExecutor.enqueue_outbox(db, "idem:one", "PAY_SYSTEM",
+            "PAYMENT_RELEASE", {"payment_id": "p-2"})
+        return {"unexpected": True}
+
+    with pytest.raises(ValueError, match="different payload"):
+        executor.execute(request, [approval], policy, registry, conflicting, now())
+    assert executor.receipts() == ()
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT COUNT(*) FROM execution_outbox").fetchone()[0] == 0
