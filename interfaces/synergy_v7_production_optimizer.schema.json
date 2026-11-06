@@ -401,6 +401,39 @@
     "include_scenario_supplier_payments": {
       "type": "boolean",
       "default": false
+    },
+    "credit_limit": {
+      "type": "number",
+      "minimum": 0
+    },
+    "credit_opening_balance": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "credit_draw_limits_by_period": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Maximum credit draw per period; JSON keys are strings."
+    },
+    "credit_repayment_limits_by_period": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Maximum repayment per period; JSON keys are strings."
+    },
+    "credit_interest_rates_by_period": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Interest rate per period, decimal fraction; JSON keys are strings."
     }
   }
 }
