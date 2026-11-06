@@ -443,3 +443,8 @@ V7.6.3 adds a contractual maturity period to the cash-and-credit MILP. Debt must
 - [V7.6.4 Period Borrowing-Base Covenant](docs/59_SYNERGY_V7_6_4_BORROWING_BASE_COVENANT.md)
 
 V7.6.4 constrains drawn credit by a supplied period-specific borrowing base in addition to the contractual facility limit and reports remaining headroom. The borrowing-base inputs are not independently certified collateral valuations; eligibility and advance-rate calculations remain an upstream evidence-controlled process.
+
+- [V7.6.5 Evidence-Qualified Borrowing-Base Calculator](docs/60_SYNERGY_V7_6_5_EVIDENCE_BORROWING_BASE.md)
+- [V7.6.5 collateral calculator](src/synergy_v7/collateral.py)
+
+V7.6.5 derives period borrowing-base limits from eligible receivables and inventory, applying aging/dispute/related-party/quality/ownership-control filters, counterparty concentration caps, advance rates and reserves. It reports the evidence IDs included and excluded; it is not a lender-certified collateral audit.
