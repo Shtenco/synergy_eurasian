@@ -201,7 +201,7 @@ class ProductionExecution:
     journal_entry_ids: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        if self.output_movement.cost != self.total_conversion_cost:
+        if self.output_movement.cost != self.direct_material_cost:
             raise ValueError("Finished-goods cost must reconcile to consumed WIP cost")
         if self.output_movement.quantity != self.output_quantity:
             raise ValueError("Finished-goods quantity differs from production output")
@@ -223,7 +223,7 @@ def execute_production_order(
     finished_goods_account_id: str,
     recorded_at: datetime,
 ) -> ProductionExecution:
-    """Consume a complete BOM batch, capitalize WIP, and transfer it to finished goods.
+    """Consume a complete BOM batch and capitalize direct materials into finished goods.
 
     The inventory subledger records both raw-material issues and finished output.
     The GL posts raw-material issues to WIP, then WIP to finished-goods inventory.
