@@ -164,3 +164,17 @@ def test_sqlite_trust_registry_rejects_memory_database_and_conflicting_records(t
             ALGORITHM, public, "2026-01-01T00:00:00+00:00"))
     assert [x["action"] for x in registry.audit_events()] == ["IDENTITY_REGISTERED"]
     assert registry.verify_audit()
+
+def test_sqlite_registry_protects_trust_records_from_application_level_mutation(tmp_path):
+    path = str(tmp_path / "immutable.db")
+    private, public = generate_ed25519_keypair()
+    registry = SQLiteTrustedKeyRegistry(path)
+    registry.register_identity(FederationIdentity("org:immutable", "tenant:i", "ORGANIZATION"))
+    registry.register_key(TrustedSigningKey("org:immutable", "tenant:i", "key-1",
+        ALGORITHM, public, "2026-01-01T00:00:00+00:00"))
+    with sqlite3.connect(path) as db:
+        with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+            db.execute("UPDATE trust_keys SET key_id='forged' WHERE key_id='key-1'")
+        with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+            db.execute("DELETE FROM trust_identities WHERE identity_id='org:immutable'")
+    assert registry.verify_audit()
