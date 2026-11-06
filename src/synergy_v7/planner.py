@@ -53,6 +53,11 @@ def optimize_production_schedule(
     cash_outflows_by_period: dict[int,float] | None = None,
     collection_lag_by_demand: dict[str,int] | None = None,
     collection_fraction_by_demand: dict[str,float] | None = None,
+    credit_limit: float | None = None,
+    credit_opening_balance: float = 0.0,
+    credit_draw_limits_by_period: dict[int,float] | None = None,
+    credit_repayment_limits_by_period: dict[int,float] | None = None,
+    credit_interest_rates_by_period: dict[int,float] | None = None,
 ) -> dict:
     """Maximize demand value less production/holding costs under physical constraints.
 
@@ -75,12 +80,32 @@ def optimize_production_schedule(
         if not isinstance(limit,int) or limit<0: raise ValueError(f"batch limit for {rid} must be a non-negative integer")
     batch_costs=batch_costs or {}; holding_costs=holding_costs or {}
     minimum_inventory=minimum_inventory or {}; storage_limits=storage_limits or {}
-    cash_enabled=any(x is not None for x in (cash_opening_balance,cash_minimum_balance,cash_inflows_by_period,cash_outflows_by_period,collection_lag_by_demand,collection_fraction_by_demand))
+    cash_enabled=any(x is not None for x in (cash_opening_balance,cash_minimum_balance,cash_inflows_by_period,cash_outflows_by_period,collection_lag_by_demand,collection_fraction_by_demand,credit_limit)) or credit_enabled
     cash_opening_balance=0.0 if cash_opening_balance is None else cash_opening_balance
     cash_inflows_by_period=cash_inflows_by_period or {}
     cash_outflows_by_period=cash_outflows_by_period or {}
     collection_lag_by_demand=collection_lag_by_demand or {}
     collection_fraction_by_demand=collection_fraction_by_demand or {}
+    credit_draw_limits_by_period=credit_draw_limits_by_period or {}
+    credit_repayment_limits_by_period=credit_repayment_limits_by_period or {}
+    credit_interest_rates_by_period=credit_interest_rates_by_period or {}
+    credit_enabled=credit_limit is not None
+    if credit_enabled:
+        if not math.isfinite(credit_limit) or credit_limit<0: raise ValueError("credit_limit must be finite and non-negative")
+        if not math.isfinite(credit_opening_balance) or credit_opening_balance<0 or credit_opening_balance>credit_limit:
+            raise ValueError("credit_opening_balance must be between zero and credit_limit")
+        for name,values in (("credit_draw_limits_by_period",credit_draw_limits_by_period),
+            ("credit_repayment_limits_by_period",credit_repayment_limits_by_period),
+            ("credit_interest_rates_by_period",credit_interest_rates_by_period)):
+            if set(values)-set(range(horizon_periods)): raise ValueError(f"{name} contains period outside horizon")
+            for period,value in values.items():
+                if not math.isfinite(value) or value<0: raise ValueError(f"Invalid {name} value for period {period}")
+        if any(v>credit_limit for v in credit_draw_limits_by_period.values()):
+            raise ValueError("Per-period credit draw limit cannot exceed facility limit")
+        if any(v>credit_limit for v in credit_repayment_limits_by_period.values()):
+            raise ValueError("Per-period repayment limit cannot exceed facility limit")
+    elif credit_opening_balance or credit_draw_limits_by_period or credit_repayment_limits_by_period or credit_interest_rates_by_period:
+        raise ValueError("Credit terms require credit_limit")
     if not math.isfinite(cash_opening_balance) or cash_opening_balance<0:
         raise ValueError("cash_opening_balance must be finite and non-negative")
     if set(cash_inflows_by_period)-set(range(horizon_periods)):
@@ -182,6 +207,17 @@ def optimize_production_schedule(
         for period in range(horizon_periods):
             cash_index[period]=len(upper); upper.append(math.inf); integrality.append(0)
             objective.append(0.0)
+    credit_draw_index={}; credit_repay_index={}; credit_balance_index={}
+    if credit_enabled:
+        for period in range(horizon_periods):
+            credit_draw_index[period]=len(upper)
+            upper.append(credit_draw_limits_by_period.get(period,credit_limit)); integrality.append(0); objective.append(0.0)
+            credit_repay_index[period]=len(upper)
+            upper.append(credit_repayment_limits_by_period.get(period,credit_limit)); integrality.append(0); objective.append(0.0)
+            credit_balance_index[period]=len(upper)
+            upper.append(credit_limit); integrality.append(0)
+            next_rate=credit_interest_rates_by_period.get(period+1,0.0)
+            objective.append(next_rate)
     nvars=len(upper); lower=np.zeros(nvars); upper=np.asarray(upper,dtype=float)
     for p in products:
         for period in range(horizon_periods):
@@ -253,9 +289,28 @@ def optimize_production_schedule(
                 if collection_period==period:
                     cash_value=d.unit_value*collection_fraction_by_demand.get(d.demand_id,1.0)
                     coeff[y_index[d.demand_id]]=coeff.get(y_index[d.demand_id],0.0)-cash_value
+            if credit_enabled:
+                coeff[credit_draw_index[period]]=coeff.get(credit_draw_index[period],0.0)-1.0
+                coeff[credit_repay_index[period]]=coeff.get(credit_repay_index[period],0.0)+1.0
+                rate=credit_interest_rates_by_period.get(period,0.0)
+                if period>0 and rate:
+                    coeff[credit_balance_index[period-1]]=coeff.get(credit_balance_index[period-1],0.0)+rate
+            interest_on_opening_debt=(credit_interest_rates_by_period.get(0,0.0)*credit_opening_balance if credit_enabled and period==0 else 0.0)
             rhs=(cash_inflows_by_period.get(period,0.0)-cash_outflows_by_period.get(period,0.0)
-                +(cash_opening_balance if period==0 else 0.0))
+                +(cash_opening_balance if period==0 else 0.0)-interest_on_opening_debt)
             add_constraint(coeff,rhs,rhs,f"cash_balance::{period}")
+    if credit_enabled:
+        for period in range(horizon_periods):
+            coeff={credit_balance_index[period]:1.0,credit_draw_index[period]:-1.0,credit_repay_index[period]:1.0}
+            if period>0: coeff[credit_balance_index[period-1]]=-1.0
+            rhs=credit_opening_balance if period==0 else 0.0
+            add_constraint(coeff,rhs,rhs,f"credit_balance::{period}")
+            repay_cap={credit_repay_index[period]:1.0}
+            if period>0:
+                repay_cap[credit_balance_index[period-1]]=-1.0
+                add_constraint(repay_cap,-math.inf,0.0,f"credit_repay_prior_balance::{period}")
+            else:
+                add_constraint(repay_cap,-math.inf,credit_opening_balance,f"credit_repay_prior_balance::{period}")
     else:
         deferred_collections=[]
     matrix=coo_matrix((vals,(rows,cols)),shape=(len(row_lb),nvars)).tocsr()
@@ -306,14 +361,25 @@ def optimize_production_schedule(
                 "available":cap.available_quantity if cap else 0.0,"unit":unit,
                 "utilization":used/cap.available_quantity if cap and cap.available_quantity else None})
     ending_cash=([max(0.0,float(sol[cash_index[t]])) for t in range(horizon_periods)] if cash_enabled else None)
+    credit_draws=([max(0.0,float(sol[credit_draw_index[t]])) for t in range(horizon_periods)] if credit_enabled else [])
+    credit_repayments=([max(0.0,float(sol[credit_repay_index[t]])) for t in range(horizon_periods)] if credit_enabled else [])
+    credit_balances=([max(0.0,float(sol[credit_balance_index[t]])) for t in range(horizon_periods)] if credit_enabled else [])
+    interest_costs=([credit_opening_balance*credit_interest_rates_by_period.get(0,0.0)]+[
+        credit_balances[t-1]*credit_interest_rates_by_period.get(t,0.0) for t in range(1,horizon_periods)] if credit_enabled else [])
+    total_interest=sum(interest_costs)
     return {"feasible":True,"optimality_proven":int(result.status)==0,"solver_status":int(result.status),
         "solver_message":str(result.message),"objective_currency":objective_currency,
-        "objective_value":served_value-production_cost_total-holding_cost_total,
+        "objective_value":served_value-production_cost_total-holding_cost_total-total_interest,
         "served_value":served_value,"production_cost":production_cost_total,"holding_cost":holding_cost_total,
         "schedule":schedule,"demand":demand_report,"inventory":inventory_report,
         "resource_usage":resource_usage,"ending_cash_by_period":ending_cash,
         "deferred_collection_demands":deferred_collections if cash_enabled else [],
         "cash_constraint_enabled":cash_enabled,
+        "credit_facility":{"enabled":credit_enabled,"facility_limit":credit_limit if credit_enabled else None,
+            "opening_balance":credit_opening_balance if credit_enabled else None,"draws_by_period":credit_draws,
+            "repayments_by_period":credit_repayments,"ending_balance_by_period":credit_balances,
+            "interest_cost_by_period":interest_costs,"total_interest_cost":total_interest,
+            "repayment_cannot_exceed_prior_period_balance":True},
         "cash_model":{"opening_balance":cash_opening_balance if cash_enabled else None,
             "minimum_balance":cash_minimum_balance if cash_enabled else None,
             "exogenous_inflows":cash_inflows_by_period if cash_enabled else {},
