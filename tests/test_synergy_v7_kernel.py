@@ -690,3 +690,11 @@ def test_v74_milp_cli_fixture_is_schema_valid_and_reproducible():
     assert r["feasible"] and r["optimality_proven"]
     assert r["demand"][0]["fulfilled"]==12
     assert r["objective_value"]==pytest.approx(1171)
+
+
+def test_v74_milp_optimizer_rejects_non_numeric_capacity_period():
+    recipe=ProductionRecipe("r","finished",1,"unit",(),(ResourceRequirement("power",1,"MWh"),),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
+    cap=[ResourceCapacity("power","2026-Q1",10,"MWh","OBSERVED","meter")]
+    with pytest.raises(ValueError,match="integer bucket"):
+        optimize_production_schedule([recipe],demand,[],cap,2,{"r":1})
