@@ -39,12 +39,13 @@ Interest is included in the optimization objective as a financing cost. Principa
 - `credit_draw_limits_by_period`: maximum new draw by period; defaults to facility limit.
 - `credit_repayment_limits_by_period`: maximum repayment by period; defaults to facility limit.
 - `credit_interest_rates_by_period`: per-period decimal interest rate. For example, 0.10 means 10% for that modeled period, not automatically an annual rate.
+- `terminal_credit_balance_limit`: optional maximum debt at the end of the final period. Set to zero to require full repayment by the horizon end.
 
 All maps use zero-based period indices. In JSON, keys are strings and the CLI converts them to integer period indices.
 
 ## Demonstration
 
-`examples/synergy_v7_6_2_credit_factory_plan.json` models a $20 production outlay, $20 revolving facility, $100 customer demand and a one-period collection lag after delivery. The facility draws $20 in period zero; the model applies 10% interest to the debt in period two, when customer cash arrives. The illustrative interest is $2 and the ending cash is $98 if the principal remains outstanding.
+`examples/synergy_v7_6_2_credit_factory_plan.json` models a $20 production outlay, $20 revolving facility, $100 customer demand and a one-period collection lag after delivery. The facility draws $20 in period zero; the model applies 10% interest to the debt in period two, when customer cash arrives. The illustrative interest is $2. The fixture explicitly sets a zero terminal debt limit, so the $20 principal is repaid in period two and ending cash is $78. Without that terminal limit, repayment is not required by the model.
 
 This is a timing demonstration, not a recommendation to borrow or a real facility offer.
 
@@ -53,7 +54,7 @@ This is a timing demonstration, not a recommendation to borrow or a real facilit
 - Credit limit, opening debt, per-period draw/repayment caps and interest rates are validated.
 - Repayment cannot exceed prior-period outstanding debt.
 - Debt and cash are modeled in the single objective currency; FX, fees, collateral, covenants, default, guarantees and lender discretion are not represented.
-- No terminal debt repayment is forced. Outstanding principal is reported, and an external treasury policy must set maturity/repayment requirements.
+- No terminal debt repayment is forced unless `terminal_credit_balance_limit` is supplied. The optional limit constrains ending debt in the final period; an external treasury policy must set maturity/repayment requirements.
 - Interest is a simple period rate on beginning-period debt; compounding conventions and day-count calendars are not modeled.
 - The model is not a loan underwriting decision or legal credit approval.
 - Actual facility drawdowns and repayments must be reconciled to bank statements; optimizer choices are not cash actuals.
