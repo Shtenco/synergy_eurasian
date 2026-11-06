@@ -50,6 +50,10 @@ jobs:
           print(json.dumps({
               "model_id": p["model_id"],
               "whole_system_residual_usd": p["accounting"]["total_net_after_replacement_usd"],
+          "repair_target_residual_usd": p["reproduction_repair"]["target_residual_after_replacement_usd"],
+          "repair_target_replacement_coverage": p["reproduction_repair"]["target_replacement_coverage"],
+          "repair_public_residual_usd": p["reproduction_repair"]["public_target_residual_usd"],
+          "repair_private_residual_usd": p["reproduction_repair"]["private_target_residual_usd"],
               "public_portfolio_residual_usd": p["accounting"]["public_net_after_replacement_usd"],
               "basket_cost_reduction_pct": 100 * p["productivity"]["net_basket_cost_reduction_share"],
               "labor_release_pct": 100 * p["productivity"]["net_labor_hours_released_share"],
