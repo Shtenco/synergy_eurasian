@@ -141,6 +141,44 @@ def break_even_cashflow_growth(
     )
 
 
+
+def sector_reconciliation(
+    cfg: dict[str, Any],
+    annual_cashflow_growth: float,
+    annual_replacement_inflation: float,
+) -> dict[str, Any]:
+    """Sector-level year-N residuals before portfolio-level project returns."""
+    years = int(cfg["horizon_years"])
+    rows = []
+    for item in cfg["sector_starting_point"]:
+        cash = float(item["cashflow_after_opex_before_replacement_usd"]) * (1.0 + annual_cashflow_growth) ** years
+        replacement = float(item["replacement_capex_usd"]) * (1.0 + annual_replacement_inflation) ** years
+        residual = cash - replacement
+        required_growth = (
+            (float(item["replacement_capex_usd"]) * (1.0 + annual_replacement_inflation) ** years
+             / float(item["cashflow_after_opex_before_replacement_usd"])) ** (1.0 / years)
+            - 1.0
+        )
+        rows.append({
+            "sector": item["sector"],
+            "year_n_cashflow_usd": cash,
+            "year_n_replacement_capex_usd": replacement,
+            "year_n_residual_usd": residual,
+            "required_annual_cashflow_growth_for_sector_break_even": required_growth,
+        })
+    positive_pool = sum(max(0.0, row["year_n_residual_usd"]) for row in rows)
+    negative_gap = sum(max(0.0, -row["year_n_residual_usd"]) for row in rows)
+    return {
+        "sectors": rows,
+        "positive_sector_pool_usd": positive_pool,
+        "negative_sector_gap_usd": negative_gap,
+        "net_residual_usd": positive_pool - negative_gap,
+        "reconciliation_error_usd": (
+            positive_pool - negative_gap - sum(row["year_n_residual_usd"] for row in rows)
+        ),
+    }
+
+
 def build_report(cfg: dict[str, Any]) -> dict[str, Any]:
     start = cfg["starting_point"]
     scenarios = []
@@ -150,7 +188,12 @@ def build_report(cfg: dict[str, Any]) -> dict[str, Any]:
             float(case["annual_cashflow_growth"]),
             float(case["annual_replacement_inflation"]),
         )
-        scenarios.append({"name": case["name"], **result})
+        sectors = sector_reconciliation(
+            cfg,
+            float(case["annual_cashflow_growth"]),
+            float(case["annual_replacement_inflation"]),
+        )
+        scenarios.append({"name": case["name"], **result, "sector_reconciliation_before_project_returns": sectors})
     break_even = {
         f"replacement_inflation_{int(rate * 100)}pct": break_even_cashflow_growth(
             float(start["gross_cashflow_after_opex_before_replacement_usd"]),
