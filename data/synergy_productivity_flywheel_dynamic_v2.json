@@ -1,0 +1,68 @@
+{
+  "model_id": "SYNERGY-PRODUCTIVITY-FLYWHEEL-DYNAMIC-V2",
+  "status": "ILLUSTRATIVE_SCENARIOS_NOT_FORECAST",
+  "currency": "USD_2026_REAL",
+  "horizon_years": 10,
+  "starting_point": {
+    "gross_cashflow_after_opex_before_replacement_usd": 1068012.5,
+    "replacement_capex_usd": 1045920,
+    "productive_capital_usd": 32900000,
+    "initial_reserve_share_of_productive_capital": 0.05
+  },
+  "allocation": {
+    "productive_automation": 0.5,
+    "breakthrough_rd": 0.25,
+    "resilience_reserve": 0.25
+  },
+  "technology_projects": {
+    "automation_net_residual_yield_per_year": 0.15,
+    "automation_deployment_lag_years": 1,
+    "automation_benefit_life_years": 5,
+    "rd_success_probability": 0.2,
+    "rd_net_residual_yield_if_success_per_year": 0.3,
+    "rd_deployment_lag_years": 2,
+    "rd_benefit_life_years": 5
+  },
+  "macro_scenarios": [
+    {
+      "name": "stagnation_replacement_2pct",
+      "annual_cashflow_growth": 0,
+      "annual_replacement_inflation": 0.02
+    },
+    {
+      "name": "moderate_growth_replacement_2pct",
+      "annual_cashflow_growth": 0.025,
+      "annual_replacement_inflation": 0.02
+    },
+    {
+      "name": "strong_growth_replacement_2pct",
+      "annual_cashflow_growth": 0.05,
+      "annual_replacement_inflation": 0.02
+    },
+    {
+      "name": "moderate_growth_replacement_5pct",
+      "annual_cashflow_growth": 0.025,
+      "annual_replacement_inflation": 0.05
+    },
+    {
+      "name": "strong_growth_replacement_5pct",
+      "annual_cashflow_growth": 0.05,
+      "annual_replacement_inflation": 0.05
+    },
+    {
+      "name": "strong_growth_replacement_10pct",
+      "annual_cashflow_growth": 0.05,
+      "annual_replacement_inflation": 0.1
+    }
+  ],
+  "accounting_rules": [
+    "Annual cashflow growth is applied to cashflow after operating expenses and before replacement CAPEX; it is a scenario assumption, not a measured AI effect.",
+    "Automation and R&D project yields are incremental net residual yields after incremental OPEX and replacement obligations.",
+    "Automation project returns begin after the stated deployment lag and stop after the stated benefit life.",
+    "R&D returns are probability-weighted expected values; failed projects generate zero return and are not assumed to recover principal.",
+    "Fund allocations are transfers of verified residual into investment or reserve uses, not additional consolidated value.",
+    "Negative residual first draws the reserve; any remaining amount is reported as an unfunded reproduction gap.",
+    "No debt, token issuance, valuation gains, price-only increases, or internal transfers are counted as operating gains.",
+    "The model does not automatically reduce productive capital when a gap is unfunded; it reports the gap explicitly."
+  ]
+}
