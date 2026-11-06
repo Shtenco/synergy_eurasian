@@ -250,7 +250,7 @@ class DurableEventStore:
             raise ValueError("Outbox topic must be a non-empty string")
         timestamp = _now(now).isoformat()
         key = (row["aggregate_type"], row["aggregate_id"])
-        with self._connect() as db:
+        with self._session() as db:
             db.execute("BEGIN IMMEDIATE")
             try:
                 head = db.execute(
@@ -325,7 +325,7 @@ class DurableEventStore:
         stamp = instant.isoformat()
         lease_end = (instant + timedelta(seconds=lease_seconds)).isoformat()
         claimed: list[OutboxMessage] = []
-        with self._connect() as db:
+        with self._session() as db:
             db.execute("BEGIN IMMEDIATE")
             try:
                 rows = db.execute(
@@ -357,12 +357,12 @@ class DurableEventStore:
         self, message_id: str, lease_token: str, now: datetime | None = None
     ) -> None:
         stamp = _now(now).isoformat()
-        with self._connect() as db:
+        with self._session() as db:
             cursor = db.execute(
                 """UPDATE outbox SET status='DELIVERED',delivered_at=?,
                    lease_until=NULL,lease_token=NULL
-                   WHERE message_id=? AND status='INFLIGHT' AND lease_token=?""",
-                (stamp, message_id, lease_token),
+                   WHERE message_id=? AND status='INFLIGHT' AND lease_token=? AND lease_until>?""",
+                (stamp, message_id, lease_token, stamp),
             )
             if cursor.rowcount != 1:
                 raise ValueError("Outbox acknowledgement rejected: stale lease or unknown message")
@@ -381,12 +381,12 @@ class DurableEventStore:
                 or not isinstance(max_attempts, int) or max_attempts < 1):
             raise ValueError("retry_delay_seconds must be >= 0 and max_attempts >= 1")
         instant = _now(now)
-        with self._connect() as db:
+        with self._session() as db:
             db.execute("BEGIN IMMEDIATE")
             try:
                 row = db.execute(
-                    "SELECT attempts FROM outbox WHERE message_id=? AND status='INFLIGHT' AND lease_token=?",
-                    (message_id, lease_token),
+                    "SELECT attempts FROM outbox WHERE message_id=? AND status='INFLIGHT' AND lease_token=? AND lease_until>?",
+                    (message_id, lease_token, instant.isoformat()),
                 ).fetchone()
                 if row is None:
                     raise ValueError("Outbox failure rejected: stale lease or unknown message")
@@ -436,7 +436,7 @@ class DurableEventStore:
             raise ValueError("Inbox event hash verification failed")
         _validate_event(digest_row)
         stamp = _now(received_at).isoformat()
-        with self._connect() as db:
+        with self._session() as db:
             db.execute("BEGIN IMMEDIATE")
             try:
                 existing = db.execute(
@@ -461,7 +461,7 @@ class DurableEventStore:
                 raise
 
     def inbox_contains(self, consumer: str, message_id: str) -> bool:
-        with self._connect() as db:
+        with self._session() as db:
             row = db.execute(
                 "SELECT 1 FROM inbox WHERE consumer=? AND message_id=?",
                 (consumer, message_id),
@@ -469,12 +469,12 @@ class DurableEventStore:
         return row is not None
 
     def outbox_status(self, message_id: str) -> dict[str, Any] | None:
-        with self._connect() as db:
+        with self._session() as db:
             row = db.execute("SELECT * FROM outbox WHERE message_id=?", (message_id,)).fetchone()
         return dict(row) if row is not None else None
 
     def verify(self) -> bool:
-        with self._connect() as db:
+        with self._session() as db:
             rows = db.execute("SELECT * FROM event_log ORDER BY event_row").fetchall()
             heads: dict[tuple[str, str], tuple[int, str]] = {}
             event_ids: set[str] = set()
@@ -507,10 +507,16 @@ class DurableEventStore:
             }
             if persisted_heads != heads:
                 return False
+            event_json_by_id = {row["event_id"]: row["event_json"] for row in rows}
             for item in db.execute("SELECT * FROM outbox").fetchall():
                 row = json.loads(item["payload_json"])
                 if row.get("event_id") != item["event_id"] or row.get("event_hash") != item["event_hash"]:
                     return False
                 if item["event_id"] not in event_ids:
+                    return False
+                if _canonical(row) != event_json_by_id[item["event_id"]]:
+                    return False
+                expected_message_id = sha256(_canonical({"event_id": item["event_id"], "destination": item["destination"]}).encode()).hexdigest()
+                if item["message_id"] != expected_message_id or not item["destination"] or not item["topic"]:
                     return False
         return True
