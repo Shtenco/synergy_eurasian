@@ -63,6 +63,44 @@
     "Fund allocations are transfers of verified residual into investment or reserve uses, not additional consolidated value.",
     "Negative residual first draws the reserve; any remaining amount is reported as an unfunded reproduction gap.",
     "No debt, token issuance, valuation gains, price-only increases, or internal transfers are counted as operating gains.",
-    "The model does not automatically reduce productive capital when a gap is unfunded; it reports the gap explicitly."
+    "The model does not automatically reduce productive capital when a gap is unfunded; it reports the gap explicitly.",
+    "Sector reconciliation is shown before allocating portfolio-level automation and R&D project returns; sector-level fund allocation must be added before investment approvals."
+  ],
+  "sector_starting_point": [
+    {
+      "sector": "FOOD",
+      "cashflow_after_opex_before_replacement_usd": 45150,
+      "replacement_capex_usd": 46080
+    },
+    {
+      "sector": "HOUSING",
+      "cashflow_after_opex_before_replacement_usd": 483750,
+      "replacement_capex_usd": 432000
+    },
+    {
+      "sector": "ENERGY",
+      "cashflow_after_opex_before_replacement_usd": 268750,
+      "replacement_capex_usd": 168000
+    },
+    {
+      "sector": "HEALTH",
+      "cashflow_after_opex_before_replacement_usd": 80625,
+      "replacement_capex_usd": 96000
+    },
+    {
+      "sector": "EDUCATION",
+      "cashflow_after_opex_before_replacement_usd": 24187.5,
+      "replacement_capex_usd": 72000
+    },
+    {
+      "sector": "MOBILITY",
+      "cashflow_after_opex_before_replacement_usd": 75250,
+      "replacement_capex_usd": 151200
+    },
+    {
+      "sector": "COMPUTE",
+      "cashflow_after_opex_before_replacement_usd": 90300,
+      "replacement_capex_usd": 80640
+    }
   ]
 }
