@@ -439,3 +439,7 @@ V7.6.2 adds period-level credit draws, prior-balance-only repayments, facility l
 - [V7.6.3 Explicit Revolving-Facility Maturity](docs/58_SYNERGY_V7_6_3_CREDIT_MATURITY.md)
 
 V7.6.3 adds a contractual maturity period to the cash-and-credit MILP. Debt must be fully repaid by the declared period and cannot reappear afterward; if repayment cannot be funded, the optimizer curtails the production plan rather than pretending refinancing is available.
+
+- [V7.6.4 Period Borrowing-Base Covenant](docs/59_SYNERGY_V7_6_4_BORROWING_BASE_COVENANT.md)
+
+V7.6.4 constrains drawn credit by a supplied period-specific borrowing base in addition to the contractual facility limit and reports remaining headroom. The borrowing-base inputs are not independently certified collateral valuations; eligibility and advance-rate calculations remain an upstream evidence-controlled process.
