@@ -80,7 +80,11 @@ This V1 production execution is a complete-batch direct-material bridge, not a f
 
 The in-memory reference ledgers are not production infrastructure. Production-grade deployment requires append-only persistence, transaction boundaries across inventory and journal, optimistic concurrency, access controls, signed source evidence, replay, and independent reconciliation.
 
-## 6. Test coverage
+## 6. Machine-readable contracts
+
+The procurement and production payloads are defined in interfaces/synergy_sues_production.schema.json. The schema covers purchase-order lines, goods receipts, supplier invoice lines, BOM components, production orders, evidence-backed production cost events and execution results. It enforces positive quantities, currency/unit identifiers, event identity and date formats. Cross-record controls such as cumulative received quantity, invoice-to-receipt matching, entity consistency and cost reconciliation remain runtime invariants and are tested in Python.
+
+## 7. Test coverage
 
 The tests in tests/test_synergy_sues_production.py cover:
 - PO/receipt/invoice quantity and value matching;
@@ -90,7 +94,7 @@ The tests in tests/test_synergy_sues_production.py cover:
 - preflight protection against partial consumption when one component is unavailable;
 - duplicate production-order rejection.
 
-## 7. Next implementation steps
+## 8. Next implementation steps
 
 1. GRNI-to-AP foreign-currency posting with dated FX and realized FX variance.
 2. Purchase price, quantity, freight/landed-cost and tax variance workflows.
