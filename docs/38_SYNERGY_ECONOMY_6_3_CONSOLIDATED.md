@@ -388,7 +388,7 @@ This is an endowment arithmetic exercise, not a claim that the fund can buy or p
 
 A separate illustrative accumulation exercise used $10,007 monthly contributions and a 3% nominal annual rate compounded monthly, contributions at month-end. It is not the same as the seven-sector portfolio model and should not be combined with its cashflows.
 
-Using (FV=P\times[((1+r/12)^{12n}-1)/(r/12)]), with (P=\$10,007), (r=3\%), month-end deposits:
+Using the ordinary annuity formula `FV = P * (((1 + r/12)^(12*n) - 1) / (r/12))`, with `P = $10,007`, `r = 3%`, and month-end deposits:
 
 | Horizon | Accumulated balance | 3% annual payout equivalent / month |
 |---|---:|---:|
