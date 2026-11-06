@@ -448,3 +448,7 @@ V7.6.4 constrains drawn credit by a supplied period-specific borrowing base in a
 - [V7.6.5 collateral calculator](src/synergy_v7/collateral.py)
 
 V7.6.5 derives period borrowing-base limits from eligible receivables and inventory, applying aging/dispute/related-party/quality/ownership-control filters, counterparty concentration caps, advance rates and reserves. It reports the evidence IDs included and excluded; it is not a lender-certified collateral audit.
+
+- [V7.6.6 Advanced Collateral Quality, Dilution and Aging](docs/61_SYNERGY_V7_6_6_ADVANCED_COLLATERAL_RISK.md)
+
+V7.6.6 adds asset-level receivable and inventory aging haircuts, receivable dilution reserves, category-specific reserve amounts and a traceable per-asset audit trail. New controls are optional; V7.6.5 inputs remain compatible.
