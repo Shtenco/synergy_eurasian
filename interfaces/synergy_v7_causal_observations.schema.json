@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/synergy_v7_causal_observations.schema.json",
+  "title": "SYNERGY V7.3.1 Matched-Pair DiD Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "confidence_level",
+    "outcome_direction",
+    "observations"
+  ],
+  "properties": {
+    "confidence_level": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "exclusiveMaximum": 1
+    },
+    "outcome_direction": {
+      "enum": [
+        "HIGHER_IS_BETTER",
+        "LOWER_IS_BETTER"
+      ]
+    },
+    "observations": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "observation_id",
+          "matched_pair_id",
+          "unit_id",
+          "group",
+          "period",
+          "outcome",
+          "evidence_id",
+          "source_class"
+        ],
+        "properties": {
+          "observation_id": {
+            "type": "string"
+          },
+          "matched_pair_id": {
+            "type": "string"
+          },
+          "unit_id": {
+            "type": "string"
+          },
+          "group": {
+            "enum": [
+              "TREATED",
+              "CONTROL"
+            ]
+          },
+          "period": {
+            "enum": [
+              "PRE",
+              "POST"
+            ]
+          },
+          "outcome": {
+            "type": "number"
+          },
+          "evidence_id": {
+            "type": "string"
+          },
+          "source_class": {
+            "enum": [
+              "OBSERVED",
+              "VERIFIED",
+              "UNDERWRITTEN",
+              "SCENARIO"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

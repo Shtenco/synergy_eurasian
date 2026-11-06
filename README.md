@@ -340,3 +340,131 @@ python src/eiiom_optimizer.py --config config/base_scenario.json --output output
 **Copyright © 2026 Evgeniy Koshtenko. All rights reserved.** Проект распространяется под собственной лицензией [`LICENSE`](LICENSE). Публичная доступность GitHub **не означает открытую лицензию** или разрешение на коммерческое использование. Права сторонних компонентов и уже выданные лицензии сохраняются в применимых пределах.
 
 <p align="center"><strong>SYNERGY EURASIAN — капитал имеет смысл тогда, когда превращается в проверяемую реальную производительность, устойчивость и благосостояние.</strong></p>
+
+---
+
+## Productivity, resilience and V7 economic graph
+
+SYNERGY develops a connected family of research models for productive-capacity reproduction, technology diffusion, innovation capability and network resilience. The model families are related but are **not yet one calibrated end-to-end simulator**.
+
+- [Master map: EIIOM + Productivity Flywheel V1–V6 + Network Economics & Resilience](docs/45_SYNERGY_PRODUCTIVITY_RESILIENCE_SYSTEM_MASTER.md)
+- [V7 Event-Sourced Productive Economy Graph](docs/46_SYNERGY_V7_EVENT_SOURCED_ECONOMIC_GRAPH.md)
+- [V7 event envelope schema](interfaces/synergy_v7_event.schema.json)
+- [V7 reference kernel](src/synergy_v7/)
+- [V7 invariant tests](tests/test_synergy_v7_kernel.py)
+
+V7 establishes append-only domain events, stable graph identities, evidence-qualified resource capacity, physical-flow consolidation, non-duplicative benefit attribution, empirical CVaR and Pareto-frontier primitives. It is a research kernel, not an operational ledger or validated digital twin. Scenario outputs must remain distinct from observed enterprise performance.
+
+- [V7.1 Time-Expanded Production Feasibility](docs/47_SYNERGY_V7_1_TIME_EXPANDED_PRODUCTION.md)
+- [V7.1 production feasibility implementation](src/synergy_v7/production.py)
+
+V7.1 adds discrete-period recipes, integer batch orders, material inventory, delivery receipts, demand priorities, lead times and shared resource-capacity checks. It validates proposed schedules; it does not yet optimize them.
+- [V7.1 production plan schema](interfaces/synergy_v7_production_plan.schema.json)
+- [V7.1 integrated factory example](examples/synergy_v7_1_integrated_factory_demo.json)
+- [V7.1 command-line evaluator](src/synergy_v7/cli.py)
+
+- [V7.2 Working Capital and Cash Waterfall](docs/48_SYNERGY_V7_2_WORKING_CAPITAL_AND_CASH_WATERFALL.md)
+- [V7.2 finance primitives](src/synergy_v7/finance.py)
+
+V7.2 adds working-capital/CCC metrics and an explicit cash waterfall. Financing proceeds and internal transfers are reported separately from consolidated external operating cash generation.
+
+- [V7.2.1 Invoice, Settlement and Counterparty Exposure Ledger](docs/49_SYNERGY_V7_2_1_TRADE_LEDGER.md)
+- [V7.2.1 trade-ledger implementation](src/synergy_v7/trade_ledger.py)
+- [V7.2.1 input schema](interfaces/synergy_v7_trade_ledger.schema.json)
+- [V7.2.1 demonstration fixture](examples/synergy_v7_2_1_trade_ledger_demo.json)
+- [V7.2.1 command-line evaluator](src/synergy_v7/trade_cli.py)
+
+V7.2.1 adds dated AR/AP documents, partial settlement replay, credit adjustments, dispute states, aging buckets and counterparty exposure. AR and AP are not netted by default; expected credit loss is a sourced estimate, not cash or an accounting provision.
+
+- [V7.2.2 Bank Statement Reconciliation](docs/50_SYNERGY_V7_2_2_BANK_RECONCILIATION.md)
+- [V7.2.2 reconciliation engine](src/synergy_v7/cash_reconciliation.py)
+- [V7.2.2 input schema](interfaces/synergy_v7_cash_reconciliation.schema.json)
+- [V7.2.2 reconciliation demo](examples/synergy_v7_2_2_reconciliation_demo.json)
+- [V7.2.2 command-line evaluator](src/synergy_v7/reconciliation_cli.py)
+
+V7.2.2 links explicitly approved bank statement allocations to AR/AP documents, preserves unmatched residuals for review and reports gross cash control totals by currency. It does not guess invoice matches or classify unexplained cash as revenue.
+
+- [V7.3 Realized Production-to-Cash Evidence Chain](docs/51_SYNERGY_V7_3_REALIZATION_EVIDENCE_CHAIN.md)
+- [V7.3 realization engine](src/synergy_v7/realization.py)
+- [V7.3 input schema](interfaces/synergy_v7_realization_chain.schema.json)
+- [V7.3 integrated evidence fixture](examples/synergy_v7_3_realization_chain_demo.json)
+- [V7.3 command-line evaluator](src/synergy_v7/realization_cli.py)
+
+V7.3 connects measured output to customer acceptance, invoice lines and explicit cash-collection attribution. It reports baseline deltas, invoiced revenue, collected cash and cost categories separately; a pre/post output change is not automatically treated as causal proof.
+
+- [V7.3.1 Matched-Pair Difference-in-Differences](docs/52_SYNERGY_V7_3_1_CAUSAL_DID.md)
+- [V7.3.1 causal estimator](src/synergy_v7/causal.py)
+- [V7.3.1 input schema](interfaces/synergy_v7_causal_observations.schema.json)
+- [V7.3.1 reproducible example](examples/synergy_v7_3_1_matched_did_demo.json)
+- [V7.3.1 command-line evaluator](src/synergy_v7/causal_cli.py)
+
+V7.3.1 estimates matched-pair difference-in-differences with a small-sample t interval. It exposes the parallel-trends and no-spillover assumptions and explicitly refuses to treat a pre/post delta as causal proof.
+
+- [V7.4 Time-Expanded MILP Production Scheduler](docs/53_SYNERGY_V7_4_MILP_PRODUCTION_SCHEDULER.md)
+- [V7.4 MILP optimizer](src/synergy_v7/planner.py)
+- [V7.4 input schema](interfaces/synergy_v7_production_optimizer.schema.json)
+- [V7.4 integrated factory plan](examples/synergy_v7_4_milp_factory_plan.json)
+- [V7.4 command-line optimizer](src/synergy_v7/planner_cli.py)
+
+V7.4 chooses integer production batches across periods, balancing demand value against batch and inventory holding costs under material and firm resource constraints. Economic values are explicit scenario inputs, not observed cash.
+
+V7.4.1 extends the MILP with end-of-period safety-stock minimums and storage-capacity maximums, with infeasible policy combinations rejected rather than silently relaxed.
+
+- [V7.5 Monte Carlo Production Resilience Stress](docs/54_SYNERGY_V7_5_MONTE_CARLO_RESILIENCE.md)
+- [V7.5 stress engine](src/synergy_v7/stress.py)
+- [V7.5 input schema](interfaces/synergy_v7_stress_test.schema.json)
+- [V7.5 reproducible stress fixture](examples/synergy_v7_5_stress_test_demo.json)
+- [V7.5 command-line evaluator](src/synergy_v7/stress_cli.py)
+
+V7.5 stress-tests a fixed schedule under common resource shocks, resource-specific failures and supplier receipt delays. It reports service-level distributions and empirical tail shortfall, without claiming calibrated failure probabilities or optimizing recourse.
+
+- [V7.6 Cash-Constrained Time-Expanded Production Optimization](docs/55_SYNERGY_V7_6_CASH_CONSTRAINED_OPTIMIZATION.md)
+- [V7.6 MILP optimizer](src/synergy_v7/planner.py)
+- [V7.6 input schema](interfaces/synergy_v7_production_optimizer.schema.json)
+- [V7.6 reproducible cash-constrained factory plan](examples/synergy_v7_6_cash_constrained_plan.json)
+- [V7.6 command-line optimizer](src/synergy_v7/planner_cli.py)
+
+V7.6 adds period-by-period cash conservation to the V7.4 production MILP. It prevents the optimizer from spending future customer collections before they arrive, while keeping scenario cash assumptions separate from bank-reconciled actuals.
+
+- [V7.6.1 Supplier Payment Calendar](docs/56_SYNERGY_V7_6_1_SUPPLIER_PAYMENT_CALENDAR.md)
+- [V7.6.1 supplier payment model](src/synergy_v7/supplier_payments.py)
+
+V7.6.1 adds evidence-qualified supplier deposits, dispatch, receipt, milestone and final-payment commitments. Only observed and committed obligations reduce firm cash by default; scenario commitments require explicit opt-in, and planned payments are excluded.
+
+- [V7.6.2 Revolving Credit Facility in Production Planning](docs/57_SYNERGY_V7_6_2_REVOLVING_CREDIT_FACILITY.md)
+- [V7.6.2 credit-aware factory fixture](examples/synergy_v7_6_2_credit_factory_plan.json)
+
+V7.6.2 adds period-level credit draws, prior-balance-only repayments, facility limits and interest on beginning-period debt. Debt principal is distinguished from operating expense; outstanding debt is reported; an optional terminal debt ceiling can require repayment by horizon end.
+
+- [V7.6.3 Explicit Revolving-Facility Maturity](docs/58_SYNERGY_V7_6_3_CREDIT_MATURITY.md)
+
+V7.6.3 adds a contractual maturity period to the cash-and-credit MILP. Debt must be fully repaid by the declared period and cannot reappear afterward; if repayment cannot be funded, the optimizer curtails the production plan rather than pretending refinancing is available.
+
+- [V7.6.4 Period Borrowing-Base Covenant](docs/59_SYNERGY_V7_6_4_BORROWING_BASE_COVENANT.md)
+
+V7.6.4 constrains drawn credit by a supplied period-specific borrowing base in addition to the contractual facility limit and reports remaining headroom. The borrowing-base inputs are not independently certified collateral valuations; eligibility and advance-rate calculations remain an upstream evidence-controlled process.
+
+- [V7.6.5 Evidence-Qualified Borrowing-Base Calculator](docs/60_SYNERGY_V7_6_5_EVIDENCE_BORROWING_BASE.md)
+- [V7.6.5 collateral calculator](src/synergy_v7/collateral.py)
+
+V7.6.5 derives period borrowing-base limits from eligible receivables and inventory, applying aging/dispute/related-party/quality/ownership-control filters, counterparty concentration caps, advance rates and reserves. It reports the evidence IDs included and excluded; it is not a lender-certified collateral audit.
+
+- [V7.6.6 Advanced Collateral Quality, Dilution and Aging](docs/61_SYNERGY_V7_6_6_ADVANCED_COLLATERAL_RISK.md)
+
+V7.6.6 adds asset-level receivable and inventory aging haircuts, receivable dilution reserves, category-specific reserve amounts and a traceable per-asset audit trail. New controls are optional; V7.6.5 inputs remain compatible.
+
+- [V7.7 Scenario Recourse and Mean-CVaR Evaluator](docs/62_SYNERGY_V7_7_SCENARIO_RECOURSE.md)
+- [V7.7 scenario engine](src/synergy_v7/scenario_recourse.py)
+- [V7.7 scenario CLI](src/synergy_v7/scenario_recourse_cli.py)
+- [V7.7 input schema](interfaces/synergy_v7_scenario_recourse.schema.json)
+- [V7.7 runnable example](examples/synergy_v7_7_scenario_recourse.json)
+
+V7.7 independently re-optimizes the cash/credit/collateral-aware production plan after each declared shock scenario, then reports expected loss and discrete CVaR. It is explicitly a wait-and-see benchmark, not a formal non-anticipative two-stage stochastic MILP.
+
+- [V7.8 Two-Stage Non-Anticipative Mean-CVaR MILP](docs/63_SYNERGY_V7_8_TWO_STAGE_NONANTICIPATIVE_MILP.md)
+- [V7.8 two-stage optimizer](src/synergy_v7/two_stage_optimizer.py)
+- [V7.8 optimizer CLI](src/synergy_v7/two_stage_optimizer_cli.py)
+- [V7.8 input schema](interfaces/synergy_v7_8_two_stage_optimizer.schema.json)
+- [V7.8 reference experiment](examples/synergy_v7_8_two_stage_milp.json)
+
+V7.8 is the first joint non-anticipative two-stage MILP prototype: it chooses one shared first-stage commitment before scenario revelation and scenario-specific production/emergency procurement/lost-sales recourse afterward. Scope is currently one product and one planning epoch; it is not yet the full V7.6 recipe/cash/credit/collateral network.

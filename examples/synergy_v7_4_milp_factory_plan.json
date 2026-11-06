@@ -1,0 +1,117 @@
+{
+  "horizon_periods": 3,
+  "objective_currency": "USD",
+  "mip_rel_gap": 0,
+  "time_limit_seconds": 30,
+  "recipes": [
+    {
+      "recipe_id": "smelt",
+      "output_product_id": "steel",
+      "output_quantity_per_batch": 80,
+      "output_unit": "kg",
+      "input_requirements": [
+        {
+          "product_id": "ore",
+          "quantity_per_batch": 100,
+          "unit": "kg"
+        }
+      ],
+      "resource_requirements": [
+        {
+          "resource_id": "electricity",
+          "quantity_per_batch": 40,
+          "unit": "MWh"
+        }
+      ],
+      "lead_time_periods": 1,
+      "node_id": "smelter"
+    },
+    {
+      "recipe_id": "machine",
+      "output_product_id": "machine_part",
+      "output_quantity_per_batch": 4,
+      "output_unit": "unit",
+      "input_requirements": [
+        {
+          "product_id": "steel",
+          "quantity_per_batch": 20,
+          "unit": "kg"
+        }
+      ],
+      "resource_requirements": [
+        {
+          "resource_id": "electricity",
+          "quantity_per_batch": 10,
+          "unit": "MWh"
+        }
+      ],
+      "lead_time_periods": 1,
+      "node_id": "machine-shop"
+    }
+  ],
+  "demands": [
+    {
+      "demand_id": "buyer-order",
+      "product_id": "machine_part",
+      "quantity": 12,
+      "unit": "unit",
+      "due_period": 2,
+      "unit_value": 100,
+      "currency": "USD",
+      "priority_weight": 1
+    }
+  ],
+  "inventory_receipts": [
+    {
+      "receipt_id": "ore-stock",
+      "product_id": "ore",
+      "quantity": 100,
+      "unit": "kg",
+      "available_period": 0,
+      "status": "OBSERVED"
+    },
+    {
+      "receipt_id": "steel-opening-stock",
+      "product_id": "steel",
+      "quantity": 10,
+      "unit": "kg",
+      "available_period": 0,
+      "status": "OBSERVED"
+    }
+  ],
+  "resource_capacities": [
+    {
+      "resource_id": "electricity",
+      "period": "0",
+      "available_quantity": 40,
+      "unit": "MWh",
+      "status": "OBSERVED",
+      "evidence_id": "meter:week0"
+    },
+    {
+      "resource_id": "electricity",
+      "period": "1",
+      "available_quantity": 30,
+      "unit": "MWh",
+      "status": "OBSERVED",
+      "evidence_id": "meter:week1"
+    }
+  ],
+  "batch_limits": {
+    "smelt": 1,
+    "machine": 3
+  },
+  "batch_costs": {
+    "smelt": 10,
+    "machine": 5
+  },
+  "holding_costs": {
+    "steel": 0.1
+  },
+  "minimum_inventory": {
+    "steel": 10
+  },
+  "storage_limits": {
+    "steel": 30
+  }
+}

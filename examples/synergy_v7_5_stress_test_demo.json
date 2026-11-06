@@ -1,0 +1,82 @@
+{
+  "scenarios": 250,
+  "seed": 42,
+  "common_shock_probability": 0.1,
+  "common_capacity_factor": 0,
+  "resource_shocks": [
+    {
+      "resource_id": "power",
+      "probability": 0.15,
+      "capacity_factor": 0.5
+    }
+  ],
+  "receipt_delays": [
+    {
+      "receipt_id": "raw1",
+      "probability": 0.1,
+      "max_delay_periods": 1
+    }
+  ],
+  "alpha": 0.95,
+  "recipes": [
+    {
+      "recipe_id": "r",
+      "output_product_id": "finished",
+      "output_quantity_per_batch": 1,
+      "output_unit": "unit",
+      "input_requirements": [
+        {
+          "product_id": "raw",
+          "quantity_per_batch": 1,
+          "unit": "kg"
+        }
+      ],
+      "resource_requirements": [
+        {
+          "resource_id": "power",
+          "quantity_per_batch": 1,
+          "unit": "MWh"
+        }
+      ],
+      "lead_time_periods": 1
+    }
+  ],
+  "orders": [
+    {
+      "order_id": "o1",
+      "recipe_id": "r",
+      "start_period": 0,
+      "batch_count": 1
+    }
+  ],
+  "inventory_receipts": [
+    {
+      "receipt_id": "raw1",
+      "product_id": "raw",
+      "quantity": 1,
+      "unit": "kg",
+      "available_period": 0,
+      "status": "OBSERVED"
+    }
+  ],
+  "demands": [
+    {
+      "demand_id": "d1",
+      "product_id": "finished",
+      "quantity": 1,
+      "unit": "unit",
+      "due_period": 1,
+      "priority": 1
+    }
+  ],
+  "resource_capacities": [
+    {
+      "resource_id": "power",
+      "period": "0",
+      "available_quantity": 1,
+      "unit": "MWh",
+      "status": "OBSERVED",
+      "evidence_id": "meter:power"
+    }
+  ]
+}

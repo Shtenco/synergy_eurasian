@@ -1,0 +1,683 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/synergy_v7_production_optimizer.schema.json",
+  "title": "SYNERGY V7.4 MILP Production Optimizer Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "horizon_periods",
+    "recipes",
+    "demands",
+    "inventory_receipts",
+    "resource_capacities",
+    "batch_limits"
+  ],
+  "properties": {
+    "horizon_periods": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "objective_currency": {
+      "type": "string"
+    },
+    "mip_rel_gap": {
+      "type": "number",
+      "minimum": 0,
+      "exclusiveMaximum": 1
+    },
+    "time_limit_seconds": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "recipes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "recipe_id",
+          "output_product_id",
+          "output_quantity_per_batch",
+          "output_unit",
+          "input_requirements",
+          "resource_requirements",
+          "lead_time_periods"
+        ],
+        "properties": {
+          "recipe_id": {
+            "type": "string"
+          },
+          "output_product_id": {
+            "type": "string"
+          },
+          "output_quantity_per_batch": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "output_unit": {
+            "type": "string"
+          },
+          "lead_time_periods": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "input_requirements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "product_id",
+                "quantity_per_batch",
+                "unit"
+              ],
+              "properties": {
+                "product_id": {
+                  "type": "string"
+                },
+                "quantity_per_batch": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "unit": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "resource_requirements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "resource_id",
+                "quantity_per_batch",
+                "unit"
+              ],
+              "properties": {
+                "resource_id": {
+                  "type": "string"
+                },
+                "quantity_per_batch": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "unit": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "demands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "demand_id",
+          "product_id",
+          "quantity",
+          "unit",
+          "due_period",
+          "unit_value",
+          "currency"
+        ],
+        "properties": {
+          "demand_id": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "unit": {
+            "type": "string"
+          },
+          "due_period": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unit_value": {
+            "type": "number",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string"
+          },
+          "priority_weight": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        }
+      }
+    },
+    "inventory_receipts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "receipt_id",
+          "product_id",
+          "quantity",
+          "unit",
+          "available_period",
+          "status"
+        ],
+        "properties": {
+          "receipt_id": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "unit": {
+            "type": "string"
+          },
+          "available_period": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "enum": [
+              "OBSERVED",
+              "COMMITTED",
+              "UNDER_CONSTRUCTION",
+              "PLANNED",
+              "ANNOUNCED",
+              "SCENARIO"
+            ]
+          }
+        }
+      }
+    },
+    "resource_capacities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "resource_id",
+          "period",
+          "available_quantity",
+          "unit",
+          "status",
+          "evidence_id"
+        ],
+        "properties": {
+          "resource_id": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string"
+          },
+          "available_quantity": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unit": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "OBSERVED",
+              "COMMITTED",
+              "UNDER_CONSTRUCTION",
+              "PLANNED",
+              "ANNOUNCED",
+              "SCENARIO"
+            ]
+          },
+          "evidence_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "batch_limits": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "batch_costs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "holding_costs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "minimum_inventory": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "storage_limits": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "cash_opening_balance": {
+      "type": "number",
+      "minimum": 0
+    },
+    "cash_minimum_balance": {
+      "oneOf": [
+        {
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      ]
+    },
+    "cash_inflows_by_period": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Keys are zero-based period numbers encoded as strings."
+    },
+    "collection_lag_by_demand": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "collection_fraction_by_demand": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "cash_outflows_by_period": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Committed cash outflows by zero-based period; JSON keys are strings."
+    },
+    "supplier_payment_commitments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "payment_id",
+          "supplier_id",
+          "purchase_order_id",
+          "input_product_id",
+          "period",
+          "amount",
+          "currency",
+          "payment_stage",
+          "status",
+          "evidence_id"
+        ],
+        "properties": {
+          "payment_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "supplier_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "purchase_order_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "input_product_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "period": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1
+          },
+          "payment_stage": {
+            "enum": [
+              "DEPOSIT",
+              "DISPATCH",
+              "RECEIPT",
+              "MILESTONE",
+              "FINAL"
+            ]
+          },
+          "status": {
+            "enum": [
+              "OBSERVED",
+              "COMMITTED",
+              "SCENARIO",
+              "PLANNED"
+            ]
+          },
+          "evidence_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "include_scenario_supplier_payments": {
+      "type": "boolean",
+      "default": false
+    },
+    "credit_limit": {
+      "type": "number",
+      "minimum": 0
+    },
+    "credit_opening_balance": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "credit_draw_limits_by_period": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Maximum credit draw per period; JSON keys are strings."
+    },
+    "credit_repayment_limits_by_period": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Maximum repayment per period; JSON keys are strings."
+    },
+    "credit_interest_rates_by_period": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Interest rate per period, decimal fraction; JSON keys are strings."
+    },
+    "terminal_credit_balance_limit": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Optional maximum ending debt at the final planning period."
+    },
+    "credit_maturity_period": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Zero-based period in which the facility must be fully repaid; debt remains zero thereafter."
+    },
+    "credit_borrowing_base_by_period": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Maximum permitted ending drawn balance by period, in objective currency. Must not exceed credit_limit."
+    },
+    "collateral_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receivable_advance_rate",
+        "inventory_advance_rate",
+        "max_days_past_due",
+        "counterparty_concentration_limit",
+        "reserve_amount"
+      ],
+      "properties": {
+        "receivable_advance_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "inventory_advance_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "max_days_past_due": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "counterparty_concentration_limit": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reserve_amount": {
+          "type": "number",
+          "minimum": 0
+        },
+        "include_underwritten": {
+          "type": "boolean"
+        },
+        "include_scenarios": {
+          "type": "boolean"
+        },
+        "receivable_aging_haircuts": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "inventory_aging_haircuts": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "receivable_dilution_reserve_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "receivable_reserve_amount": {
+          "type": "number",
+          "minimum": 0
+        },
+        "inventory_reserve_amount": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "receivable_collateral": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "receivable_id",
+          "counterparty_id",
+          "period",
+          "outstanding_amount",
+          "currency",
+          "days_past_due",
+          "status",
+          "disputed",
+          "related_party",
+          "evidence_id"
+        ],
+        "properties": {
+          "receivable_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "counterparty_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "period": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "outstanding_amount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1
+          },
+          "days_past_due": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "enum": [
+              "OBSERVED",
+              "VERIFIED",
+              "UNDERWRITTEN",
+              "SCENARIO"
+            ]
+          },
+          "disputed": {
+            "type": "boolean"
+          },
+          "related_party": {
+            "type": "boolean"
+          },
+          "evidence_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "inventory_collateral": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "lot_id",
+          "product_id",
+          "period",
+          "carrying_value",
+          "currency",
+          "status",
+          "quality_approved",
+          "location_controlled",
+          "consigned",
+          "evidence_id"
+        ],
+        "properties": {
+          "lot_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "product_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "period": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "carrying_value": {
+            "type": "number",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "OBSERVED",
+              "VERIFIED",
+              "UNDERWRITTEN",
+              "SCENARIO",
+              "OBSOLETE",
+              "WIP",
+              "DAMAGED"
+            ]
+          },
+          "quality_approved": {
+            "type": "boolean"
+          },
+          "location_controlled": {
+            "type": "boolean"
+          },
+          "consigned": {
+            "type": "boolean"
+          },
+          "evidence_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "age_days": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        }
+      }
+    }
+  }
+}

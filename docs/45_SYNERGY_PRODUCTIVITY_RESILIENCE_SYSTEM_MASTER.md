@@ -77,3 +77,103 @@ Until that common data and evidence layer exists, V1–V6 remain a family of rel
 ## Reproducibility and current CI note
 
 V1–V4 source and tests are in this repository. V5–V6 source, config, tests, docs and outputs are included in the companion extension package; its tests were run locally: **23 passed**. The PR #9 resilience branch initially failed test collection because pandas was absent; `pandas>=2.2,<4` was added in commit `9c8e4cb503d33e82cc4bb9add729514db1a42587`. After adding pandas, the follow-up GitHub Actions run 42149696277 completed successfully. PR #9 remains open and has not been merged.
+
+## V7 implementation status (research branch)
+
+The V7 line has now progressed from architecture into an executable reference kernel. See [PR #10](https://github.com/Shtenco/synergy_eurasian/pull/10); it remains a research branch until reviewed and merged.
+
+| Layer | Implementation | Boundary |
+|---|---|---|
+| V7 core | Event envelope, per-aggregate sequence/idempotency, hash-chain verification, graph projection, evidence-qualified resource capacity, physical-flow consolidation, benefit ledger, NPV/CVaR/Pareto primitives | In-memory reference kernel; no durable distributed event store |
+| V7.1 | Time-expanded recipes, integer batches, inventory receipts, lead times, shared resource buckets, demand fulfillment and executable integrated factory fixture | Deterministic feasibility validator, not a production scheduler optimizer |
+| V7.2 | Working-capital metrics, DSO/DIO/DPO/CCC, cash release from NWC movement and prioritized cash waterfall | Period-level liquidity calculator, not double-entry accounting |
+| V7.2.1 | AR/AP documents, partial settlements, credit adjustments, disputes, aging, gross counterparty exposure and sourced PD×LGD estimate | In-memory subledger projection; no legal netting, FX conversion or statutory impairment |
+
+V7 acceptance still requires durable event storage, signed evidence, access controls, trusted checkpoints, concurrency/recovery tests, independent accounting/legal/security review and calibration against real enterprise data. Scenario and synthetic examples are not enterprise forecasts.
+
+## Next development frontier
+
+1. **V7.2.2 — cash reconciliation:** bank statement lines, settlement allocation, unmatched receipts, reversals, cash-account controls and reconciliation evidence.
+2. **V7.3 — causal operating performance:** link production orders, delivery acceptance, invoice issuance, collections, asset costs and benefit claims to a single evidence chain. Separate physical output, recognized revenue, collected cash and incremental net value.
+3. **V7.4 — temporal supply network:** supplier shipment lead times, lot/serial traceability, inventory aging, safety stock, substitutions, transport capacity, storage and disruptions.
+4. **V7.5 — constrained optimization:** MILP/CP-SAT over order timing, scarce resources, inventory, cash constraints and essential-service minimums; preserve Pareto alternatives rather than hiding trade-offs in one score.
+5. **V7.6 — resilience and learning:** correlated shocks, recovery policies, formal CVaR/chance constraints, verified reusable technology packages and measured R&D-capability reproduction.
+
+No automated optimizer output may authorize credit, token issuance, payments, securities distribution or legally binding commitments.
+
+### V7.2.2 update — cash evidence
+
+The research branch now also includes explicit bank statement reconciliation: manually approved allocations connect signed bank lines to AR/AP documents, generate settlement events, preserve unmatched residuals for review and report gross cash control totals by currency. No automatic fuzzy matching is performed and unexplained cash is not recognized as revenue. See [V7.2.2 specification](docs/50_SYNERGY_V7_2_2_BANK_RECONCILIATION.md) and [PR #10](https://github.com/Shtenco/synergy_eurasian/pull/10).
+
+### V7.3 update — realization evidence chain
+
+V7.3 now validates the explicit chain from observed production output to customer acceptance, invoice allocations, settlement events and sourced cash attribution. It separately reports baseline output deltas, accepted quantities, invoiced revenue, collected cash and cost categories. It does **not** infer causality from a pre/post comparison, prorate cash receipts, or collapse recognized revenue into collected cash. See [V7.3 specification](docs/51_SYNERGY_V7_3_REALIZATION_EVIDENCE_CHAIN.md) and [PR #10](https://github.com/Shtenco/synergy_eurasian/pull/10).
+
+### V7.3.1 update — causal measurement discipline
+
+V7.3.1 adds a matched-pair difference-in-differences estimator with pair-level effects, Student-t confidence intervals and explicit treatment/control identity checks. It records that parallel trends, no spillovers and matching quality require independent review; a single pre-period cannot test parallel trends. It is a design-conditional estimate, not automatic causal certification. See [V7.3.1 specification](docs/52_SYNERGY_V7_3_1_CAUSAL_DID.md).
+
+### V7.4 update — MILP production scheduling
+
+V7.4 adds a SciPy/HiGHS mixed-integer scheduler over recipe batches, inventory balances, lead times, customer demand and shared firm resource capacity. It maximizes explicit demand value less batch and inventory holding costs. It reports solver optimality and MIP gap separately; scenario values are not treated as observed cash. See [V7.4 specification](docs/53_SYNERGY_V7_4_MILP_PRODUCTION_SCHEDULER.md) and the reproducible factory example.
+
+### V7.4.1 update — inventory policy
+
+The V7.4 MILP now supports end-of-period minimum inventory (safety stock) and maximum storage bounds by product. Infeasible combinations are reported as infeasible, not silently relaxed. The factory fixture demonstrates a 10 kg steel safety stock and 30 kg storage ceiling.
+
+### V7.5 update — production resilience stress
+
+V7.5 replays a fixed production schedule under correlated common shocks, resource-specific capacity reductions and supplier receipt delays. It reports demand service distributions, complete-service frequency and empirical tail service shortfall. This is conditional Monte Carlo stress, not calibrated probability forecasting, recourse optimization or a formal CVaR-constrained solution. See [V7.5 specification](docs/54_SYNERGY_V7_5_MONTE_CARLO_RESILIENCE.md).
+
+## V7 research-branch validation checkpoint
+
+At head `90dc6e841a415d75e4e9aa0b1a794babc83f116c`, GitHub Actions completed successfully: **146 tests passed** in EIIOM CI run [42178996729](https://github.com/Shtenco/synergy_eurasian/actions/runs/42178996729); README integrity run [42178996693](https://github.com/Shtenco/synergy_eurasian/actions/runs/42178996693) also passed. PR #10 remains open and unmerged. These tests establish software invariants and reproducibility of the included synthetic fixtures, not calibration against real enterprise data or proof of economic impact.
+
+### V7.6 update — cash-constrained production scheduling
+
+The V7.4 time-expanded MILP now optionally carries an explicit period-by-period cash balance. Production batch cash cost is paid at start period, inventory holding cost at period end, and customer receipts enter only after the configured demand collection lag. The optimizer enforces a minimum cash floor and reports collections deferred beyond the horizon. This closes a key gap between physical feasibility and working-capital feasibility, while keeping modeled receipts distinct from bank-reconciled actual cash. See [V7.6 specification](docs/55_SYNERGY_V7_6_CASH_CONSTRAINED_OPTIMIZATION.md).
+
+### Next V7 milestones
+
+- **V7.6.1 supplier payment calendar:** deposits, staged payments, invoice due dates, supplier credit terms and procurement cash timing by input lot.
+- **V7.6.2 financing layer:** credit-line availability, draw/repayment schedule, debt service, financing cost, covenant headroom and default consequences.
+- **V7.7 adaptive resilience optimizer:** recourse decisions under V7.5 correlated shocks and delivery delays, with cash floors and essential-service minimums retained.
+- **V7.8 evidence-calibrated operating model:** replace scenario collection fractions and batch cash costs with reconciled invoice, bank, payroll, energy and asset-maintenance evidence, retaining provenance and confidence tiers.
+
+All V7.6 values are planning inputs. A feasible MILP schedule is not a solvency opinion, financing commitment, or authorization to pay.
+
+### V7.6.1 update — supplier payment calendar
+
+V7.6.1 adds dated supplier payment commitments for deposits, dispatch, receipt, milestones and final payments. Firm observed/committed obligations are aggregated into cash outflows before the MILP chooses a feasible production schedule. Scenario commitments require explicit inclusion; planned payments remain excluded. These commitments are not treated as bank settlements and must not be duplicated in the generic cash-outflow input. See [V7.6.1 specification](docs/56_SYNERGY_V7_6_1_SUPPLIER_PAYMENT_CALENDAR.md).
+
+V7.6.2 now covers facility limits, drawdowns, prior-balance repayments, interest and an optional terminal debt ceiling; fees and covenant headroom remain future work. This must remain separate from verified bank cash and from legal authority to borrow.
+
+### V7.6.2 update — revolving credit and financing cost
+
+V7.6.2 adds a revolving facility with per-period draw and repayment limits, a hard outstanding-balance ceiling, and interest charged on beginning-period debt. The cash equation includes drawdowns, repayments and interest; the objective penalizes financing interest, while principal remains a balance-sheet liability rather than operating expense. An optional terminal debt ceiling can require repayment by the horizon end; otherwise no maturity is inferred. See [V7.6.2 specification](docs/57_SYNERGY_V7_6_2_REVOLVING_CREDIT_FACILITY.md).
+
+The financing model remains a planning abstraction: no covenant, collateral, fees, FX, default, legal approval or lender commitment is inferred. Actual draws and repayments must be reconciled to bank evidence.
+
+### V7.6.3 update — explicit credit maturity
+
+A declared `credit_maturity_period` now forces the facility balance to zero by the end of that period and in all later periods. This is distinct from a terminal horizon debt ceiling: the model no longer assumes that debt can remain outstanding past a known maturity date merely because the planning horizon is longer. If repayment cannot be funded, production is curtailed. See [V7.6.3 specification](docs/58_SYNERGY_V7_6_3_CREDIT_MATURITY.md).
+
+### V7.6.4 update — borrowing-base covenant
+
+V7.6.4 adds period-specific maximum drawn-debt limits on top of the contractual facility cap and reports borrowing-base headroom. This makes collateral availability a first-class planning constraint, while keeping collateral eligibility, aging, concentration and advance-rate certification outside the optimizer until those inputs are evidence-backed. See [V7.6.4 specification](docs/59_SYNERGY_V7_6_4_BORROWING_BASE_COVENANT.md).
+
+### V7.6.5 update — evidence-derived borrowing base
+
+V7.6.5 derives period borrowing-base ceilings from eligible receivables and inventory. It applies overdue/dispute/related-party and inventory-quality/location/consignment filters, counterparty concentration caps, advance rates and reserves, then passes the lower of calculated and externally supplied caps to the credit-aware optimizer. This creates a traceable bridge from collateral records to borrowing capacity, without pretending that supplied evidence has been independently audited or accepted by a lender. When collateral mode is enabled, missing period snapshots fail closed to zero borrowing-base availability. See [V7.6.5 specification](docs/60_SYNERGY_V7_6_5_EVIDENCE_BORROWING_BASE.md).
+
+### V7.6.6 update — collateral aging, dilution and auditability
+
+V7.6.6 adds receivable aging haircuts, inventory aging haircuts, receivable dilution reserves, receivable/inventory-specific fixed reserves and an asset-level audit trail with evidence IDs and explicit exclusion reasons. All additions are optional and preserve V7.6.5 input compatibility. This improves traceability and conservative valuation but does not independently authenticate the evidence or certify lender eligibility. See [V7.6.6 specification](docs/61_SYNERGY_V7_6_6_ADVANCED_COLLATERAL_RISK.md).
+
+### V7.7 update — scenario-wise adaptive recourse and mean-CVaR
+
+V7.7 adds an evaluator that perturbs demand, resources, receipts, cash flows, supplier commitments and collateral by declared scenarios, re-runs the existing production/finance MILP independently for each scenario, and reports expected loss and discrete CVaR. This is deliberately labelled a wait-and-see benchmark: it does not enforce non-anticipativity and is not a formal two-stage stochastic MILP. Infeasible or unproven scenario solves withhold aggregate risk metrics. See [V7.7 specification](docs/62_SYNERGY_V7_7_SCENARIO_RECOURSE.md).
+
+### V7.8 update — first joint non-anticipative stochastic MILP
+
+V7.8 adds a deliberately narrow single-product, single-epoch two-stage MILP. It chooses one common pre-shock commitment and scenario-specific production, emergency procurement and lost-sales recourse, with expected recourse cost blended with discrete CVaR. It also calculates a risk-neutral solution and a wait-and-see expected-cost benchmark/EVPI. This is the first actual joint non-anticipative stochastic MILP in the V7 research line, but it is not yet integrated with the full multi-product, multi-period recipe/cash/credit/collateral planner. See [V7.8 specification](docs/63_SYNERGY_V7_8_TWO_STAGE_NONANTICIPATIVE_MILP.md).

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SYNERGY V7.8 Two-Stage Non-Anticipative MILP",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "precommit_capacity",
+    "precommit_unit_cost",
+    "production_unit_cost",
+    "emergency_unit_cost",
+    "lost_sales_penalty",
+    "scenarios"
+  ],
+  "properties": {
+    "precommit_capacity": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "precommit_unit_cost": {
+      "type": "number",
+      "minimum": 0
+    },
+    "production_unit_cost": {
+      "type": "number",
+      "minimum": 0
+    },
+    "emergency_unit_cost": {
+      "type": "number",
+      "minimum": 0
+    },
+    "lost_sales_penalty": {
+      "type": "number",
+      "minimum": 0
+    },
+    "risk_alpha": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "exclusiveMaximum": 1,
+      "default": 0.95
+    },
+    "risk_weight": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.5
+    },
+    "mip_rel_gap": {
+      "type": "number",
+      "minimum": 0,
+      "exclusiveMaximum": 1,
+      "default": 0
+    },
+    "time_limit_seconds": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 30
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scenario_id",
+          "probability",
+          "demand_quantity",
+          "available_capacity"
+        ],
+        "properties": {
+          "scenario_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "probability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "demand_quantity": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "available_capacity": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  }
+}
