@@ -136,3 +136,20 @@ def test_journal_enforces_idempotency_and_single_reversal():
     with pytest.raises(ValueError, match="already been reversed"):
         journal.reverse(original.entry_id, "je-reversal-2", date(2026, 11, 8),
             datetime(2026, 11, 8, 8, tzinfo=timezone.utc), "event-reversal-2", "idem-reversal-2", "Second reversal")
+
+
+def test_journal_rejects_a_forged_reversal_that_does_not_mirror_original():
+    journal = new_journal()
+    original = journal.post(entry())
+    now = datetime(2026, 11, 7, 8, tzinfo=timezone.utc)
+    forged = JournalEntry(
+        "je-forged-reversal", date(2026, 11, 7), now, "USD",
+        (
+            JournalLine("fr1", "cash", "CREDIT", Money("50", "USD"), Money("50", "USD"), "co1", "bank:tx1"),
+            JournalLine("fr2", "revenue", "DEBIT", Money("50", "USD"), Money("50", "USD"), "co1", "invoice:1"),
+        ),
+        "event-forged", "idem-forged", "Forged partial reversal", reversal_of=original.entry_id,
+    )
+    with pytest.raises(ValueError, match="exactly mirror"):
+        journal.post(forged)
+    assert len(journal.entries) == 1
