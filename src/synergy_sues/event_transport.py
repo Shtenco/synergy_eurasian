@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime, timedelta, timezone
+from contextlib import contextmanager
 from hashlib import sha256
 import json
 import sqlite3
@@ -86,6 +87,10 @@ def _validate_event(row: Mapping[str, Any]) -> None:
     _canonical(row["payload"])
     _aware(row["effective_at"], "effective_at")
     _aware(row["recorded_at"], "recorded_at")
+    idem = row.get("idempotency_key") or ""
+    previous = row.get("previous_hash") or ""
+    if not isinstance(idem, str) or not isinstance(previous, str):
+        raise ValueError("idempotency_key and previous_hash must be strings")
     evidence = tuple(row.get("evidence_ids") or ())
     if any(not isinstance(item, str) or not item for item in evidence):
         raise ValueError("evidence_ids must contain non-empty strings")
@@ -155,8 +160,16 @@ class DurableEventStore:
         connection.execute("PRAGMA foreign_keys=ON")
         return connection
 
+    @contextmanager
+    def _session(self):
+        db = self._connect()
+        try:
+            yield db
+        finally:
+            db.close()
+
     def _initialize(self) -> None:
-        with self._connect() as db:
+        with self._session() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS event_log (
@@ -210,7 +223,7 @@ class DurableEventStore:
 
     @property
     def events(self) -> tuple[DurableEvent, ...]:
-        with self._connect() as db:
+        with self._session() as db:
             rows = db.execute("SELECT event_json FROM event_log ORDER BY event_row").fetchall()
         result = []
         for item in rows:
@@ -305,7 +318,8 @@ class DurableEventStore:
         lease_seconds: int = 30,
         now: datetime | None = None,
     ) -> tuple[OutboxMessage, ...]:
-        if isinstance(limit, bool) or limit < 1 or isinstance(lease_seconds, bool) or lease_seconds < 1:
+        if (isinstance(limit, bool) or not isinstance(limit, int) or limit < 1
+                or isinstance(lease_seconds, bool) or not isinstance(lease_seconds, int) or lease_seconds < 1):
             raise ValueError("limit and lease_seconds must be positive integers")
         instant = _now(now)
         stamp = instant.isoformat()
@@ -362,7 +376,9 @@ class DurableEventStore:
         max_attempts: int = 10,
         now: datetime | None = None,
     ) -> str:
-        if retry_delay_seconds < 0 or max_attempts < 1:
+        if (isinstance(retry_delay_seconds, bool) or not isinstance(retry_delay_seconds, int)
+                or retry_delay_seconds < 0 or isinstance(max_attempts, bool)
+                or not isinstance(max_attempts, int) or max_attempts < 1):
             raise ValueError("retry_delay_seconds must be >= 0 and max_attempts >= 1")
         instant = _now(now)
         with self._connect() as db:
