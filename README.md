@@ -417,3 +417,11 @@ V7.4.1 extends the MILP with end-of-period safety-stock minimums and storage-cap
 - [V7.5 command-line evaluator](src/synergy_v7/stress_cli.py)
 
 V7.5 stress-tests a fixed schedule under common resource shocks, resource-specific failures and supplier receipt delays. It reports service-level distributions and empirical tail shortfall, without claiming calibrated failure probabilities or optimizing recourse.
+
+- [V7.6 Cash-Constrained Time-Expanded Production Optimization](docs/55_SYNERGY_V7_6_CASH_CONSTRAINED_OPTIMIZATION.md)
+- [V7.6 MILP optimizer](src/synergy_v7/planner.py)
+- [V7.6 input schema](interfaces/synergy_v7_production_optimizer.schema.json)
+- [V7.6 reproducible cash-constrained factory plan](examples/synergy_v7_6_cash_constrained_plan.json)
+- [V7.6 command-line optimizer](src/synergy_v7/planner_cli.py)
+
+V7.6 adds period-by-period cash conservation to the V7.4 production MILP. It prevents the optimizer from spending future customer collections before they arrive, while keeping scenario cash assumptions separate from bank-reconciled actuals.
