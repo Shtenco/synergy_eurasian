@@ -430,3 +430,8 @@ V7.6 adds period-by-period cash conservation to the V7.4 production MILP. It pre
 - [V7.6.1 supplier payment model](src/synergy_v7/supplier_payments.py)
 
 V7.6.1 adds evidence-qualified supplier deposits, dispatch, receipt, milestone and final-payment commitments. Only observed and committed obligations reduce firm cash by default; scenario commitments require explicit opt-in, and planned payments are excluded.
+
+- [V7.6.2 Revolving Credit Facility in Production Planning](docs/57_SYNERGY_V7_6_2_REVOLVING_CREDIT_FACILITY.md)
+- [V7.6.2 credit-aware factory fixture](examples/synergy_v7_6_2_credit_factory_plan.json)
+
+V7.6.2 adds period-level credit draws, prior-balance-only repayments, facility limits and interest on beginning-period debt. Debt principal is distinguished from operating expense; outstanding debt is reported and no terminal repayment is silently assumed.
