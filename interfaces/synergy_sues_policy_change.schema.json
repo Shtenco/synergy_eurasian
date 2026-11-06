@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/synergy_sues_policy_change.schema.json",
+  "title": "SYNERGY SUES Signed Authorization Policy Change V1",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["change_id", "tenant_id", "expected_version", "operation", "rule"],
+      "properties": {
+        "change_id": {"type": "string", "minLength": 1},
+        "tenant_id": {"type": "string", "minLength": 1},
+        "expected_version": {"type": "integer", "minimum": 0},
+        "operation": {"const": "UPSERT_RULE"},
+        "rule": {"$ref": "#/$defs/rule"}
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["change_id", "tenant_id", "expected_version", "operation", "rule_id"],
+      "properties": {
+        "change_id": {"type": "string", "minLength": 1},
+        "tenant_id": {"type": "string", "minLength": 1},
+        "expected_version": {"type": "integer", "minimum": 0},
+        "operation": {"const": "REVOKE_RULE"},
+        "rule_id": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["change_id", "tenant_id", "expected_version", "policy_change_event_id", "policy_change_event_hash", "decision"],
+      "properties": {
+        "change_id": {"type": "string", "minLength": 1},
+        "tenant_id": {"type": "string", "minLength": 1},
+        "expected_version": {"type": "integer", "minimum": 0},
+        "policy_change_event_id": {"type": "string", "minLength": 1},
+        "policy_change_event_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "decision": {"enum": ["APPROVE", "REJECT"]}
+      },
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "required": ["rule_id", "tenant_id", "effect", "action", "resource_type", "subject_ids", "approver_ids", "min_approvals", "resource_id", "valid_from", "valid_until"],
+      "properties": {
+        "rule_id": {"type": "string", "minLength": 1},
+        "tenant_id": {"type": "string", "minLength": 1},
+        "effect": {"enum": ["ALLOW", "DENY"]},
+        "action": {"type": "string", "minLength": 1},
+        "resource_type": {"type": "string", "minLength": 1},
+        "subject_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "approver_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "min_approvals": {"type": "integer", "minimum": 0},
+        "resource_id": {"type": ["string", "null"]},
+        "valid_from": {"type": "string", "format": "date-time"},
+        "valid_until": {"type": ["string", "null"], "format": "date-time"}
+      },
+      "additionalProperties": false
+    }
+  }
+}
