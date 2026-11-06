@@ -21,6 +21,8 @@ from .realization import (OutputObservation, DeliveryAcceptance,
 
 from .causal import CausalObservation, matched_pair_difference_in_differences
 
+from .planner import PlanDemand, optimize_production_schedule
+
 __all__ = ["DomainEvent","EventStore","GraphNode","GraphEdge","EconomicGraph",
     "PhysicalFlow","physical_flow_summary","ResourceCapacity","ResourceCommitment",
     "validate_resource_capacity","graph_from_events","BenefitClaim","BenefitLedger",
@@ -30,5 +32,5 @@ __all__ = ["DomainEvent","EventStore","GraphNode","GraphEdge","EconomicGraph",
     "DocumentAdjustment","DisputeEvent","CreditRiskAssessment","build_trade_ledger",
     "BankStatementLine","CashAllocation","reconcile_bank_statement","OutputObservation",
     "DeliveryAcceptance","InvoiceDeliveryAllocation","CollectionAttribution","CostObservation",
-    "evaluate_realization_chain","CausalObservation","matched_pair_difference_in_differences","WorkingCapitalSnapshot",
+    "evaluate_realization_chain","PlanDemand","optimize_production_schedule","CausalObservation","matched_pair_difference_in_differences","WorkingCapitalSnapshot",
     "working_capital_cash_impact","CashWaterfallInput","run_cash_waterfall"]
