@@ -1,0 +1,65 @@
+{
+  "model_id": "SYNERGY-PRODUCTIVITY-FLYWHEEL-MONTE-CARLO-V3",
+  "status": "ILLUSTRATIVE_PROBABILISTIC_STRESS_NOT_FORECAST",
+  "currency": "USD_2026_REAL",
+  "horizon_years": 10,
+  "paths": 20000,
+  "random_seed": 42,
+  "starting_point": {
+    "gross_cashflow_after_opex_before_replacement_usd": 1068012.5,
+    "replacement_capex_usd": 1045920,
+    "productive_capital_usd": 32900000,
+    "initial_reserve_share_of_productive_capital": 0.05
+  },
+  "fund_allocation": {
+    "productive_automation": 0.5,
+    "breakthrough_rd": 0.25,
+    "resilience_reserve": 0.25
+  },
+  "annual_uncertainty": {
+    "cashflow_growth_mean": 0.025,
+    "cashflow_growth_std": 0.015,
+    "cashflow_growth_min": -0.05,
+    "cashflow_growth_max": 0.08,
+    "replacement_inflation_mean": 0.02,
+    "replacement_inflation_std": 0.01,
+    "replacement_inflation_min": -0.01,
+    "replacement_inflation_max": 0.08
+  },
+  "correlated_shock": {
+    "annual_probability_sensitivity": [
+      0,
+      0.01,
+      0.03,
+      0.05,
+      0.1
+    ],
+    "cashflow_growth_additive_shock": -0.1,
+    "replacement_inflation_additive_shock": 0.1
+  },
+  "automation_projects": {
+    "annual_net_residual_yield_mean": 0.15,
+    "annual_net_residual_yield_std": 0.05,
+    "yield_min": 0,
+    "deployment_lag_years": 1,
+    "benefit_life_years": 5
+  },
+  "rd_projects": {
+    "independent_projects_per_year": 10,
+    "success_probability_per_project": 0.2,
+    "annual_net_residual_yield_if_success": 0.3,
+    "deployment_lag_years": 2,
+    "benefit_life_years": 5
+  },
+  "accounting_rules": [
+    "All probability distributions are illustrative assumptions, not estimated from observed SYNERGY enterprises.",
+    "Annual growth draws represent cashflow after OPEX and before replacement CAPEX.",
+    "The correlated shock is a joint downside event applied to cashflow growth and replacement inflation in the same year.",
+    "Automation yield is drawn once per funded cohort and represents net residual after incremental OPEX and replacement.",
+    "R&D success is sampled independently across ten projects per annual cohort; failed projects produce zero return.",
+    "R&D yield is counted only after the deployment lag and only during the finite benefit life.",
+    "Positive residual is allocated 50/25/25; negative residual draws the reserve and then records an unfunded gap.",
+    "Reserve depletion probability means the reserve was exhausted at least once during the horizon, even if later contributions replenish it.",
+    "Monte Carlo results are conditional on the chosen distributions and must not be presented as real-world forecast probabilities."
+  ]
+}
