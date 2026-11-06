@@ -452,3 +452,11 @@ V7.6.5 derives period borrowing-base limits from eligible receivables and invent
 - [V7.6.6 Advanced Collateral Quality, Dilution and Aging](docs/61_SYNERGY_V7_6_6_ADVANCED_COLLATERAL_RISK.md)
 
 V7.6.6 adds asset-level receivable and inventory aging haircuts, receivable dilution reserves, category-specific reserve amounts and a traceable per-asset audit trail. New controls are optional; V7.6.5 inputs remain compatible.
+
+- [V7.7 Scenario Recourse and Mean-CVaR Evaluator](docs/62_SYNERGY_V7_7_SCENARIO_RECOURSE.md)
+- [V7.7 scenario engine](src/synergy_v7/scenario_recourse.py)
+- [V7.7 scenario CLI](src/synergy_v7/scenario_recourse_cli.py)
+- [V7.7 input schema](interfaces/synergy_v7_scenario_recourse.schema.json)
+- [V7.7 runnable example](examples/synergy_v7_7_scenario_recourse.json)
+
+V7.7 independently re-optimizes the cash/credit/collateral-aware production plan after each declared shock scenario, then reports expected loss and discrete CVaR. It is explicitly a wait-and-see benchmark, not a formal non-anticipative two-stage stochastic MILP.
