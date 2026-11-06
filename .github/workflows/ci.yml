@@ -41,6 +41,37 @@ jobs:
       - name: Run seven-sector SYNERGY Economy reference model
         run: python src/synergy_economy_7sector.py --output outputs/synergy_economy_7sector_v1.json
 
+      - name: Run dynamic productivity flywheel and Monte Carlo stress models
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, "src")
+          from synergy_productivity_flywheel_dynamic_v2 import build_report as build_dynamic
+          from synergy_productivity_flywheel_dynamic_v2 import load_config as load_dynamic
+          from synergy_productivity_flywheel_monte_carlo_v3 import build_report as build_mc
+          from synergy_productivity_flywheel_monte_carlo_v3 import load_config as load_mc
+          dynamic = build_dynamic(load_dynamic())
+          mc = build_mc(load_mc())
+          Path("outputs").mkdir(exist_ok=True)
+          Path("outputs/synergy_productivity_flywheel_dynamic_v2.json").write_text(json.dumps(dynamic, indent=2), encoding="utf-8")
+          Path("outputs/synergy_productivity_flywheel_monte_carlo_v3.json").write_text(json.dumps(mc, indent=2), encoding="utf-8")
+          print("DYNAMIC V2")
+          print(json.dumps([{
+              "name": x["name"],
+              "year_10_residual_usd": x["year_10_residual_usd"],
+              "final_reserve_usd": x["final_reserve_usd"],
+              "cumulative_unfunded_gap_usd": x["cumulative_unfunded_gap_usd"]
+          } for x in dynamic["macro_scenarios"]], indent=2))
+          print("MONTE CARLO V3")
+          print(json.dumps([{
+              "shock_probability_per_year": x["shock_probability_per_year"],
+              "reserve_exhaustion_probability": x["reserve_exhaustion_probability"],
+              "reserve_end_usd_quantiles": x["reserve_end_usd_quantiles"],
+              "cumulative_unfunded_gap_usd_quantiles": x["cumulative_unfunded_gap_usd_quantiles"]
+          } for x in mc["shock_sensitivity"]], indent=2))
+          PY
       - name: Print seven-sector economy summary
         run: |
           python - <<'PY'
