@@ -399,3 +399,11 @@ V7.3 connects measured output to customer acceptance, invoice lines and explicit
 - [V7.3.1 command-line evaluator](src/synergy_v7/causal_cli.py)
 
 V7.3.1 estimates matched-pair difference-in-differences with a small-sample t interval. It exposes the parallel-trends and no-spillover assumptions and explicitly refuses to treat a pre/post delta as causal proof.
+
+- [V7.4 Time-Expanded MILP Production Scheduler](docs/53_SYNERGY_V7_4_MILP_PRODUCTION_SCHEDULER.md)
+- [V7.4 MILP optimizer](src/synergy_v7/planner.py)
+- [V7.4 input schema](interfaces/synergy_v7_production_optimizer.schema.json)
+- [V7.4 integrated factory plan](examples/synergy_v7_4_milp_factory_plan.json)
+- [V7.4 command-line optimizer](src/synergy_v7/planner_cli.py)
+
+V7.4 chooses integer production batches across periods, balancing demand value against batch and inventory holding costs under material and firm resource constraints. Economic values are explicit scenario inputs, not observed cash.
