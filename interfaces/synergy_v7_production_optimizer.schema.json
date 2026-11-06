@@ -439,6 +439,11 @@
       "type": "number",
       "minimum": 0,
       "description": "Optional maximum ending debt at the final planning period."
+    },
+    "credit_maturity_period": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Zero-based period in which the facility must be fully repaid; debt remains zero thereafter."
     }
   }
 }
