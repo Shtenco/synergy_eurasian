@@ -196,7 +196,7 @@ class ProductionExecution:
     order_id: str
     output_movement: InventoryMovement
     input_movements: tuple[InventoryMovement, ...]
-    total_conversion_cost: Money
+    direct_material_cost: Money
     output_quantity: Quantity
     journal_entry_ids: tuple[str, ...]
 
