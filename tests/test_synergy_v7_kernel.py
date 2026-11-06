@@ -739,3 +739,52 @@ def test_matched_pair_did_rejects_reusing_same_unit_in_multiple_pairs():
     rows[5]=CausalObservation(rows[5].observation_id,rows[5].matched_pair_id,"treated-0","TREATED","POST",rows[5].outcome,rows[5].evidence_id)
     with pytest.raises(ValueError,match="exactly one matched pair"):
         matched_pair_difference_in_differences(rows)
+
+
+from synergy_v7 import ResourceShock, ReceiptDelay, stress_test_fixed_schedule
+
+
+def stress_fixture():
+    recipe=ProductionRecipe("r","finished",1,"unit",(MaterialRequirement("raw",1,"kg"),),
+      (ResourceRequirement("power",1,"MWh"),),1)
+    order=[ProductionOrder("o1","r",0,1)]
+    receipts=[InventoryReceipt("raw1","raw",1,"kg",0,"OBSERVED")]
+    demand=[ProductDemand("d1","finished",1,"unit",1)]
+    caps=[ResourceCapacity("power","0",1,"MWh","OBSERVED","meter")]
+    return [recipe],order,receipts,demand,caps
+
+
+def test_v75_stress_test_baseline_schedule_has_full_service():
+    args=stress_fixture()
+    r=stress_test_fixed_schedule(*args,scenarios=20,seed=7)
+    assert r["mean_weighted_service_level"]==1
+    assert r["probability_full_demand_service"]==1
+    assert r["empirical_cvar_service_shortfall"]==0
+
+
+def test_v75_stress_test_correlated_power_shock_causes_service_loss():
+    args=stress_fixture()
+    r=stress_test_fixed_schedule(*args,scenarios=20,seed=7,
+      common_shock_probability=1,common_capacity_factor=0)
+    assert r["mean_weighted_service_level"]==0
+    assert r["probability_full_demand_service"]==0
+    assert r["common_shock_count"]==20
+    assert r["empirical_cvar_service_shortfall"]==1
+
+
+def test_v75_stress_test_supplier_delay_is_visible_and_reproducible():
+    args=stress_fixture()
+    delay=[ReceiptDelay("raw1",1,1)]
+    a=stress_test_fixed_schedule(*args,scenarios=30,seed=42,receipt_delays=delay)
+    b=stress_test_fixed_schedule(*args,scenarios=30,seed=42,receipt_delays=delay)
+    assert a==b
+    assert a["receipt_delay_counts"]["raw1"]==30
+    assert a["mean_weighted_service_level"]==0
+
+
+def test_v75_stress_test_rejects_unknown_shocks_and_invalid_weights():
+    args=stress_fixture()
+    with pytest.raises(ValueError,match="unknown receipt"):
+        stress_test_fixed_schedule(*args,receipt_delays=[ReceiptDelay("missing",1,1)])
+    with pytest.raises(ValueError,match="Demand weight"):
+        stress_test_fixed_schedule(*args,demand_weights={"d1":0})
