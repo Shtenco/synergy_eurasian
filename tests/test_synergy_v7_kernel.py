@@ -1143,5 +1143,5 @@ def test_v765_collateral_cli_uses_calculated_base_to_constrain_credit():
       "disputed":False,"related_party":False,"evidence_id":"erp:ar-1"}]
     result=evaluate_document(document)
     assert result["collateral_borrowing_base"]["periods"][0]["net_borrowing_base"]==pytest.approx(10)
-    assert result["credit_facility"]["borrowing_base_by_period"]=={0:10}
+    assert result["credit_facility"]["borrowing_base_by_period"]=={0:10,1:0.0,2:0.0}
     assert result["schedule"]==[]
