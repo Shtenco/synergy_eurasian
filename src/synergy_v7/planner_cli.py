@@ -24,7 +24,7 @@ def evaluate_document(document,schema_path=None):
     return optimize_production_schedule(recipes,demands,receipts,capacities,
       document["horizon_periods"],document["batch_limits"],document.get("batch_costs",{}),
       document.get("holding_costs",{}),document.get("objective_currency","USD"),
-      document.get("mip_rel_gap",0.0),document.get("time_limit_seconds",30.0))
+      document.get("mip_rel_gap",0.0),document.get("time_limit_seconds",30.0),document.get("minimum_inventory",{}),document.get("storage_limits",{}))
 
 
 def main(argv=None):
