@@ -205,9 +205,18 @@ class AuthorizedActionExecutor:
                         "WHERE tenant_id=? ORDER BY version DESC LIMIT 1",
                         (request.tenant_id,),
                     ).fetchone()
-                    if (current_policy is None
-                            or int(current_policy["version"]) != decision.policy_version
-                            or str(current_policy["policy_hash"]) != decision.policy_hash):
+                    if current_policy is None:
+                        current_version = 0
+                        current_hash = sha256(_canonical({
+                            "tenant_id": request.tenant_id,
+                            "version": 0,
+                            "rules": [],
+                        })).hexdigest()
+                    else:
+                        current_version = int(current_policy["version"])
+                        current_hash = str(current_policy["policy_hash"])
+                    if (current_version != decision.policy_version
+                            or current_hash != decision.policy_hash):
                         raise ValueError("authorization policy snapshot changed before execution")
 
                 result = handler(db, request, decision)
