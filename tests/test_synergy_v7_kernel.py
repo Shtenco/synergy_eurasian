@@ -926,7 +926,7 @@ def test_v761_supplier_payment_commitments_reduce_cash_available_for_production(
     payments=supplier_payment_fixture()
     report=aggregate_supplier_payment_commitments(payments,3,"USD")
     r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
-      cash_opening_balance=30,cash_outflows_by_period=report["cash_outflows_by_period"],
+      cash_opening_balance=40,cash_outflows_by_period=report["cash_outflows_by_period"],
       collection_lag_by_demand={"sale":1})
     assert r["feasible"] and r["schedule"]==[]
     assert r["demand"][0]["fulfilled"]==0
