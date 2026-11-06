@@ -7,6 +7,7 @@ from .journal import Account, AccountType, Journal, JournalEntry, JournalLine, N
 from .physical import FlowBoundary, PhysicalFlow, summarize_physical_flows
 from .reconciliation import BankAllocation, BankStatement, BankStatementLine, reconcile_bank_account
 from .translation import TranslationPolicy, TrialBalanceAccount, translate_trial_balance
+from .trade import TradeAccountMap, TradeDocument, TradeSettlement, TradeSide, TradeSubledger
 
 __all__ = [
     "Account", "AccountType", "BankAllocation", "BankStatement", "BankStatementLine", "BenefitAttribution", "BenefitAttributionRegistry",
