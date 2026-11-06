@@ -305,3 +305,15 @@ def test_intercompany_reconciliation_does_not_net_across_periods():
     assert not result["complete"]
     assert len(result["exceptions"]) == 2
     assert result["transactions"][0]["eliminations"]["P_AND_L"] == "0"
+
+
+def test_intercompany_reconciliation_reports_missing_reciprocal_side():
+    rows = [
+        IntercompanyRecord("r1", "tx-missing", "seller", "buyer", "SELLER_REVENUE",
+                           Money("25", "USD"), "2026-Q4", "erp:sale"),
+    ]
+    result = reconcile_intercompany(rows)
+    assert not result["complete"]
+    assert result["transactions"][0]["eliminations"]["P_AND_L"] == "0"
+    assert result["exceptions"][0]["seller_unmatched"] == "25"
+    assert result["exceptions"][0]["buyer_unmatched"] == "0"
