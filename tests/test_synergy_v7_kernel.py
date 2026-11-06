@@ -1145,3 +1145,56 @@ def test_v765_collateral_cli_uses_calculated_base_to_constrain_credit():
     assert result["collateral_borrowing_base"]["periods"][0]["net_borrowing_base"]==pytest.approx(10)
     assert result["credit_facility"]["borrowing_base_by_period"]=={0:10,1:0.0,2:0.0}
     assert result["schedule"]==[]
+
+
+def test_v766_aging_haircuts_dilution_and_category_reserves_reduce_borrowing_base():
+    ar=[
+      ReceivableCollateral("ar-aged","buyer-a",0,100,"USD",40,"VERIFIED",False,False,"erp:aged"),
+      ReceivableCollateral("ar-current","buyer-b",0,50,"USD",0,"VERIFIED",False,False,"erp:current"),
+    ]
+    stock=[InventoryCollateral("lot-aged","steel",0,200,"USD","VERIFIED",True,True,False,"wms:aged",age_days=200)]
+    policy=BorrowingBasePolicy(
+      receivable_advance_rate=0.8,inventory_advance_rate=0.5,max_days_past_due=60,
+      counterparty_concentration_limit=1.0,reserve_amount=5,
+      receivable_aging_haircuts=((30,0.2),(60,0.5)),
+      inventory_aging_haircuts=((90,0.25),(180,0.5)),
+      receivable_dilution_reserve_rate=0.1,receivable_reserve_amount=2,
+      inventory_reserve_amount=3)
+    r=calculate_borrowing_base(ar,stock,policy,"USD")["periods"][0]
+    assert r["receivables_after_aging_haircuts"]==pytest.approx(130)
+    assert r["receivables_after_concentration_caps"]==pytest.approx(130)
+    assert r["receivable_dilution_reserve"]==pytest.approx(13)
+    assert r["receivable_advance_amount"]==pytest.approx(93.6)
+    assert r["inventory_after_aging_haircuts"]==pytest.approx(100)
+    assert r["inventory_advance_amount"]==pytest.approx(50)
+    assert r["reserve_deduction"]==pytest.approx(23)
+    assert r["net_borrowing_base"]==pytest.approx(120.6)
+    audit={x["asset_id"]:x for x in r["asset_audit_trail"]}
+    assert audit["ar-aged"]["aging_haircut_amount"]==pytest.approx(20)
+    assert audit["lot-aged"]["aging_haircut_rate"]==pytest.approx(0.5)
+    assert audit["ar-aged"]["evidence_id"]=="erp:aged"
+
+
+def test_v766_haircut_tiers_require_sorted_thresholds_and_valid_rates():
+    with pytest.raises(ValueError,match="strictly increasing"):
+        BorrowingBasePolicy(0.8,0.5,60,1.0,0,receivable_aging_haircuts=((60,0.2),(30,0.3)))
+    with pytest.raises(ValueError,match="haircut rates"):
+        BorrowingBasePolicy(0.8,0.5,60,1.0,0,inventory_aging_haircuts=((90,1.2),))
+
+
+def test_v766_cli_accepts_age_and_risk_reserve_policy():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_2_credit_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    document["collateral_policy"]={"receivable_advance_rate":0.8,"inventory_advance_rate":0.5,
+      "max_days_past_due":60,"counterparty_concentration_limit":1.0,"reserve_amount":0,
+      "receivable_aging_haircuts":[[30,0.2]],"inventory_aging_haircuts":[[90,0.25]],
+      "receivable_dilution_reserve_rate":0.05,"receivable_reserve_amount":1,"inventory_reserve_amount":2}
+    document["receivable_collateral"]=[{"receivable_id":"ar-age","counterparty_id":"buyer","period":0,
+      "outstanding_amount":20,"currency":"USD","days_past_due":40,"status":"VERIFIED",
+      "disputed":False,"related_party":False,"evidence_id":"erp:ar-age"}]
+    result=evaluate_document(document)
+    assert result["collateral_borrowing_base"]["periods"][0]["receivables_after_aging_haircuts"]==pytest.approx(16)
+    assert result["collateral_borrowing_base"]["periods"][0]["reserve_deduction"]==pytest.approx(4)
