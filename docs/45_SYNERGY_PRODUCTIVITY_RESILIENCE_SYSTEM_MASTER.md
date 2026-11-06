@@ -112,3 +112,7 @@ V7.3 now validates the explicit chain from observed production output to custome
 ### V7.3.1 update — causal measurement discipline
 
 V7.3.1 adds a matched-pair difference-in-differences estimator with pair-level effects, Student-t confidence intervals and explicit treatment/control identity checks. It records that parallel trends, no spillovers and matching quality require independent review; a single pre-period cannot test parallel trends. It is a design-conditional estimate, not automatic causal certification. See [V7.3.1 specification](docs/52_SYNERGY_V7_3_1_CAUSAL_DID.md).
+
+### V7.4 update — MILP production scheduling
+
+V7.4 adds a SciPy/HiGHS mixed-integer scheduler over recipe batches, inventory balances, lead times, customer demand and shared firm resource capacity. It maximizes explicit demand value less batch and inventory holding costs. It reports solver optimality and MIP gap separately; scenario values are not treated as observed cash. See [V7.4 specification](docs/53_SYNERGY_V7_4_MILP_PRODUCTION_SCHEDULER.md) and the reproducible factory example.
