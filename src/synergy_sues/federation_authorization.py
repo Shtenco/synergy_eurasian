@@ -147,9 +147,18 @@ class FederationAuthorizationPolicy:
             )
             if not scope_matches:
                 continue
+            if approval_payload["decision"] not in {"APPROVE", "REJECT"}:
+                if scope_matches:
+                    raise ValueError("approval decision must be APPROVE or REJECT")
+                continue
+            authorized_approver = any(
+                approver.identity_id in rule.approver_ids for rule in allows
+            )
+            if not scope_matches or not authorized_approver or approver.identity_id == requester.identity_id:
+                continue
             if approval_payload["decision"] == "REJECT":
                 vetoes.append(approver.identity_id)
-            elif approval_payload["decision"] == "APPROVE":
+            else:
                 verified_approvals[approver.identity_id] = approval.event["event_id"]
 
         if vetoes:
