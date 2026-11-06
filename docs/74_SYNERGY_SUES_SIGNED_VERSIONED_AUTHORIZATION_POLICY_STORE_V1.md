@@ -61,7 +61,7 @@ The implementation uses a file-backed SQLite database, append-only policy change
 
 SQLite is a single-host reference. WAL is not a distributed database or consensus protocol. Triggers and hash chains are tamper-evident against ordinary application-level mutation, not against an attacker who can rewrite the database file, drop triggers and recompute hashes. Production requires managed database permissions, external audit anchoring, backup/restore drills, key management, authenticated admin interfaces and independent governance.
 
-The store structurally verifies persisted history at startup. Signature verification occurs at mutation time against the supplied trusted-key registry; historical signature revalidation against a time-versioned trust root and externally anchored checkpoints is a future hardening step.
+The store structurally verifies persisted history at startup. Signature verification occurs at mutation time against the supplied trusted-key registry; historical signature revalidation against a time-versioned trust root and externally anchored checkpoints is a future hardening step. Snapshot reads also re-verify the complete per-tenant history before returning a policy, so this reference has O(history length) read cost. Only accepted changes are stored; rejected or vetoed administrative attempts do not yet enter a separate security audit stream.
 
 ## Explicit non-goals
 
@@ -70,7 +70,7 @@ This layer does not:
 - implement admin enrollment, key issuance, emergency override or recovery;
 - provide multi-region consensus, PostgreSQL, HSM/KMS or mTLS;
 - transfer payment, credit, custody, token-mint/burn, journal-posting or ownership authority;
-- guarantee that a policy snapshot remains current between authorization and execution;
+- provide a cross-host or cross-database policy-version fence;
 - turn an authorization decision into an economic fact or settlement receipt.
 
 ## Files
