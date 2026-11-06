@@ -8,7 +8,13 @@ from .core import ResourceCapacity
 from .stress import ResourceShock,ReceiptDelay,stress_test_fixed_schedule
 
 
-def evaluate_document(document):
+def evaluate_document(document,schema_path=None):
+    try: import jsonschema
+    except ImportError as exc: raise RuntimeError("Install requirements to validate JSON Schema") from exc
+    root=Path(__file__).resolve().parents[2]
+    path=Path(schema_path) if schema_path else root/"interfaces"/"synergy_v7_stress_test.schema.json"
+    with path.open(encoding="utf-8") as stream: schema=json.load(stream)
+    jsonschema.validate(instance=document,schema=schema)
     recipes=[ProductionRecipe(x["recipe_id"],x["output_product_id"],x["output_quantity_per_batch"],
       x["output_unit"],tuple(MaterialRequirement(**r) for r in x["input_requirements"]),
       tuple(ResourceRequirement(**r) for r in x["resource_requirements"]),x["lead_time_periods"],x.get("node_id",""))
