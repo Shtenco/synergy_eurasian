@@ -1,4 +1,4 @@
-"""CLI for the V7.6.4 borrowing-base and maturity-aware credit-aware cash-constrained production scheduler."""
+"""CLI for the V7.6.5 collateral-aware borrowing-base and maturity-aware credit-aware cash-constrained production scheduler."""
 from __future__ import annotations
 import argparse,json,sys
 from pathlib import Path
@@ -6,6 +6,7 @@ from .core import ResourceCapacity
 from .production import MaterialRequirement,ResourceRequirement,ProductionRecipe,InventoryReceipt
 from .planner import PlanDemand,optimize_production_schedule
 from .supplier_payments import SupplierPaymentCommitment,aggregate_supplier_payment_commitments
+from .collateral import (ReceivableCollateral,InventoryCollateral,BorrowingBasePolicy,calculate_borrowing_base)
 
 
 def evaluate_document(document,schema_path=None):
@@ -32,7 +33,17 @@ def evaluate_document(document,schema_path=None):
     credit_draws={int(k):v for k,v in document["credit_draw_limits_by_period"].items()} if "credit_draw_limits_by_period" in document else None
     credit_repayments={int(k):v for k,v in document["credit_repayment_limits_by_period"].items()} if "credit_repayment_limits_by_period" in document else None
     credit_rates={int(k):v for k,v in document["credit_interest_rates_by_period"].items()} if "credit_interest_rates_by_period" in document else None
-    borrowing_base={int(k):v for k,v in document["credit_borrowing_base_by_period"].items()} if "credit_borrowing_base_by_period" in document else None
+    borrowing_base={int(k):v for k,v in document["credit_borrowing_base_by_period"].items()} if "credit_borrowing_base_by_period" in document else {}
+    collateral_report=None
+    if any(k in document for k in ("receivable_collateral","inventory_collateral","collateral_policy")):
+        if "credit_limit" not in document: raise ValueError("Collateral borrowing-base calculation requires credit_limit")
+        policy=BorrowingBasePolicy(**document["collateral_policy"])
+        ar=[ReceivableCollateral(**x) for x in document.get("receivable_collateral",[])]
+        stock=[InventoryCollateral(**x) for x in document.get("inventory_collateral",[])]
+        collateral_report=calculate_borrowing_base(ar,stock,policy,document.get("objective_currency","USD"))
+        for period,row in collateral_report["periods"].items():
+            amount=row["net_borrowing_base"]
+            borrowing_base[period]=min(borrowing_base.get(period,document["credit_limit"]),amount)
     for period,amount in supplier_report["cash_outflows_by_period"].items():
         cash_outflows[period]=cash_outflows.get(period,0.0)+amount
     result=optimize_production_schedule(recipes,demands,receipts,capacities,
@@ -45,8 +56,9 @@ def evaluate_document(document,schema_path=None):
       document.get("collection_lag_by_demand"),document.get("collection_fraction_by_demand"),
       document.get("credit_limit"),document.get("credit_opening_balance",0.0),
       credit_draws,credit_repayments,credit_rates,document.get("terminal_credit_balance_limit"),
-      document.get("credit_maturity_period"),borrowing_base)
+      document.get("credit_maturity_period"),borrowing_base if borrowing_base else None)
     result["supplier_payment_commitments"]=supplier_report
+    result["collateral_borrowing_base"]=collateral_report
     return result
 
 
@@ -60,7 +72,7 @@ def main(argv=None):
         print(json.dumps(result,ensure_ascii=False,indent=2,sort_keys=True))
         return 0 if result["feasible"] and result["optimality_proven"] else 2
     except Exception as exc:
-        print(f"SYNERGY V7.6.4 optimizer error: {exc}",file=sys.stderr)
+        print(f"SYNERGY V7.6.5 optimizer error: {exc}",file=sys.stderr)
         return 1
 
 
