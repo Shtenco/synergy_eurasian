@@ -85,8 +85,8 @@ def test_resource_capacity_rejects_overcommitment():
     caps=[ResourceCapacity("power","2026-Q2",100,"MWh","OBSERVED","meter:power")]
     commits=[ResourceCommitment("c1","power","p1","2026-Q2",60,"MWh"),ResourceCommitment("c2","power","p2","2026-Q2",50,"MWh")]
     r=validate_resource_capacity(caps,commits)
-    assert r["feasible"] and r["schedule"]==[]
-    assert r["demand"][0]["fulfilled"]==0 and r["violations"][0]["excess"]==10
+    assert not r["feasible"]
+    assert r["violations"][0]["excess"]==10
 
 
 def test_unverified_capacity_cannot_be_used_as_firm_supply():
@@ -878,4 +878,5 @@ def test_v76_cash_constraint_rejects_cash_floor_beyond_available_funding():
     r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
       cash_opening_balance=20,cash_minimum_balance={0:1,1:0,2:0},
       collection_lag_by_demand={"sale":1})
-    assert not r["feasible"]
+    assert r["feasible"] and r["schedule"]==[]
+    assert r["demand"][0]["fulfilled"]==0
