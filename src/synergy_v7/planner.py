@@ -86,6 +86,11 @@ def optimize_production_schedule(
     for x in receipts: register(x.product_id,x.unit)
     for d in demand_rows: register(d.product_id,d.unit)
     products=sorted(product_units)
+    for cap in caps:
+        try: cap_period=int(cap.period)
+        except (TypeError,ValueError) as exc: raise ValueError(f"Resource capacity period must be an integer bucket: {cap.period}") from exc
+        if str(cap_period)!=cap.period or cap_period<0 or cap_period>=horizon_periods:
+            raise ValueError(f"Resource capacity period outside planning horizon: {cap.period}")
     capmap={(c.resource_id,c.period):c for c in caps}
     receipt_qty={}; excluded_receipts=[]; out_of_horizon_receipts=[]
     for x in receipts:
