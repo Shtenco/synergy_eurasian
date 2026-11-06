@@ -434,6 +434,11 @@
         "minimum": 0
       },
       "description": "Interest rate per period, decimal fraction; JSON keys are strings."
+    },
+    "terminal_credit_balance_limit": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Optional maximum ending debt at the final planning period."
     }
   }
 }
