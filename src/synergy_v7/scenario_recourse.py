@@ -132,7 +132,9 @@ def evaluate_scenario_set(base_document:dict,scenarios:Iterable[EconomicShockSce
             objective=float(result["objective_value"])
             baseline_objective=float(baseline["objective_value"])
             loss=max(0.0,baseline_objective-objective)
-            shortfall_value=sum(x["shortfall"]*x["unit_value"]*x.get("priority_weight",1.0)
+            demand_inputs={x["demand_id"]:x for x in altered.get("demands",[])}
+            shortfall_value=sum(x["shortfall"]*demand_inputs[x["demand_id"]]["unit_value"]*
+                                demand_inputs[x["demand_id"]].get("priority_weight",1.0)
                                 for x in result["demand"])
             row.update({"objective_value":objective,"baseline_objective_value":baseline_objective,
                 "objective_delta":objective-baseline_objective,"loss_vs_baseline":loss,
