@@ -1234,7 +1234,11 @@ def test_v77_scenario_recourse_reports_expected_loss_and_tail_risk():
     assert result["complete"] and result["risk_metrics"] is not None
     assert result["non_anticipativity_enforced"] is False
     assert result["formal_two_stage_stochastic_milp"] is False
-    assert result["risk_metrics"]["expected_loss_vs_baseline"]>=0
+    assert result["risk_metrics"]["expected_loss_vs_baseline"]==pytest.approx(15)
+    assert result["risk_metrics"]["cvar_loss"]==pytest.approx(50)
+    assert result["risk_metrics"]["mean_cvar_loss"]==pytest.approx(32.5)
+    assert len(result["input_sha256"])==64
+    assert len(result["scenarios"][0]["scenario_input_sha256"])==64
     assert result["risk_metrics"]["cvar_loss"]>=result["risk_metrics"]["expected_loss_vs_baseline"]
 
 
