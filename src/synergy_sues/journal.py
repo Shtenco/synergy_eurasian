@@ -157,6 +157,28 @@ class Journal:
                 raise ValueError("Reversal references unknown journal entry")
             if entry.reversal_of in self._reversed:
                 raise ValueError("Journal entry has already been reversed")
+            original = self._entries[entry.reversal_of]
+            def reversal_signature(line: JournalLine):
+                return (
+                    line.account_id,
+                    PostingSide.CREDIT if line.side == PostingSide.DEBIT else PostingSide.DEBIT,
+                    line.amount,
+                    line.functional_amount,
+                    line.entity_id,
+                    line.source_ref,
+                    line.counterparty_id,
+                    line.fx_rate_ref,
+                    line.evidence_ids,
+                )
+            expected = sorted((reversal_signature(line) for line in original.lines), key=repr)
+            actual = sorted((
+                (line.account_id, line.side, line.amount, line.functional_amount,
+                 line.entity_id, line.source_ref, line.counterparty_id,
+                 line.fx_rate_ref, line.evidence_ids)
+                for line in entry.lines
+            ), key=repr)
+            if actual != expected:
+                raise ValueError("Reversal lines must exactly mirror the original entry")
         self._entries[entry.entry_id] = entry
         self._idempotency_keys.add(entry.idempotency_key)
         if entry.reversal_of is not None:
