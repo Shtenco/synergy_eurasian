@@ -71,6 +71,13 @@ class AuthorizedActionExecutor:
                     last_error TEXT,
                     UNIQUE(idempotency_key, destination, topic)
                 );
+                CREATE TRIGGER IF NOT EXISTS execution_outbox_identity_no_update
+                BEFORE UPDATE OF message_id,idempotency_key,destination,topic,payload_json,created_at
+                ON execution_outbox
+                BEGIN SELECT RAISE(ABORT, 'execution outbox identity is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS execution_outbox_no_delete
+                BEFORE DELETE ON execution_outbox
+                BEGIN SELECT RAISE(ABORT, 'execution outbox is append-only'); END;
                 CREATE TRIGGER IF NOT EXISTS execution_receipts_no_update
                 BEFORE UPDATE ON execution_receipts
                 BEGIN SELECT RAISE(ABORT, 'execution receipts are append-only'); END;
