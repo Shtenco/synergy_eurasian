@@ -351,3 +351,16 @@ def test_trade_ledger_rejects_duplicate_documents_and_conflicting_same_day_risk(
         build_trade_ledger([doc,doc],[],[],[],"2026-01-20")
     with pytest.raises(ValueError,match="Conflicting credit assessments"):
         build_trade_ledger([doc],[],[],[],"2026-01-20",[risk1,risk2])
+
+
+def test_trade_ledger_cli_fixture_is_schema_valid_and_reconciles():
+    import json
+    from synergy_v7.trade_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_2_1_trade_ledger_demo.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    result=evaluate_document(document)
+    assert result["totals_by_side_and_currency"]=={"PAYABLE::USD":30000,"RECEIVABLE::USD":60000}
+    ar=result["documents"][0]
+    assert ar["disputed_outstanding"]==10000
+    assert result["counterparty_exposure"][0]["expected_credit_loss"]==pytest.approx(810)
