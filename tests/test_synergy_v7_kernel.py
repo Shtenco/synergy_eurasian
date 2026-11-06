@@ -1198,3 +1198,50 @@ def test_v766_cli_accepts_age_and_risk_reserve_policy():
     result=evaluate_document(document)
     assert result["collateral_borrowing_base"]["periods"][0]["receivables_after_aging_haircuts"]==pytest.approx(16)
     assert result["collateral_borrowing_base"]["periods"][0]["reserve_deduction"]==pytest.approx(3.8)
+
+
+from synergy_v7 import EconomicShockScenario, apply_scenario, weighted_cvar, evaluate_scenario_set
+
+
+def test_v77_weighted_cvar_uses_discrete_tail_probabilities():
+    result=weighted_cvar([(0.0,0.7),(50.0,0.3)],0.95)
+    assert result["cvar"]==pytest.approx(50)
+    assert result["var_threshold"]==pytest.approx(50)
+
+
+def test_v77_scenario_application_scales_demand_and_cash_without_mutating_base():
+    base={"demands":[{"demand_id":"d1","quantity":100}],
+      "cash_inflows_by_period":{"0":50},"resource_capacities":[]}
+    scenario=EconomicShockScenario("demand-shock",1.0,
+      demand_quantity_multipliers={"d1":0.5},cash_inflow_multipliers={"0":0.2})
+    changed=apply_scenario(base,scenario)
+    assert changed["demands"][0]["quantity"]==pytest.approx(50)
+    assert changed["cash_inflows_by_period"]["0"]==pytest.approx(10)
+    assert base["demands"][0]["quantity"]==100
+
+
+def test_v77_scenario_recourse_reports_expected_loss_and_tail_risk():
+    import json
+    fixture=ROOT/"examples"/"synergy_v7_6_2_credit_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        base=json.load(stream)
+    scenarios=[
+      {"scenario_id":"normal","probability":0.7},
+      {"scenario_id":"demand-contraction","probability":0.3,
+       "demand_quantity_multipliers":{"sale":0.5}},
+    ]
+    result=evaluate_scenario_set(base,scenarios,risk_alpha=0.95,risk_weight=0.5)
+    assert result["complete"] and result["risk_metrics"] is not None
+    assert result["non_anticipativity_enforced"] is False
+    assert result["formal_two_stage_stochastic_milp"] is False
+    assert result["risk_metrics"]["expected_loss_vs_baseline"]>=0
+    assert result["risk_metrics"]["cvar_loss"]>=result["risk_metrics"]["expected_loss_vs_baseline"]
+
+
+def test_v77_scenario_set_rejects_non_normalized_probabilities_and_unknown_ids():
+    with pytest.raises(ValueError,match="sum to 1.0"):
+        evaluate_scenario_set({},[{"scenario_id":"a","probability":0.8}])
+    base={"resource_capacities":[],"demands":[],"inventory_receipts":[]}
+    scenario=EconomicShockScenario("bad",1.0,demand_quantity_multipliers={"missing":0.5})
+    with pytest.raises(ValueError,match="Unknown demand_id"):
+        apply_scenario(base,scenario)
