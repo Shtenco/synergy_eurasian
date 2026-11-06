@@ -698,3 +698,29 @@ def test_v74_milp_optimizer_rejects_non_numeric_capacity_period():
     cap=[ResourceCapacity("power","2026-Q1",10,"MWh","OBSERVED","meter")]
     with pytest.raises(ValueError,match="integer bucket"):
         optimize_production_schedule([recipe],demand,[],cap,2,{"r":1})
+
+
+def test_v741_milp_optimizer_enforces_safety_stock_and_storage_limits():
+    recipe=ProductionRecipe("r","finished",1,"unit",(MaterialRequirement("raw",1,"kg"),),(),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
+    receipts=[InventoryReceipt("i1","raw",2,"kg",0,"OBSERVED")]
+    r=optimize_production_schedule([recipe],demand,receipts,[],2,{"r":1},
+      minimum_inventory={"raw":1},storage_limits={"raw":1})
+    assert r["feasible"] and r["demand"][0]["fulfilled"]==1
+    assert all(x["ending_quantity"]==pytest.approx(1) for x in r["inventory"] if x["product_id"]=="raw")
+    assert all(x["ending_quantity"]<=x["storage_limit"]+1e-9 for x in r["inventory"] if x["storage_limit"] is not None)
+
+
+def test_v741_milp_optimizer_reports_infeasible_unfunded_safety_stock():
+    recipe=ProductionRecipe("r","finished",1,"unit",(),(),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
+    r=optimize_production_schedule([recipe],demand,[],[],2,{"r":1},minimum_inventory={"finished":1})
+    assert not r["feasible"] and r["schedule"]==[]
+
+
+def test_v741_milp_optimizer_rejects_storage_limit_below_safety_stock():
+    recipe=ProductionRecipe("r","finished",1,"unit",(),(),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
+    with pytest.raises(ValueError,match="below safety stock"):
+        optimize_production_schedule([recipe],demand,[],[],2,{"r":1},
+          minimum_inventory={"finished":2},storage_limits={"finished":1})
