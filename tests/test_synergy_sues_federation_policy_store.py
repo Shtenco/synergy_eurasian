@@ -12,6 +12,7 @@ from synergy_sues.federation_identity import (
 )
 from synergy_sues.federation_authorization import AuthorizationRule
 from synergy_sues.federation_policy_store import SQLiteAuthorizationPolicyStore
+from synergy_sues.federation_execution import AuthorizedActionExecutor
 
 
 @dataclass(frozen=True)
@@ -255,3 +256,55 @@ def test_policy_snapshot_version_and_hash_are_attached_to_authorization_decision
     assert decision.allowed
     assert decision.policy_version == 1
     assert decision.policy_hash == store.snapshot("tenant:one").policy_hash
+
+
+
+def test_execution_receipt_pins_policy_snapshot_and_same_database_guard(tmp_path):
+    store, registry, keys = setup(tmp_path)
+    change, change_approvals = make_change(tmp_path, keys)
+    store.apply_change(change, change_approvals, registry, "2026-11-06T10:02:00+00:00")
+    action_request = make_signed(tmp_path, keys, "user:operator",
+        "AUTHORIZATION_REQUEST", {
+            "request_id": "request:policy-pinned",
+            "action": "JOURNAL_POST",
+            "resource_type": "LEDGER",
+            "resource_id": "ledger:alpha",
+        }, "policy-pinned-action", "2026-11-06T10:03:00+00:00")
+    executor = AuthorizedActionExecutor(store.database_path)
+    result = executor.execute(action_request, [], store, registry,
+        lambda db, request, decision: {"committed": True}, "2026-11-06T10:04:00+00:00")
+    assert result.executed
+    receipt = executor.receipts()[0]
+    decision_record = json.loads(receipt["decision_json"])
+    assert decision_record["policy_version"] == 1
+    assert decision_record["policy_hash"] == store.snapshot("tenant:one").policy_hash
+
+
+def test_execution_rejects_policy_changed_after_authorization_before_commit(tmp_path):
+    store, registry, keys = setup(tmp_path)
+    change, change_approvals = make_change(tmp_path, keys)
+    store.apply_change(change, change_approvals, registry, "2026-11-06T10:02:00+00:00")
+    action_request = make_signed(tmp_path, keys, "user:operator",
+        "AUTHORIZATION_REQUEST", {
+            "request_id": "request:stale-policy",
+            "action": "JOURNAL_POST",
+            "resource_type": "LEDGER",
+            "resource_id": "ledger:alpha",
+        }, "stale-policy-action", "2026-11-06T10:03:00+00:00")
+
+    class PolicyChangesAfterDecision:
+        def authorize(self, request, approvals, registry, received_at=None):
+            decision = store.authorize(request, approvals, registry, received_at)
+            revoke, revoke_approvals = make_change(
+                tmp_path, keys, change_id="change:revoke-between-check-and-commit",
+                expected_version=1, operation="REVOKE_RULE", suffix="revoke-race")
+            store.apply_change(revoke, revoke_approvals, registry, "2026-11-06T10:04:00+00:00")
+            return decision
+
+    executor = AuthorizedActionExecutor(store.database_path)
+    called = []
+    with pytest.raises(ValueError, match="policy snapshot changed"):
+        executor.execute(action_request, [], PolicyChangesAfterDecision(), registry,
+            lambda *_: called.append(True), "2026-11-06T10:05:00+00:00")
+    assert called == []
+    assert executor.receipts() == ()
