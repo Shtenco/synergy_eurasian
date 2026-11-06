@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Iterable
 import math
 
-from .trade_ledger import TradeDocument, SettlementEvent
+from .trade_ledger import TradeDocument, SettlementEvent, build_trade_ledger
 
 
 def _positive(value,name,zero=True):
@@ -48,8 +48,11 @@ class DeliveryAcceptance:
     acceptance_ref: str
     source_class: str="VERIFIED"
     def __post_init__(self):
-        if not all((self.delivery_id,self.output_id,self.customer_id,self.acceptance_ref,self.unit)):
+        if not all((self.delivery_id,self.output_id,self.customer_id,self.acceptance_ref,self.unit,self.accepted_date)):
             raise ValueError("Delivery acceptance identity and evidence are required")
+        from datetime import date
+        try: date.fromisoformat(self.accepted_date)
+        except ValueError as exc: raise ValueError("accepted_date must be ISO YYYY-MM-DD") from exc
         _positive(self.accepted_quantity,"accepted_quantity",zero=False)
         if self.source_class not in {"OBSERVED","VERIFIED","UNDERWRITTEN","SCENARIO"}:
             raise ValueError("Unsupported source_class")
@@ -169,6 +172,8 @@ def evaluate_realization_chain(
     for iid,amount in invoice_value_by_document.items():
         if amount>imap[iid].original_amount+1e-9: raise ValueError(f"Allocated invoice value exceeds document amount: {iid}")
 
+    # Reuse the trade subledger's chronology, currency and over-settlement controls.
+    build_trade_ledger(invoice_rows,settlement_rows,[],[],as_of)
     settled_by_id={x.settlement_id:x for x in settlement_rows}
     for s in settlement_rows:
         if s.document_id not in imap: raise ValueError(f"Settlement references unknown invoice: {s.settlement_id}")
