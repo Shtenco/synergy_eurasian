@@ -1,4 +1,4 @@
-"""CLI for the V7.4 MILP production scheduler."""
+"""CLI for the V7.6 cash-constrained production scheduler."""
 from __future__ import annotations
 import argparse,json,sys
 from pathlib import Path
@@ -24,11 +24,14 @@ def evaluate_document(document,schema_path=None):
     return optimize_production_schedule(recipes,demands,receipts,capacities,
       document["horizon_periods"],document["batch_limits"],document.get("batch_costs",{}),
       document.get("holding_costs",{}),document.get("objective_currency","USD"),
-      document.get("mip_rel_gap",0.0),document.get("time_limit_seconds",30.0),document.get("minimum_inventory",{}),document.get("storage_limits",{}))
+      document.get("mip_rel_gap",0.0),document.get("time_limit_seconds",30.0),document.get("minimum_inventory",{}),document.get("storage_limits",{}),
+      document.get("cash_opening_balance"),document.get("cash_minimum_balance"),
+      {int(k):v for k,v in document.get("cash_inflows_by_period",{}).items()},
+      document.get("collection_lag_by_demand"),document.get("collection_fraction_by_demand"))
 
 
 def main(argv=None):
-    parser=argparse.ArgumentParser(description="Optimize a SYNERGY V7.4 production schedule")
+    parser=argparse.ArgumentParser(description="Optimize a SYNERGY V7.6 cash-constrained production schedule")
     parser.add_argument("plan",help="MILP production plan JSON")
     args=parser.parse_args(argv)
     try:
@@ -37,7 +40,7 @@ def main(argv=None):
         print(json.dumps(result,ensure_ascii=False,indent=2,sort_keys=True))
         return 0 if result["feasible"] and result["optimality_proven"] else 2
     except Exception as exc:
-        print(f"SYNERGY V7.4 optimizer error: {exc}",file=sys.stderr)
+        print(f"SYNERGY V7.6 optimizer error: {exc}",file=sys.stderr)
         return 1
 
 
