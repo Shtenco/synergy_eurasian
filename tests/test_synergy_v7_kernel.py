@@ -1002,3 +1002,38 @@ def test_v762_credit_cli_schema_and_period_maps():
     assert result["feasible"] and result["schedule"]
     assert result["credit_facility"]["total_interest_cost"]==pytest.approx(2)
     assert result["ending_cash_by_period"]==pytest.approx([0,0,78])
+
+
+def test_v763_credit_maturity_forces_repayment_by_declared_period():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_opening_balance=20,cash_inflows_by_period={1:20},
+      credit_limit=20,credit_opening_balance=20,
+      collection_lag_by_demand={"sale":1},credit_maturity_period=1)
+    assert r["feasible"] and r["schedule"]
+    assert r["credit_facility"]["ending_balance_by_period"]==pytest.approx([20,0,0])
+    assert r["credit_facility"]["repayments_by_period"]==pytest.approx([0,20,0])
+
+
+def test_v763_unfunded_credit_maturity_blocks_production_that_cannot_repay():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      credit_limit=20,credit_draw_limits_by_period={0:20},
+      collection_lag_by_demand={"sale":1},credit_maturity_period=1)
+    assert r["feasible"] and r["schedule"]==[]
+    assert r["demand"][0]["fulfilled"]==0
+    assert r["credit_facility"]["ending_balance_by_period"]==pytest.approx([0,0,0])
+
+
+def test_v763_credit_maturity_validation_and_cli_fixture():
+    args=cash_planner_fixture()
+    with pytest.raises(ValueError,match="inside the planning horizon"):
+        optimize_production_schedule(*args,3,{"make":1},credit_limit=20,credit_maturity_period=3)
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_2_credit_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    document["credit_maturity_period"]=2
+    result=evaluate_document(document)
+    assert result["feasible"] and result["credit_facility"]["ending_balance_by_period"][-1]==pytest.approx(0)
