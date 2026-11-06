@@ -128,3 +128,16 @@ V7.5 replays a fixed production schedule under correlated common shocks, resourc
 ## V7 research-branch validation checkpoint
 
 At head `82078ed244f1d8af928a0b6343894f860713f85a`, GitHub Actions completed successfully: **128 tests passed** in EIIOM CI run [42168437910](https://github.com/Shtenco/synergy_eurasian/actions/runs/42168437910); README integrity run [42168437895](https://github.com/Shtenco/synergy_eurasian/actions/runs/42168437895) also passed. PR #10 remains open and unmerged. These tests establish software invariants and reproducibility of the included synthetic fixtures, not calibration against real enterprise data or proof of economic impact.
+
+### V7.6 update — cash-constrained production scheduling
+
+The V7.4 time-expanded MILP now optionally carries an explicit period-by-period cash balance. Production batch cash cost is paid at start period, inventory holding cost at period end, and customer receipts enter only after the configured demand collection lag. The optimizer enforces a minimum cash floor and reports collections deferred beyond the horizon. This closes a key gap between physical feasibility and working-capital feasibility, while keeping modeled receipts distinct from bank-reconciled actual cash. See [V7.6 specification](docs/55_SYNERGY_V7_6_CASH_CONSTRAINED_OPTIMIZATION.md).
+
+### Next V7 milestones
+
+- **V7.6.1 supplier payment calendar:** deposits, staged payments, invoice due dates, supplier credit terms and procurement cash timing by input lot.
+- **V7.6.2 financing layer:** credit-line availability, draw/repayment schedule, debt service, financing cost, covenant headroom and default consequences.
+- **V7.7 adaptive resilience optimizer:** recourse decisions under V7.5 correlated shocks and delivery delays, with cash floors and essential-service minimums retained.
+- **V7.8 evidence-calibrated operating model:** replace scenario collection fractions and batch cash costs with reconciled invoice, bank, payroll, energy and asset-maintenance evidence, retaining provenance and confidence tiers.
+
+All V7.6 values are planning inputs. A feasible MILP schedule is not a solvency opinion, financing commitment, or authorization to pay.
