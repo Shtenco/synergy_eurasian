@@ -300,6 +300,8 @@ def test_execution_rejects_policy_changed_after_authorization_before_commit(tmp_
         }, "stale-policy-action", "2026-11-06T10:03:00+00:00")
 
     class PolicyChangesAfterDecision:
+        database_path = store.database_path
+
         def authorize(self, request, approvals, registry, received_at=None):
             decision = store.authorize(request, approvals, registry, received_at)
             revoke, revoke_approvals = make_change(
