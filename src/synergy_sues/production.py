@@ -375,6 +375,19 @@ def post_grni_invoice(
         raise ValueError("GRNI reference posting requires invoice currency equal to journal functional currency")
     _account_map(journal, grni_account_id, AccountType.LIABILITY, NormalBalance.CREDIT, "GRNI account")
     _account_map(journal, accounts_payable_account_id, AccountType.LIABILITY, NormalBalance.CREDIT, "AP account")
+    posted_receipts = sum((
+        matcher._orders[receipt.po_line_id].unit_price.amount * receipt.received_quantity.amount
+        for receipt in matcher.receipts
+        if receipt.po_line_id == invoice.po_line_id
+        and f"grni:receipt:{receipt.receipt_id}" in {x.entry_id for x in journal.entries}
+    ), Decimal("0"))
+    posted_invoices = sum((
+        row.amount.amount for row in matcher.invoices
+        if row.po_line_id == invoice.po_line_id
+        and f"grni:invoice:{row.invoice_line_id}" in {x.entry_id for x in journal.entries}
+    ), Decimal("0"))
+    if invoice.amount.amount > posted_receipts - posted_invoices:
+        raise ValueError("Invoice cannot clear more GRNI than has been accrued from posted receipts")
     entry_id = f"grni:invoice:{invoice.invoice_line_id}"
     return journal.post(JournalEntry(
         entry_id, invoice.invoice_date, recorded_at, journal.functional_currency,
