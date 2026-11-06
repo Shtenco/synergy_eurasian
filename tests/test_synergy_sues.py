@@ -519,3 +519,30 @@ def test_trade_subledger_rejects_over_settlement_and_wrong_cash_account():
     subledger = TradeSubledger(docs, settlements)
     with pytest.raises(ValueError, match="exceeds open balance"):
         subledger.project(date(2026, 11, 3))
+
+
+def test_trade_subledger_foreign_currency_posting_uses_dated_fx_for_each_event():
+    journal = Journal("USD")
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
+    journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_fx_rate(FXRate("eurusd-invoice", "EUR", "USD", "1.1",
+        datetime(2026, 11, 1, 12, tzinfo=timezone.utc), "fx:invoice"))
+    journal.add_fx_rate(FXRate("eurusd-settlement", "EUR", "USD", "1.2",
+        datetime(2026, 11, 6, 12, tzinfo=timezone.utc), "fx:settlement"))
+    subledger = TradeSubledger(
+        [TradeDocument("inv-eur", TradeSide.RECEIVABLE, "co1", "customer",
+            date(2026, 11, 1), date(2026, 11, 30), Money("100", "EUR"), "invoice:eur")],
+        [TradeSettlement("settle-eur", "inv-eur", date(2026, 11, 6),
+            Money("20", "EUR"), "cash", "bank:eur")],
+    )
+    result = subledger.post_to_journal(
+        journal, TradeAccountMap("ar", "revenue", "ap", "purchases"),
+        datetime(2026, 11, 6, 13, tzinfo=timezone.utc),
+        {"invoice:eur": "eurusd-invoice", "bank:eur": "eurusd-settlement"},
+    )
+    assert result["expected_ar_control_delta"] == "86.0"
+    assert result["actual_ar_control_delta"] == "86.0"
+    assert journal.trial_balance()["balanced"]
