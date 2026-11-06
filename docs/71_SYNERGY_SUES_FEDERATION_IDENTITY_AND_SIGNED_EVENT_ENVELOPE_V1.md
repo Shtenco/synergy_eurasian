@@ -50,3 +50,11 @@ Financial OS remains the accounting authority; Pay System remains the payment ex
 Not implemented: distributed PKI, certificate chains, HSM/KMS integration, identity discovery, database tenant isolation, policy authorization, trusted timestamping, transport replay windows, multi-signature approvals, broker mTLS or historical signature archival. Event IDs, aggregate sequence and hash chain provide source-level replay identity; delivery remains at-least-once and consumers must deduplicate.
 
 Tests cover valid signatures, payload/hash tampering, unknown identities and keys, tenant mismatch, validity windows, revocation, duplicate key IDs, canonical JSON and algorithm downgrade rejection.
+
+## Durable trust registry V1
+
+`SQLiteTrustedKeyRegistry(database_path)` provides a persistent, file-backed local trust registry. It stores identities and public-key records, and records key revocation as a separate immutable fact rather than overwriting the original key record. Registration and revocation plus their administrative audit events commit atomically under SQLite `BEGIN IMMEDIATE`.
+
+The registry records identity registration, key registration (including a SHA-256 fingerprint, never private key material) and key revocation. Audit events form a canonical SHA-256 chain with sequence and previous-hash links. Database triggers reject UPDATE/DELETE against identity, key, revocation and audit rows. Startup verifies the audit chain and fails closed if it is inconsistent. Verification refreshes persisted trust state each time so another process's key revocation is observed by already-running registry instances.
+
+This is a single-host reference backend. SQLite WAL must not be treated as a distributed database or placed on arbitrary network filesystems. Protect the database, WAL/SHM files and backups with OS-level access controls. A local hash chain and triggers are tamper-evident against ordinary application-level mutation, not a defense against an attacker who can rewrite the database file, drop triggers or replace backups. Production requires externally anchored audit checkpoints, managed administrative authorization, key enrollment approvals, backup/restore controls and eventually a PostgreSQL or dedicated trust service.
