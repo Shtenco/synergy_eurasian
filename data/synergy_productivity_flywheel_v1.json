@@ -1,0 +1,77 @@
+{
+  "model_id": "SYNERGY-PRODUCTIVITY-FLYWHEEL-V1",
+  "status": "ILLUSTRATIVE_SENSITIVITY_NOT_FORECAST",
+  "currency": "USD_2026_REAL",
+  "baseline": {
+    "gross_cashflow_usd": 993500,
+    "replacement_capex_usd": 1089500,
+    "initial_operating_cashflow_uplift": 0.075,
+    "replacement_cost_reduction": 0.04
+  },
+  "additional_productivity_uplift_scenarios": [
+    0,
+    0.025,
+    0.05,
+    0.1
+  ],
+  "residual_fund_allocation": {
+    "productive_automation_and_capacity": 0.5,
+    "breakthrough_technology_r_and_d": 0.25,
+    "resilience_reserve": 0.25
+  },
+  "stress_scenarios": [
+    {
+      "name": "cashflow_minus_5_replacement_inflation_2",
+      "cashflow_shock": 0.05,
+      "replacement_inflation": 0.02
+    },
+    {
+      "name": "cashflow_minus_5_replacement_inflation_5",
+      "cashflow_shock": 0.05,
+      "replacement_inflation": 0.05
+    },
+    {
+      "name": "cashflow_minus_5_replacement_inflation_10",
+      "cashflow_shock": 0.05,
+      "replacement_inflation": 0.1
+    },
+    {
+      "name": "cashflow_minus_10_replacement_inflation_2",
+      "cashflow_shock": 0.1,
+      "replacement_inflation": 0.02
+    },
+    {
+      "name": "cashflow_minus_10_replacement_inflation_5",
+      "cashflow_shock": 0.1,
+      "replacement_inflation": 0.05
+    },
+    {
+      "name": "cashflow_minus_10_replacement_inflation_10",
+      "cashflow_shock": 0.1,
+      "replacement_inflation": 0.1
+    },
+    {
+      "name": "cashflow_minus_15_replacement_inflation_2",
+      "cashflow_shock": 0.15,
+      "replacement_inflation": 0.02
+    },
+    {
+      "name": "cashflow_minus_15_replacement_inflation_5",
+      "cashflow_shock": 0.15,
+      "replacement_inflation": 0.05
+    },
+    {
+      "name": "cashflow_minus_15_replacement_inflation_10",
+      "cashflow_shock": 0.15,
+      "replacement_inflation": 0.1
+    }
+  ],
+  "accounting_rules": [
+    "Additional productivity uplift is a sensitivity input, not a measured or guaranteed AI return.",
+    "Output volume growth is not automatically cashflow growth; recognize only net cashflow after incremental operating costs and working capital.",
+    "Fund contributions are allocations of verified residual, not additional system-wide value.",
+    "R&D contributions are not booked as returns until a technology is validated, deployed, and its incremental net cashflow is measured.",
+    "No fund may distribute or reinvest the same dollar twice.",
+    "A negative residual is a funding gap and receives no positive-surplus allocation."
+  ]
+}
