@@ -5,6 +5,7 @@ from pathlib import Path
 from .core import ResourceCapacity
 from .production import MaterialRequirement,ResourceRequirement,ProductionRecipe,InventoryReceipt
 from .planner import PlanDemand,optimize_production_schedule
+from .supplier_payments import SupplierPaymentCommitment,aggregate_supplier_payment_commitments
 
 
 def evaluate_document(document,schema_path=None):
@@ -24,14 +25,22 @@ def evaluate_document(document,schema_path=None):
     cash_floor=document.get("cash_minimum_balance")
     if isinstance(cash_floor,dict):
         cash_floor={int(k):v for k,v in cash_floor.items()}
-    return optimize_production_schedule(recipes,demands,receipts,capacities,
+    supplier_payments=[SupplierPaymentCommitment(**x) for x in document.get("supplier_payment_commitments",[])]
+    supplier_report=aggregate_supplier_payment_commitments(supplier_payments,document["horizon_periods"],
+      document.get("objective_currency","USD"),document.get("include_scenario_supplier_payments",False))
+    cash_outflows={int(k):v for k,v in document.get("cash_outflows_by_period",{}).items()}
+    for period,amount in supplier_report["cash_outflows_by_period"].items():
+        cash_outflows[period]=cash_outflows.get(period,0.0)+amount
+    result=optimize_production_schedule(recipes,demands,receipts,capacities,
       document["horizon_periods"],document["batch_limits"],document.get("batch_costs",{}),
       document.get("holding_costs",{}),document.get("objective_currency","USD"),
       document.get("mip_rel_gap",0.0),document.get("time_limit_seconds",30.0),document.get("minimum_inventory",{}),document.get("storage_limits",{}),
       document.get("cash_opening_balance"),cash_floor,
       ({int(k):v for k,v in document["cash_inflows_by_period"].items()} if "cash_inflows_by_period" in document else None),
-      ({int(k):v for k,v in document["cash_outflows_by_period"].items()} if "cash_outflows_by_period" in document else None),
+      cash_outflows if ("cash_outflows_by_period" in document or supplier_payments) else None,
       document.get("collection_lag_by_demand"),document.get("collection_fraction_by_demand"))
+    result["supplier_payment_commitments"]=supplier_report
+    return result
 
 
 def main(argv=None):
