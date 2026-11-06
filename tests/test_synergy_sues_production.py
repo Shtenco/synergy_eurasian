@@ -1,7 +1,10 @@
 from datetime import date, datetime, timezone
+import json
+from pathlib import Path
 from decimal import Decimal
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from synergy_sues.contracts import Money, Quantity
 from synergy_sues.inventory import InventoryLedger
@@ -191,3 +194,33 @@ def test_production_cost_events_require_mapping_before_inventory_is_consumed():
         execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, (event,), {})
     assert inventory.summary() == before
     assert journal.entries == ()
+
+
+
+def test_production_json_schema_validates_all_procurement_and_production_contracts():
+    schema_path = Path(__file__).resolve().parents[1] / "interfaces" / "synergy_sues_production.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    samples = [
+        {"po_line_id": "po", "entity_id": "co1", "supplier_id": "s1", "item_id": "steel",
+         "ordered_quantity": {"amount": "10", "unit": "kg"},
+         "unit_price": {"amount": "5", "currency": "USD"}, "order_date": "2026-11-01", "source_ref": "po:1"},
+        {"receipt_id": "r1", "po_line_id": "po", "received_quantity": {"amount": "2", "unit": "kg"},
+         "received_date": "2026-11-02", "evidence_ref": "warehouse:r1"},
+        {"invoice_line_id": "i1", "po_line_id": "po", "invoiced_quantity": {"amount": "2", "unit": "kg"},
+         "amount": {"amount": "10", "currency": "USD"}, "invoice_date": "2026-11-03", "source_ref": "invoice:1"},
+        {"item_id": "steel", "quantity_per_output_unit": {"amount": "2", "unit": "kg"}},
+        {"order_id": "batch", "entity_id": "co1", "product_id": "part",
+         "output_quantity": {"amount": "1", "unit": "unit"}, "location_id": "factory",
+         "components": [{"item_id": "steel", "quantity_per_output_unit": {"amount": "2", "unit": "kg"}}],
+         "planned_date": "2026-11-06", "source_ref": "production:batch"},
+        {"event_id": "labor-1", "order_id": "batch", "entity_id": "co1", "cost_type": "LABOR",
+         "amount": {"amount": "5", "currency": "USD"}, "effective_date": "2026-11-06",
+         "source_ref": "payroll:1", "evidence_ref": "timesheet:1"},
+        {"order_id": "batch", "direct_material_cost": {"amount": "10", "currency": "USD"},
+         "conversion_cost": {"amount": "5", "currency": "USD"}, "capitalized_cost": {"amount": "15", "currency": "USD"},
+         "output_quantity": {"amount": "1", "unit": "unit"}, "journal_entry_ids": ["entry:1"]},
+    ]
+    for sample in samples:
+        validator.validate(sample)
