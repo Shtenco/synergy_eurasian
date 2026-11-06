@@ -90,7 +90,7 @@ def test_bom_execution_reconciles_material_wip_and_finished_goods():
     result = execute_production_order(order, inventory, journal,
         "raw", "wip", "finished", NOW)
 
-    assert result.total_conversion_cost == Money("40", "USD")
+    assert result.direct_material_cost == Money("40", "USD")
     assert result.output_movement.quantity == Quantity("2", "unit")
     assert result.output_movement.cost == Money("40", "USD")
     pools = {(x["item_id"], x["location_id"]): x for x in inventory.summary()["pools"]}
