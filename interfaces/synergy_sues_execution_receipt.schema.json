@@ -4,7 +4,7 @@
   "title":"SYNERGY SUES Authorized Execution Receipt V1",
   "type":"object",
   "additionalProperties":false,
-  "required":["sequence","request_id","request_event_id","request_event_hash","action","resource_type","resource_id","requester_identity_id","executed_at","result_json","previous_hash","receipt_hash"],
+  "required":["sequence","request_id","request_event_id","request_event_hash","action","resource_type","resource_id","requester_identity_id","executed_at","result_json","decision_json","previous_hash","receipt_hash"],
   "properties":{
     "sequence":{"type":"integer","minimum":1},
     "request_id":{"type":"string","minLength":1},
@@ -16,6 +16,7 @@
     "requester_identity_id":{"type":"string","minLength":1},
     "executed_at":{"type":"string","format":"date-time"},
     "result_json":{"type":"string","contentMediaType":"application/json"},
+    "decision_json":{"type":"string","contentMediaType":"application/json"},
     "previous_hash":{"type":"string"},
     "receipt_hash":{"type":"string","pattern":"^[a-f0-9]{64}$"}
   }
