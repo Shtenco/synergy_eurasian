@@ -427,7 +427,11 @@ def post_grni_receipt(
     entity_id: str,
     recorded_at: datetime,
 ) -> JournalEntry:
-    """Accrue received-but-not-invoiced goods: Dr inventory / Cr GRNI."""
+    """Accrue received-but-not-invoiced goods: Dr inventory / Cr GRNI.
+
+    For one physical receipt, use this journal bridge OR InventoryLedger.post_to_journal
+    with the GRNI offset account; never post both paths for the same receipt.
+    """
     _aware(recorded_at, "recorded_at")
     po = matcher._orders.get(receipt.po_line_id)
     if po is None or matcher._receipts.get(receipt.receipt_id) != receipt:
