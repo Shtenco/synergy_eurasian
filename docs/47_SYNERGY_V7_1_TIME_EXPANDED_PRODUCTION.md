@@ -47,6 +47,8 @@ Production lead time must be at least one period. This prevents zero-time circul
 - No optimization objective is solved here.
 - The evaluator does not establish that source evidence is authentic; it only respects the supplied evidence status and IDs.
 
+The input interchange contract is [`interfaces/synergy_v7_production_plan.schema.json`](../interfaces/synergy_v7_production_plan.schema.json). It describes the recipe, order, receipt, demand and resource-capacity envelope; semantic cross-record checks are performed by the Python evaluator.
+
 ## Run
 
 ```bash
