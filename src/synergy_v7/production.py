@@ -156,7 +156,7 @@ def evaluate_production_plan(
 
     inventory={}; inventory_trace=[]; violations=[]; order_results={}
     resource_used={}; resource_unit={}
-    total_completed={}; total_fulfilled={}; total_demand={}
+    total_completed={}; total_fulfilled={}; total_demand={}; demand_line_results=[]
     completions={}
     for period in range(max_period+1):
         for r in sorted(receipts_by_period.get(period,[]),key=lambda x:x.receipt_id):
@@ -205,6 +205,9 @@ def evaluate_production_plan(
             available=inventory.get(demand.product_id,0.0); fulfilled=min(available,demand.quantity)
             inventory[demand.product_id]=available-fulfilled
             total_fulfilled[demand.product_id]=total_fulfilled.get(demand.product_id,0.0)+fulfilled
+            demand_line_results.append({"demand_id":demand.demand_id,"product_id":demand.product_id,
+                "period":period,"requested":demand.quantity,"fulfilled":fulfilled,
+                "shortfall":demand.quantity-fulfilled,"unit":demand.unit,"priority":demand.priority})
             if fulfilled+1e-9<demand.quantity:
                 violations.append({"type":"DEMAND_SHORTFALL","demand_id":demand.demand_id,"product_id":demand.product_id,
                     "period":period,"required":demand.quantity,"fulfilled":fulfilled,"shortfall":demand.quantity-fulfilled,"unit":demand.unit})
@@ -219,7 +222,7 @@ def evaluate_production_plan(
         "unit":resource_unit[k],"utilization":v/cap_map[k].available_quantity if cap_map[k].available_quantity else None}
         for k,v in sorted(resource_used.items())]
     return {"feasible":not violations,"violations":violations,"orders":order_results,
-        "demand":demand_summary,"completed_output":total_completed,"resource_usage":resource_summary,
+        "demand":demand_summary,"demand_lines":demand_line_results,"completed_output":total_completed,"resource_usage":resource_summary,
         "inventory_trace":inventory_trace,"excluded_nonfirm_receipts":excluded_receipts,
         "assumptions":{"discrete_periods":True,"lead_time_minimum_periods":1,"backorders":False,
             "order_tie_break":"order_id ascending","demand_priority":"lower integer first, then demand_id",
