@@ -564,3 +564,21 @@ def test_journal_can_enforce_single_entity_ownership():
     )
     with pytest.raises(ValueError, match="entity_id"):
         journal.post(cross_entity)
+
+
+def test_journal_post_many_is_atomic_when_later_entry_is_invalid():
+    journal = new_journal()
+    good = entry("batch-good", "batch-good-idem", "10")
+    bad = JournalEntry(
+        "batch-bad", date(2026, 11, 6), datetime(2026, 11, 6, tzinfo=timezone.utc), "USD",
+        (
+            JournalLine("bad-dr", "cash", "DEBIT", Money("10", "USD"), Money("10", "USD"), "co1", "bank:bad"),
+            JournalLine("bad-cr", "revenue", "CREDIT", Money("9", "USD"), Money("9", "USD"), "co1", "sale:bad"),
+        ),
+        "event-bad", "batch-bad-idem", "Invalid batch entry",
+    )
+    with pytest.raises(ValueError, match="Unbalanced"):
+        journal.post_many([good, bad])
+    assert journal.entries == ()
+    journal.post(good)
+    assert len(journal.entries) == 1
