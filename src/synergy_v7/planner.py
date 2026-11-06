@@ -59,6 +59,7 @@ def optimize_production_schedule(
     credit_repayment_limits_by_period: dict[int,float] | None = None,
     credit_interest_rates_by_period: dict[int,float] | None = None,
     terminal_credit_balance_limit: float | None = None,
+    credit_maturity_period: int | None = None,
 ) -> dict:
     """Maximize demand value net of modeled costs under physical, cash and credit constraints.
 
@@ -98,6 +99,9 @@ def optimize_production_schedule(
         if terminal_credit_balance_limit is not None and (not math.isfinite(terminal_credit_balance_limit)
             or terminal_credit_balance_limit<0 or terminal_credit_balance_limit>credit_limit):
             raise ValueError("terminal_credit_balance_limit must be between zero and credit_limit")
+        if credit_maturity_period is not None and (not isinstance(credit_maturity_period,int)
+            or credit_maturity_period<0 or credit_maturity_period>=horizon_periods):
+            raise ValueError("credit_maturity_period must be an integer inside the planning horizon")
         if not math.isfinite(credit_limit) or credit_limit<0: raise ValueError("credit_limit must be finite and non-negative")
         if not math.isfinite(credit_opening_balance) or credit_opening_balance<0 or credit_opening_balance>credit_limit:
             raise ValueError("credit_opening_balance must be between zero and credit_limit")
@@ -321,6 +325,10 @@ def optimize_production_schedule(
     if credit_enabled and terminal_credit_balance_limit is not None:
         add_constraint({credit_balance_index[horizon_periods-1]:1.0},-math.inf,
             terminal_credit_balance_limit,"terminal_credit_balance_limit")
+    if credit_enabled and credit_maturity_period is not None:
+        for period in range(credit_maturity_period,horizon_periods):
+            add_constraint({credit_balance_index[period]:1.0},0.0,0.0,
+                f"credit_maturity_repayment::{period}")
     matrix=coo_matrix((vals,(rows,cols)),shape=(len(row_lb),nvars)).tocsr()
     constraints=LinearConstraint(matrix,np.asarray(row_lb),np.asarray(row_ub))
     result=milp(c=np.asarray(objective),integrality=np.asarray(integrality),
