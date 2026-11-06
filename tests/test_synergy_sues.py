@@ -148,3 +148,23 @@ def test_journal_rejects_a_forged_reversal_that_does_not_mirror_original():
     with pytest.raises(ValueError, match="exactly mirror"):
         journal.post(forged)
     assert len(journal.entries) == 1
+
+
+def test_sues_contracts_json_schema_accepts_all_five_contract_shapes():
+    import json
+    import jsonschema
+
+    schema_path = ROOT / "interfaces" / "synergy_sues_economic_contracts.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    checker = jsonschema.FormatChecker()
+    examples = [
+        {"amount": "125.50", "currency": "KZT"},
+        {"amount": "2.75", "unit": "MWh"},
+        {"period_id": "2026-Q4", "start": "2026-10-01", "end": "2026-12-31"},
+        {"rate_id": "fx1", "base_currency": "USD", "quote_currency": "KZT",
+         "rate": "500.25", "observed_at": "2026-11-06T08:00:00Z", "source_ref": "feed:1"},
+        {"evidence_id": "e1", "source_ref": "meter:1", "status": "VERIFIED",
+         "captured_at": "2026-11-06T08:00:00Z", "effective_from": "2026-11-01"},
+    ]
+    for example in examples:
+        jsonschema.validate(example, schema, format_checker=checker)
