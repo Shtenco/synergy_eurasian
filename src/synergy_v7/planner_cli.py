@@ -43,7 +43,7 @@ def evaluate_document(document,schema_path=None):
       cash_outflows if ("cash_outflows_by_period" in document or supplier_payments) else None,
       document.get("collection_lag_by_demand"),document.get("collection_fraction_by_demand"),
       document.get("credit_limit"),document.get("credit_opening_balance",0.0),
-      credit_draws,credit_repayments,credit_rates)
+      credit_draws,credit_repayments,credit_rates,document.get("terminal_credit_balance_limit"))
     result["supplier_payment_commitments"]=supplier_report
     return result
 
