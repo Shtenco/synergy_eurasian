@@ -319,6 +319,14 @@
         "minimum": 0,
         "maximum": 1
       }
+    },
+    "cash_outflows_by_period": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Committed cash outflows by zero-based period; JSON keys are strings."
     }
   }
 }
