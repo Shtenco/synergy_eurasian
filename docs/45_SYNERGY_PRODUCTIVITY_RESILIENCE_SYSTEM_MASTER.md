@@ -173,3 +173,7 @@ V7.6.6 adds receivable aging haircuts, inventory aging haircuts, receivable dilu
 ### V7.7 update — scenario-wise adaptive recourse and mean-CVaR
 
 V7.7 adds an evaluator that perturbs demand, resources, receipts, cash flows, supplier commitments and collateral by declared scenarios, re-runs the existing production/finance MILP independently for each scenario, and reports expected loss and discrete CVaR. This is deliberately labelled a wait-and-see benchmark: it does not enforce non-anticipativity and is not a formal two-stage stochastic MILP. Infeasible or unproven scenario solves withhold aggregate risk metrics. See [V7.7 specification](docs/62_SYNERGY_V7_7_SCENARIO_RECOURSE.md).
+
+### V7.8 update — first joint non-anticipative stochastic MILP
+
+V7.8 adds a deliberately narrow single-product, single-epoch two-stage MILP. It chooses one common pre-shock commitment and scenario-specific production, emergency procurement and lost-sales recourse, with expected recourse cost blended with discrete CVaR. It also calculates a risk-neutral solution and a wait-and-see expected-cost benchmark/EVPI. This is the first actual joint non-anticipative stochastic MILP in the V7 research line, but it is not yet integrated with the full multi-product, multi-period recipe/cash/credit/collateral planner. See [V7.8 specification](docs/63_SYNERGY_V7_8_TWO_STAGE_NONANTICIPATIVE_MILP.md).
