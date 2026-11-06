@@ -49,6 +49,8 @@ Production lead time must be at least one period. This prevents zero-time circul
 
 The input interchange contract is [`interfaces/synergy_v7_production_plan.schema.json`](../interfaces/synergy_v7_production_plan.schema.json). It describes the recipe, order, receipt, demand and resource-capacity envelope; semantic cross-record checks are performed by the Python evaluator.
 
+A multi-stage example models ore → steel → machine parts across three weekly periods, with separate electricity limits at the smelter and machining stages: [`examples/synergy_v7_1_integrated_factory_demo.json`](../examples/synergy_v7_1_integrated_factory_demo.json). It is a synthetic fixture, not observed plant data.
+
 ## Run
 
 ```bash
