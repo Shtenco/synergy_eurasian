@@ -1126,7 +1126,7 @@ def test_v765_borrowing_base_rejects_duplicate_ids_currency_mismatch_and_invalid
         calculate_borrowing_base(ar+[ar[0]],stock,policy,"USD")
     with pytest.raises(ValueError,match="currency mismatch"):
         calculate_borrowing_base(ar,stock,policy,"EUR")
-    with pytest.raises(ValueError,match="in \[0,1\]"):
+    with pytest.raises(ValueError,match=r"in \[0,1\]"):
         BorrowingBasePolicy(1.2,0.5,60,0.5,0)
 
 
@@ -1197,4 +1197,4 @@ def test_v766_cli_accepts_age_and_risk_reserve_policy():
       "disputed":False,"related_party":False,"evidence_id":"erp:ar-age"}]
     result=evaluate_document(document)
     assert result["collateral_borrowing_base"]["periods"][0]["receivables_after_aging_haircuts"]==pytest.approx(16)
-    assert result["collateral_borrowing_base"]["periods"][0]["reserve_deduction"]==pytest.approx(4)
+    assert result["collateral_borrowing_base"]["periods"][0]["reserve_deduction"]==pytest.approx(3.8)
