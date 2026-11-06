@@ -33,7 +33,11 @@
   },
   "holding_costs": {},
   "cash_opening_balance": 20,
-  "cash_minimum_balance": 0,
+  "cash_minimum_balance": {
+    "0": 0,
+    "1": 0,
+    "2": 0
+  },
   "cash_inflows_by_period": {},
   "collection_lag_by_demand": {
     "sale": 1
