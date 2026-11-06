@@ -99,5 +99,11 @@
   },
   "holding_costs": {
     "steel": 0.1
+  },
+  "minimum_inventory": {
+    "steel": 10
+  },
+  "storage_limits": {
+    "steel": 30
   }
 }
