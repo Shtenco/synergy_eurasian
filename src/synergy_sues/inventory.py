@@ -31,6 +31,21 @@ class _InventoryLot:
 
 
 @dataclass(frozen=True)
+class InventoryLotAllocation:
+    lot_id: str
+    quantity: Quantity
+    cost: Money
+    source_ref: str
+    destination_lot_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.lot_id or not self.source_ref:
+            raise ValueError("Inventory lot allocation requires lot and source identity")
+        if self.quantity.amount <= 0 or self.cost.amount < 0:
+            raise ValueError("Inventory lot allocation quantity/cost is invalid")
+
+
+@dataclass(frozen=True)
 class InventoryMovement:
     movement_id: str
     movement_type: InventoryMovementType
@@ -42,6 +57,7 @@ class InventoryMovement:
     source_ref: str
     destination_location_id: str | None = None
     lot_id: str | None = None
+    lot_allocations: tuple[InventoryLotAllocation, ...] = ()
 
     def __post_init__(self) -> None:
         if not all((self.movement_id, self.item_id, self.location_id, self.source_ref)):
@@ -54,6 +70,16 @@ class InventoryMovement:
             raise ValueError("Inventory movement quantity must be positive")
         if self.cost.amount < 0:
             raise ValueError("Inventory movement cost must be non-negative")
+        if not isinstance(self.lot_allocations, tuple):
+            object.__setattr__(self, "lot_allocations", tuple(self.lot_allocations))
+        if self.lot_allocations:
+            allocated_quantity = sum((row.quantity.amount for row in self.lot_allocations), Decimal("0"))
+            allocated_cost = sum((row.cost.amount for row in self.lot_allocations), Decimal("0"))
+            if allocated_quantity != self.quantity.amount or allocated_cost != self.cost.amount:
+                raise ValueError("Inventory lot allocations must reconcile to movement quantity and cost")
+            if any(row.quantity.unit != self.quantity.unit or row.cost.currency != self.cost.currency
+                   for row in self.lot_allocations):
+                raise ValueError("Inventory lot allocation unit/currency mismatch")
 
 
 class InventoryLedger:
@@ -169,9 +195,14 @@ class InventoryLedger:
             raise ValueError(f"Duplicate inventory movement_id: {issue_id}")
         consumed = self._consume_fifo(item_id, location_id, quantity)
         total_cost = sum((money.amount for _, money, _ in consumed), Decimal("0"))
+        lot_allocations = tuple(
+            InventoryLotAllocation(lot.lot_id, taken_quantity, taken_cost, lot.source_ref)
+            for taken_quantity, taken_cost, lot in consumed
+        )
         return self._add_movement(InventoryMovement(
             issue_id, InventoryMovementType.ISSUE, item_id, location_id,
             quantity, Money(total_cost, self.functional_currency), issue_date, source_ref,
+            lot_allocations=lot_allocations,
         ))
 
     def writeoff(
@@ -191,9 +222,14 @@ class InventoryLedger:
             raise ValueError(f"Duplicate inventory movement_id: {writeoff_id}")
         consumed = self._consume_fifo(item_id, location_id, quantity)
         total_cost = sum((money.amount for _, money, _ in consumed), Decimal("0"))
+        lot_allocations = tuple(
+            InventoryLotAllocation(lot.lot_id, taken_quantity, taken_cost, lot.source_ref)
+            for taken_quantity, taken_cost, lot in consumed
+        )
         return self._add_movement(InventoryMovement(
             writeoff_id, InventoryMovementType.WRITEOFF, item_id, location_id,
             quantity, Money(total_cost, self.functional_currency), writeoff_date, source_ref,
+            lot_allocations=lot_allocations,
         ))
 
     def transfer(
@@ -236,6 +272,7 @@ class InventoryLedger:
             raise ValueError(f"Duplicate destination lot ID for transfer: {transfer_id}")
         source_consumed = self._consume_fifo(item_id, source_location_id, quantity)
         total_cost = sum((money.amount for _, money, _ in source_consumed), Decimal("0"))
+        transfer_allocations = []
         for index, (taken_quantity, taken_cost, source_lot) in enumerate(source_consumed, start=1):
             new_lot_id = f"{transfer_id}:LOT:{index}"
             if new_lot_id in self._lot_ids:
@@ -246,16 +283,21 @@ class InventoryLedger:
             )
             self._lots.setdefault(destination_key, []).append(new_lot)
             self._lot_ids.add(new_lot_id)
+            transfer_allocations.append(InventoryLotAllocation(
+                source_lot.lot_id, taken_quantity, taken_cost, source_lot.source_ref, new_lot_id,
+            ))
         self._lots[destination_key].sort(key=lambda x: (x.received_date, x.lot_id))
         out_move = self._add_movement(InventoryMovement(
             out_id, InventoryMovementType.TRANSFER_OUT, item_id, source_location_id,
             quantity, Money(total_cost, self.functional_currency), transfer_date, source_ref,
             destination_location_id=destination_location_id,
+            lot_allocations=tuple(transfer_allocations),
         ))
         in_move = self._add_movement(InventoryMovement(
             in_id, InventoryMovementType.TRANSFER_IN, item_id, destination_location_id,
             quantity, Money(total_cost, self.functional_currency), transfer_date, source_ref,
             destination_location_id=source_location_id,
+            lot_allocations=tuple(transfer_allocations),
         ))
         return out_move, in_move
 
