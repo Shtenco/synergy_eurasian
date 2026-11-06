@@ -33,7 +33,10 @@ def _arrays(cfg: dict[str, Any]) -> dict[str, np.ndarray]:
 
 
 def _validated_leontief_components(cfg: dict[str, Any]) -> tuple[np.ndarray, float, float]:
-    a = _arrays(cfg)["A"]
+    try:
+        a = _arrays(cfg)["A"]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Input-output matrix A must be a rectangular numeric matrix") from exc
     if a.ndim != 2 or a.shape[0] != a.shape[1]:
         raise ValueError("Input-output matrix A must be square")
     if not np.isfinite(a).all():
