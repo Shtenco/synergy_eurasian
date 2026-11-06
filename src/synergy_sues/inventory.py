@@ -72,6 +72,15 @@ class InventoryMovement:
             raise ValueError("Inventory movement cost must be non-negative")
         if not isinstance(self.lot_allocations, tuple):
             object.__setattr__(self, "lot_allocations", tuple(self.lot_allocations))
+        if self.movement_type == InventoryMovementType.RECEIPT and not self.lot_id:
+            raise ValueError("Inventory receipt movement requires a lot_id")
+        if self.movement_type != InventoryMovementType.RECEIPT and not self.lot_allocations:
+            raise ValueError("Inventory consumption/transfer movement requires lot allocations")
+        if self.movement_type in {InventoryMovementType.TRANSFER_IN, InventoryMovementType.TRANSFER_OUT}:
+            if any(row.destination_lot_id is None for row in self.lot_allocations):
+                raise ValueError("Inventory transfer allocations require destination lot IDs")
+        elif any(row.destination_lot_id is not None for row in self.lot_allocations):
+            raise ValueError("Only transfer movements may include destination lot IDs")
         if self.lot_allocations:
             allocated_quantity = sum((row.quantity.amount for row in self.lot_allocations), Decimal("0"))
             allocated_cost = sum((row.cost.amount for row in self.lot_allocations), Decimal("0"))
