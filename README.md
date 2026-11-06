@@ -391,3 +391,11 @@ V7.2.2 links explicitly approved bank statement allocations to AR/AP documents, 
 - [V7.3 command-line evaluator](src/synergy_v7/realization_cli.py)
 
 V7.3 connects measured output to customer acceptance, invoice lines and explicit cash-collection attribution. It reports baseline deltas, invoiced revenue, collected cash and cost categories separately; a pre/post output change is not automatically treated as causal proof.
+
+- [V7.3.1 Matched-Pair Difference-in-Differences](docs/52_SYNERGY_V7_3_1_CAUSAL_DID.md)
+- [V7.3.1 causal estimator](src/synergy_v7/causal.py)
+- [V7.3.1 input schema](interfaces/synergy_v7_causal_observations.schema.json)
+- [V7.3.1 reproducible example](examples/synergy_v7_3_1_matched_did_demo.json)
+- [V7.3.1 command-line evaluator](src/synergy_v7/causal_cli.py)
+
+V7.3.1 estimates matched-pair difference-in-differences with a small-sample t interval. It exposes the parallel-trends and no-spillover assumptions and explicitly refuses to treat a pre/post delta as causal proof.
