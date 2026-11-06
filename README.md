@@ -375,3 +375,11 @@ V7.2 adds working-capital/CCC metrics and an explicit cash waterfall. Financing 
 - [V7.2.1 command-line evaluator](src/synergy_v7/trade_cli.py)
 
 V7.2.1 adds dated AR/AP documents, partial settlement replay, credit adjustments, dispute states, aging buckets and counterparty exposure. AR and AP are not netted by default; expected credit loss is a sourced estimate, not cash or an accounting provision.
+
+- [V7.2.2 Bank Statement Reconciliation](docs/50_SYNERGY_V7_2_2_BANK_RECONCILIATION.md)
+- [V7.2.2 reconciliation engine](src/synergy_v7/cash_reconciliation.py)
+- [V7.2.2 input schema](interfaces/synergy_v7_cash_reconciliation.schema.json)
+- [V7.2.2 reconciliation demo](examples/synergy_v7_2_2_reconciliation_demo.json)
+- [V7.2.2 command-line evaluator](src/synergy_v7/reconciliation_cli.py)
+
+V7.2.2 links explicitly approved bank statement allocations to AR/AP documents, preserves unmatched residuals for review and reports gross cash control totals by currency. It does not guess invoice matches or classify unexplained cash as revenue.
