@@ -136,6 +136,86 @@ def portfolio_accounting(cfg: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+
+def reproduction_repair_results(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Calculate a transparent operating-improvement scenario for the replacement gap.
+
+    The scenario is a target, not an observed result. It applies an operating
+    cashflow uplift and a replacement-cost reduction, then reconciles public,
+    private and sector balances. Internal cross-subsidies are not new value.
+    """
+    a = _arrays(cfg)
+    plan = cfg["reproduction_repair_plan"]
+    uplift = float(plan["operating_cashflow_uplift_target"])
+    replacement_reduction = float(plan["replacement_cost_reduction_target"])
+    capital = a["capital"]
+    gross = capital * a["yield"]
+    replacement = capital * a["replacement"]
+    public_share = a["public_share"]
+
+    target_gross = gross * (1.0 + uplift)
+    target_replacement = replacement * (1.0 - replacement_reduction)
+    target_residual = target_gross - target_replacement
+    public_residual = target_residual * public_share
+    private_residual = target_residual * (1.0 - public_share)
+
+    sectors = []
+    for i, name in enumerate(cfg["sectors"]):
+        sectors.append({
+            "sector": name,
+            "baseline_residual_usd": float(gross[i] - replacement[i]),
+            "target_gross_cashflow_usd": float(target_gross[i]),
+            "target_replacement_capex_usd": float(target_replacement[i]),
+            "target_residual_usd": float(target_residual[i]),
+            "public_target_residual_usd": float(public_residual[i]),
+            "private_target_residual_usd": float(private_residual[i]),
+        })
+
+    def pool(values: np.ndarray) -> dict[str, float]:
+        positive = float(np.maximum(values, 0.0).sum())
+        negative = float(np.minimum(values, 0.0).sum())
+        return {
+            "positive_sector_surplus_usd": positive,
+            "negative_sector_gap_usd": negative,
+            "net_residual_usd": positive + negative,
+            "internal_cross_subsidy_required_usd": -negative,
+            "surplus_after_covering_sector_gaps_usd": positive + negative,
+        }
+
+    public_pool = pool(public_residual)
+    private_pool = pool(private_residual)
+    total_pool = pool(target_residual)
+    base_gross = float(gross.sum())
+    base_replacement = float(replacement.sum())
+    target_gross_total = float(target_gross.sum())
+    target_replacement_total = float(target_replacement.sum())
+    return {
+        "status": plan["status"],
+        "operating_cashflow_uplift_target": uplift,
+        "replacement_cost_reduction_target": replacement_reduction,
+        "baseline_gap_usd": float(base_replacement - base_gross),
+        "operating_cashflow_uplift_usd": float(target_gross_total - base_gross),
+        "replacement_cost_savings_usd": float(base_replacement - target_replacement_total),
+        "target_gross_cashflow_usd": target_gross_total,
+        "target_replacement_capex_usd": target_replacement_total,
+        "target_residual_after_replacement_usd": float(target_gross_total - target_replacement_total),
+        "target_replacement_coverage": float(target_gross_total / target_replacement_total),
+        "baseline_replacement_coverage": float(base_gross / base_replacement),
+        "target_residual_margin_pct_of_replacement": float(
+            (target_gross_total - target_replacement_total) / target_replacement_total
+        ),
+        "public_target_residual_usd": float(public_residual.sum()),
+        "private_target_residual_usd": float(private_residual.sum()),
+        "public_sector_pool": public_pool,
+        "private_sector_pool": private_pool,
+        "whole_system_sector_pool": total_pool,
+        "sectors": sectors,
+        "reserve_policy": plan["reserve_policy"],
+        "accounting_rules": plan["accounting_rules"],
+        "operational_levers": plan["operational_levers"],
+    }
+
+
 def productivity_results(cfg: dict[str, Any]) -> dict[str, Any]:
     basket = np.asarray(cfg["basket_share"], dtype=float)
     labor = np.asarray(cfg["labor_share"], dtype=float)
@@ -275,6 +355,7 @@ def build_report(cfg: dict[str, Any]) -> dict[str, Any]:
         "currency": cfg["currency"],
         "population": cfg["population"],
         "accounting": portfolio_accounting(cfg),
+        "reproduction_repair": reproduction_repair_results(cfg),
         "productivity": productivity_results(cfg),
         "leontief": leontief_results(cfg),
         "supply_stress": stress,
@@ -305,6 +386,8 @@ def main() -> None:
         "gross_cashflow_usd": report["accounting"]["total_gross_cashflow_usd"],
         "replacement_capex_usd": report["accounting"]["total_replacement_capex_usd"],
         "net_after_replacement_usd": report["accounting"]["total_net_after_replacement_usd"],
+        "repair_target_residual_usd": report["reproduction_repair"]["target_residual_after_replacement_usd"],
+        "repair_target_replacement_coverage": report["reproduction_repair"]["target_replacement_coverage"],
         "public_capital_usd": report["accounting"]["public_productive_capital_usd"],
         "public_net_after_replacement_usd": report["accounting"]["public_net_after_replacement_usd"],
         "leontief_spectral_radius": report["leontief"]["spectral_radius"],

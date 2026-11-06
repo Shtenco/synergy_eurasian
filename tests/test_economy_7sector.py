@@ -67,3 +67,30 @@ def test_30y_no_crisis_projection_reconciles():
     assert abs(result["final_productive_capital_usd"] - 42_337_661.8282) < 1.0
     assert abs(result["cumulative_dividends_usd"] - 5_662_597.0969) < 1.0
     assert abs(result["final_financial_reserve_usd"] - 5_420_064.7313) < 1.0
+
+
+
+def test_reproduction_repair_plan_closes_whole_and_public_gaps():
+    from synergy_economy_7sector import reproduction_repair_results
+    result = reproduction_repair_results(config())
+    assert abs(result["baseline_gap_usd"] - 96_000) < 1e-6
+    assert abs(result["operating_cashflow_uplift_usd"] - 74_512.5) < 1e-6
+    assert abs(result["replacement_cost_savings_usd"] - 43_580) < 1e-6
+    assert abs(result["target_residual_after_replacement_usd"] - 22_092.5) < 1e-6
+    assert abs(result["public_target_residual_usd"] - 9_116.25) < 1e-6
+    assert abs(result["private_target_residual_usd"] - 12_976.25) < 1e-6
+    assert result["target_replacement_coverage"] > 1.0
+
+
+def test_reproduction_repair_sector_pools_reconcile():
+    from synergy_economy_7sector import reproduction_repair_results
+    result = reproduction_repair_results(config())
+    whole = result["whole_system_sector_pool"]
+    public = result["public_sector_pool"]
+    private = result["private_sector_pool"]
+    assert abs(whole["positive_sector_surplus_usd"] - 162_160) < 1e-6
+    assert abs(whole["negative_sector_gap_usd"] + 140_067.5) < 1e-6
+    assert abs(whole["net_residual_usd"] - 22_092.5) < 1e-6
+    assert abs(public["net_residual_usd"] - 9_116.25) < 1e-6
+    assert abs(private["net_residual_usd"] - 12_976.25) < 1e-6
+    assert abs(public["net_residual_usd"] + private["net_residual_usd"] - whole["net_residual_usd"]) < 1e-6

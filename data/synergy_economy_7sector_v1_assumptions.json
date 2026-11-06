@@ -275,5 +275,31 @@
     "Gross cash yield is not free cash flow; replacement CAPEX is deducted separately.",
     "The input-output matrix is a teaching/architecture matrix, not a calibrated national accounts table.",
     "The 5% gross cash yield is a target sensitivity, not a forecast or guarantee."
-  ]
+  ],
+  "reproduction_repair_plan": {
+    "status": "TARGET_SCENARIO_NOT_OBSERVED",
+    "operating_cashflow_uplift_target": 0.075,
+    "replacement_cost_reduction_target": 0.04,
+    "operational_levers": [
+      "raise productive asset utilization and uptime without reducing safety or service quality",
+      "reduce energy, material, logistics and procurement waste",
+      "use predictive maintenance and condition-based replacement",
+      "standardize components and procure lifecycle cost rather than lowest purchase price",
+      "reduce leakage, idle inventory and uncollected contracted receivables"
+    ],
+    "accounting_rules": [
+      "cashflow uplift must be net of incremental operating expenses and must not be produced solely by price increases",
+      "replacement savings must preserve asset safety, useful output, quality and resilience",
+      "cross-subsidies are internal transfers and are not additional consolidated surplus",
+      "no dividends until replacement obligations and reserve targets are funded",
+      "token issuance, revaluation and borrowing proceeds are not operating cashflow"
+    ],
+    "reserve_policy": {
+      "first_priority": "fund required replacement and maintenance",
+      "second_priority": "cross-subsidize essential low-cashflow sectors under explicit service contracts",
+      "third_priority": "build liquidity and crisis reserves",
+      "fourth_priority": "fund productive growth",
+      "fifth_priority": "distribute dividends only from verified residual surplus"
+    }
+  }
 }
