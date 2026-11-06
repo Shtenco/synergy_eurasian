@@ -12,7 +12,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Iterable
 
-from .contracts import Money, _aware
+from .contracts import FXRate, Money, _aware
 
 
 class AccountType(str, Enum):
@@ -113,6 +113,7 @@ class Journal:
         self._entries: dict[str, JournalEntry] = {}
         self._idempotency_keys: set[str] = set()
         self._reversed: set[str] = set()
+        self._fx_rates: dict[str, FXRate] = {}
 
     @property
     def accounts(self) -> tuple[Account, ...]:
@@ -121,6 +122,11 @@ class Journal:
     @property
     def entries(self) -> tuple[JournalEntry, ...]:
         return tuple(self._entries.values())
+
+    def add_fx_rate(self, rate: FXRate) -> None:
+        if rate.rate_id in self._fx_rates:
+            raise ValueError(f"Duplicate FX rate_id: {rate.rate_id}")
+        self._fx_rates[rate.rate_id] = rate
 
     def add_account(self, account: Account) -> None:
         if account.account_id in self._accounts:
@@ -146,6 +152,17 @@ class Journal:
                 raise ValueError(f"Unknown account_id: {line.account_id}")
             if line.functional_amount.currency != self.functional_currency:
                 raise ValueError("Journal line functional currency mismatch")
+            if line.amount.currency != self.functional_currency:
+                rate = self._fx_rates.get(line.fx_rate_ref or "")
+                if rate is None:
+                    raise ValueError(f"Unknown FX rate reference: {line.fx_rate_ref}")
+                if rate.base_currency != line.amount.currency or rate.quote_currency != self.functional_currency:
+                    raise ValueError("FX rate direction must convert transaction currency to functional currency")
+                if rate.observed_at.date() > entry.effective_date:
+                    raise ValueError("FX rate observation cannot post-date the journal effective date")
+                expected_functional = rate.convert(line.amount)
+                if expected_functional.amount != line.functional_amount.amount:
+                    raise ValueError("Functional amount does not match the referenced FX rate")
             if line.side == PostingSide.DEBIT:
                 debit += line.functional_amount.amount
             else:
