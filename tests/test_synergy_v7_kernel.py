@@ -1038,3 +1038,38 @@ def test_v763_credit_maturity_validation_and_cli_fixture():
     document["credit_maturity_period"]=2
     result=evaluate_document(document)
     assert result["feasible"] and result["credit_facility"]["ending_balance_by_period"][-1]==pytest.approx(0)
+
+
+def test_v764_borrowing_base_caps_drawn_debt_and_reports_headroom():
+    args=cash_planner_fixture()
+    blocked=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      credit_limit=20,credit_draw_limits_by_period={0:20},
+      credit_borrowing_base_by_period={0:10,1:10,2:10},
+      collection_lag_by_demand={"sale":1})
+    assert blocked["feasible"] and blocked["schedule"]==[]
+    funded=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      credit_limit=20,credit_draw_limits_by_period={0:20},
+      credit_borrowing_base_by_period={0:20,1:20,2:20},
+      collection_lag_by_demand={"sale":1},terminal_credit_balance_limit=0)
+    assert funded["feasible"] and funded["schedule"]
+    assert funded["credit_facility"]["borrowing_base_headroom_by_period"][0]==pytest.approx(0)
+    assert funded["credit_facility"]["borrowing_base_headroom_by_period"][2]==pytest.approx(20)
+
+
+def test_v764_borrowing_base_rejects_invalid_period_or_amount():
+    args=cash_planner_fixture()
+    with pytest.raises(ValueError,match="outside horizon"):
+        optimize_production_schedule(*args,3,{"make":1},credit_limit=20,credit_borrowing_base_by_period={3:10})
+    with pytest.raises(ValueError,match="Invalid borrowing base"):
+        optimize_production_schedule(*args,3,{"make":1},credit_limit=20,credit_borrowing_base_by_period={0:21})
+
+
+def test_v764_borrowing_base_cli_schema_and_report():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_2_credit_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    document["credit_borrowing_base_by_period"]={"0":20,"1":20,"2":20}
+    result=evaluate_document(document)
+    assert result["feasible"] and result["credit_facility"]["borrowing_base_by_period"]=={0:20,1:20,2:20}
