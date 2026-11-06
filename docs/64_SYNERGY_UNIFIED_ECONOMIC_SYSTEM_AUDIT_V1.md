@@ -250,3 +250,24 @@ Scenario values cannot silently satisfy an observed/verified hard constraint. Ev
 ## 10. Explicit non-goals of this audit
 
 This document does not merge PR #9 or PR #10, does not claim the whole economy has been fully calibrated, does not authorize payments/credit/token issuance, and does not replace statutory accounting, legal review or independent model validation.
+
+
+### F-21 — V2 deterministic scenario domain excludes recession/deflation (MEDIUM)
+
+`simulate_case` rejects negative annual cashflow growth and negative replacement inflation. This prevents the deterministic scenario engine from expressing declining operating cashflow or falling replacement prices. V3 has a wider stochastic growth domain, but V2 should accept explicit negative scenarios with bounded validation.
+
+### F-22 — V4 input validation is incomplete (HIGH)
+
+The optimizer checks budget positivity, non-negative objective weights, weight sum, unique project IDs, non-negative maximum investment and direct yield. It does not fully validate finite values, strictly positive normalization denominators, criticality weights, spillover/operational metrics, sector caps/floors or integer deployment fields. NaN values can bypass ordinary comparison checks and reach the solver.
+
+### F-23 — V4 timing and diffusion inputs do not influence allocation (MEDIUM)
+
+`deployment_lag_months` and `diffusion_reach_enterprises` are emitted in the allocation report but do not affect the LP objective or constraints. They are descriptive fields until a time-expanded, adoption-aware model uses them.
+
+### F-24 — V1 supply feasibility does not guard the Leontief stability condition (HIGH)
+
+The current input-output fixture is stable, but `leontief_results` and `solve_supply` invert `I-A` before checking the spectral radius. The runtime should validate non-negative finite coefficients, square dimensions, `rho(A) < 1` and matrix conditioning before using the inverse.
+
+### F-25 — EIIOM output needs a full objective/metric bridge (HIGH)
+
+EIIOM reports both a weighted LP objective and an unweighted 2045 annual GVA-equivalent total. The distinction is explainable by stage weights, but the output does not publish a clear reconciliation between these values or a full project commissioning/capital-stock bridge. Future reports must publish both measures, stage contribution and assumptions side by side.
