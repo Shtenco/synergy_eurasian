@@ -367,3 +367,5 @@ python src/eiiom_optimizer.py --config config/base_scenario.json --output output
 - [Signed Event JSON Schema](interfaces/synergy_sues_signed_event.schema.json)
 
 Ed25519 signatures authenticate events from keys provisioned in an explicit trust registry. Signature validity is not business or financial authorization.
+
+- [SUES Federation Identity and Signed Event Envelope V1](docs/71_SYNERGY_SUES_FEDERATION_IDENTITY_AND_SIGNED_EVENT_ENVELOPE_V1.md) — Ed25519 identity authentication, durable SQLite trust registry and administrative audit chain.
