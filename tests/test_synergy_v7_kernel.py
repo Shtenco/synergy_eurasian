@@ -364,3 +364,57 @@ def test_trade_ledger_cli_fixture_is_schema_valid_and_reconciles():
     ar=result["documents"][0]
     assert ar["disputed_outstanding"]==10000
     assert result["counterparty_exposure"][0]["expected_credit_loss"]==pytest.approx(810)
+
+
+from synergy_v7 import (BankStatementLine, CashAllocation, reconcile_bank_statement)
+
+
+def test_bank_reconciliation_matches_partial_receipt_to_invoice():
+    doc=trade_doc("ar1","RECEIVABLE",1000,"buyer")
+    line=BankStatementLine("bank1","usd-account","2026-02-01",600,"USD","ref-1","bank:line:1")
+    alloc=CashAllocation("alloc1","bank1","ar1",600,"operator:match:1")
+    r=reconcile_bank_statement([doc],[],[line],[alloc],"2026-02-02")
+    assert r["fully_reconciled"]
+    assert r["trade_ledger"]["documents"][0]["outstanding"]==400
+    assert r["currency_control_totals"]["USD"]["allocated_net"]==600
+
+
+def test_bank_reconciliation_reports_unmatched_residual_without_guessing():
+    doc=trade_doc("ar1","RECEIVABLE",1000,"buyer")
+    line=BankStatementLine("bank1","usd-account","2026-02-01",700,"USD","ref-1","bank:line:1")
+    alloc=CashAllocation("alloc1","bank1","ar1",500,"operator:match:1")
+    r=reconcile_bank_statement([doc],[],[line],[alloc],"2026-02-02")
+    assert not r["fully_reconciled"]
+    assert r["bank_lines"][0]["unmatched_amount"]==200
+    assert r["bank_lines"][0]["status"]=="PARTIALLY_RECONCILED"
+
+
+def test_bank_reconciliation_rejects_overallocation_and_wrong_direction():
+    doc=trade_doc("ap1","PAYABLE",1000,"supplier")
+    line=BankStatementLine("bank1","usd-account","2026-02-01",500,"USD","ref-1","bank:line:1")
+    alloc=CashAllocation("alloc1","bank1","ap1",100,"operator:match:1")
+    with pytest.raises(ValueError,match="Inflow cannot settle payable"):
+        reconcile_bank_statement([doc],[],[line],[alloc],"2026-02-02")
+    ar=trade_doc("ar1","RECEIVABLE",1000,"buyer")
+    too_much=CashAllocation("alloc2","bank1","ar1",600,"operator:match:2")
+    with pytest.raises(ValueError,match="Allocations exceed"):
+        reconcile_bank_statement([ar],[],[line],[too_much],"2026-02-02")
+
+
+def test_bank_reconciliation_handles_supplier_outflow_and_payable_balance():
+    doc=trade_doc("ap1","PAYABLE",900,"supplier")
+    line=BankStatementLine("bank1","usd-account","2026-02-01",-300,"USD","ref-1","bank:line:1")
+    alloc=CashAllocation("alloc1","bank1","ap1",300,"operator:match:1")
+    r=reconcile_bank_statement([doc],[],[line],[alloc],"2026-02-02")
+    assert r["fully_reconciled"]
+    assert r["trade_ledger"]["documents"][0]["outstanding"]==600
+    assert r["currency_control_totals"]["USD"]["allocated_net"]==-300
+
+
+def test_bank_reconciliation_ignores_future_bank_lines_and_allocations():
+    doc=trade_doc("ar1","RECEIVABLE",1000,"buyer")
+    line=BankStatementLine("bank1","usd-account","2026-02-01",500,"USD","ref-1","bank:line:1")
+    alloc=CashAllocation("alloc1","bank1","ar1",500,"operator:match:1")
+    r=reconcile_bank_statement([doc],[],[line],[alloc],"2026-01-31")
+    assert r["bank_lines"]==[]
+    assert r["trade_ledger"]["documents"][0]["outstanding"]==1000
