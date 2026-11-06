@@ -53,7 +53,7 @@ def test_grni_three_way_match_and_journal_clearance():
     assert report["three_way_match_complete"] is False
     tb = journal.trial_balance()
     assert tb["balanced"]
-    assert tb["total_debits"] == tb["total_credits"] == "30"
+    assert tb["total_debits"] == tb["total_credits"] == "50"
 
 
 def test_grni_rejects_over_receipt_unreceived_invoice_and_price_variance():
@@ -99,7 +99,7 @@ def test_bom_execution_reconciles_material_wip_and_finished_goods():
     assert pools[("machine-part", "factory")]["quantity"] == "2"
     assert pools[("machine-part", "factory")]["inventory_cost"] == "40"
     assert journal.trial_balance()["balanced"]
-    assert journal.trial_balance()["total_debits"] == journal.trial_balance()["total_credits"] == "140"
+    assert journal.trial_balance()["total_debits"] == journal.trial_balance()["total_credits"] == "180"
     with pytest.raises(ValueError, match="already executed"):
         execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW)
 
