@@ -19,18 +19,21 @@ A scenario can scale:
 - inventory collateral by lot ID;
 - externally supplied period borrowing-base ceilings.
 
-Multipliers must be finite and non-negative. Unknown IDs for entity-level shocks are rejected. Scenario probabilities must sum to 1.0 within a strict tolerance.
+Multipliers must be finite and non-negative. Unknown IDs for entity-level shocks are rejected. If a borrowing-base multiplier is supplied without an explicit period ceiling, the contractual facility limit is used as the starting ceiling; the shock therefore cannot silently create a zero or unlimited facility. Scenario probabilities must sum to 1.0 within a strict tolerance.
 
 ## Re-optimization and reporting
 
 The engine first solves the baseline plan, then applies each scenario's shocks to a deep copy of the input and invokes the existing cash-, credit- and collateral-aware MILP optimizer.
 
 For each scenario it reports:
+- a SHA-256 fingerprint of the transformed scenario input and the canonical baseline input fingerprint;
+- the full scenario shock specification;
 - probability, feasibility and optimality status;
 - objective value and change from baseline;
 - loss versus baseline;
 - served value and unserved demand value;
 - production, holding and interest costs;
+- demand-level service detail, resource usage and collateral borrowing-base detail;
 - production schedule, ending cash and ending debt.
 
 The loss metric is `max(0, baseline_objective - scenario_objective)`. Gains in favorable scenarios do not offset downside losses in the risk measure.
