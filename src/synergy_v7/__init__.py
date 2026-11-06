@@ -12,11 +12,15 @@ from .finance import (WorkingCapitalSnapshot, working_capital_cash_impact,
 from .trade_ledger import (TradeDocument, SettlementEvent, DocumentAdjustment,
     DisputeEvent, CreditRiskAssessment, build_trade_ledger)
 
+from .cash_reconciliation import (BankStatementLine, CashAllocation,
+    reconcile_bank_statement)
+
 __all__ = ["DomainEvent","EventStore","GraphNode","GraphEdge","EconomicGraph",
     "PhysicalFlow","physical_flow_summary","ResourceCapacity","ResourceCommitment",
     "validate_resource_capacity","graph_from_events","BenefitClaim","BenefitLedger",
     "cashflow_npv","empirical_cvar","pareto_frontier","MaterialRequirement",
     "ResourceRequirement","ProductionRecipe","ProductionOrder","InventoryReceipt",
     "ProductDemand","evaluate_production_plan","TradeDocument","SettlementEvent",
-    "DocumentAdjustment","DisputeEvent","CreditRiskAssessment","build_trade_ledger","WorkingCapitalSnapshot",
+    "DocumentAdjustment","DisputeEvent","CreditRiskAssessment","build_trade_ledger",
+    "BankStatementLine","CashAllocation","reconcile_bank_statement","WorkingCapitalSnapshot",
     "working_capital_cash_impact","CashWaterfallInput","run_cash_waterfall"]
