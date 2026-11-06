@@ -856,3 +856,24 @@ def test_v76_cash_constraint_rejects_invalid_periods_lags_and_fractions():
         optimize_production_schedule(*args,3,{"make":1},collection_lag_by_demand={"sale":-1})
     with pytest.raises(ValueError,match="in \[0,1\]"):
         optimize_production_schedule(*args,3,{"make":1},collection_fraction_by_demand={"sale":1.5})
+
+
+def test_v76_cash_constrained_cli_fixture_is_schema_valid_and_reproducible():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_cash_constrained_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    a=evaluate_document(document); b=evaluate_document(document)
+    assert a==b and a["feasible"] and a["optimality_proven"]
+    assert a["schedule"][0]["batch_count"]==1
+    assert a["ending_cash_by_period"]==pytest.approx([0,0,100])
+    assert a["cash_constraint_enabled"]
+
+
+def test_v76_cash_constraint_rejects_cash_floor_beyond_available_funding():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_opening_balance=20,cash_minimum_balance={0:1,1:0,2:0},
+      collection_lag_by_demand={"sale":1})
+    assert not r["feasible"]
