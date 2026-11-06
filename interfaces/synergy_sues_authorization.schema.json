@@ -7,8 +7,6 @@
       "type":"object","required":["request_id","action","resource_type","resource_id"],
       "properties":{
         "request_id":{"type":"string","minLength":1},
-        "request_event_id":{"type":"string","minLength":1},
-        "request_event_hash":{"type":"string","pattern":"^[a-f0-9]{64}$"},
         "action":{"type":"string","minLength":1},
         "resource_type":{"type":"string","minLength":1},
         "resource_id":{"type":"string","minLength":1}
@@ -16,7 +14,7 @@
       "additionalProperties":true
     },
     "authorizationApprovalPayload":{
-      "type":"object","required":["request_id","request_event_id","request_event_hash","action","resource_type","resource_id","requester_identity_id","decision"],
+      "type":"object","required":["request_id","action","resource_type","resource_id","requester_identity_id","decision"],
       "properties":{
         "request_id":{"type":"string","minLength":1},
         "action":{"type":"string","minLength":1},
