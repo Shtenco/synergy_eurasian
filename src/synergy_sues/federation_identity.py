@@ -362,7 +362,7 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
             (sequence, action, subject_id, details_json, occurred_at, previous_hash, digest))
 
     def _refresh(self) -> None:
-        with self._connect() as db:
+        with self._session() as db:
             identities = db.execute("SELECT * FROM trust_identities ORDER BY identity_id").fetchall()
             keys = db.execute("""
                 SELECT k.*, r.revoked_at FROM trust_keys k
