@@ -435,3 +435,7 @@ V7.6.1 adds evidence-qualified supplier deposits, dispatch, receipt, milestone a
 - [V7.6.2 credit-aware factory fixture](examples/synergy_v7_6_2_credit_factory_plan.json)
 
 V7.6.2 adds period-level credit draws, prior-balance-only repayments, facility limits and interest on beginning-period debt. Debt principal is distinguished from operating expense; outstanding debt is reported; an optional terminal debt ceiling can require repayment by horizon end.
+
+- [V7.6.3 Explicit Revolving-Facility Maturity](docs/58_SYNERGY_V7_6_3_CREDIT_MATURITY.md)
+
+V7.6.3 adds a contractual maturity period to the cash-and-credit MILP. Debt must be fully repaid by the declared period and cannot reappear afterward; if repayment cannot be funded, the optimizer curtails the production plan rather than pretending refinancing is available.
