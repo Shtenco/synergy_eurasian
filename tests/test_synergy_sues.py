@@ -427,3 +427,53 @@ def test_intercompany_elimination_refuses_unmapped_period_and_wrong_accounts():
     with pytest.raises(ValueError, match="revenue debit and expense credit"):
         post_intercompany_eliminations(wrong_accounts, rows, {"2026-Q4": date(2026, 12, 31)},
             datetime(2026, 12, 31, tzinfo=timezone.utc), "event-wrong", "idem-wrong")
+
+
+def test_trial_balance_translation_uses_closing_average_and_historical_rates():
+    now = datetime(2026, 11, 6, 10, tzinfo=timezone.utc)
+    policy = TranslationPolicy(
+        closing_rate=FXRate("close-eur-usd", "EUR", "USD", "1.1", now, "fx:close"),
+        average_rate=FXRate("avg-eur-usd", "EUR", "USD", "1.05", now, "fx:average"),
+        historical_equity_rates={
+            "capital": FXRate("hist-capital", "EUR", "USD", "1.0", now, "fx:historical")
+        },
+        reporting_date=date(2026, 11, 6),
+        translation_adjustment_account_id="cta",
+    )
+    rows = [
+        TrialBalanceAccount("cash", AccountType.ASSET, Money("100", "EUR"), Money("0", "EUR")),
+        TrialBalanceAccount("payable", AccountType.LIABILITY, Money("0", "EUR"), Money("40", "EUR")),
+        TrialBalanceAccount("capital", AccountType.EQUITY, Money("0", "EUR"), Money("50", "EUR")),
+        TrialBalanceAccount("revenue", AccountType.REVENUE, Money("0", "EUR"), Money("30", "EUR")),
+        TrialBalanceAccount("opex", AccountType.EXPENSE, Money("20", "EUR"), Money("0", "EUR")),
+    ]
+    result = translate_trial_balance(rows, policy, "USD")
+    assert result["balanced"]
+    assert result["total_debits"] == result["total_credits"] == "136.5"
+    assert result["translation_adjustment"]["credit"] == "5.5"
+    assert result["translation_is_not_operating_profit"]
+
+
+def test_trial_balance_translation_rejects_missing_historical_rate_and_future_rate():
+    now = datetime(2026, 11, 6, 10, tzinfo=timezone.utc)
+    base = TranslationPolicy(
+        closing_rate=FXRate("close", "EUR", "USD", "1.1", now, "fx:close"),
+        average_rate=FXRate("avg", "EUR", "USD", "1.05", now, "fx:avg"),
+        historical_equity_rates={},
+        reporting_date=date(2026, 11, 6),
+        translation_adjustment_account_id="cta",
+    )
+    equity = [TrialBalanceAccount("capital", AccountType.EQUITY, Money("0", "EUR"), Money("10", "EUR"))]
+    with pytest.raises(ValueError, match="Missing historical FX"):
+        translate_trial_balance(equity, base, "USD")
+
+    future_policy = TranslationPolicy(
+        closing_rate=FXRate("future", "EUR", "USD", "1.1",
+            datetime(2026, 11, 7, 10, tzinfo=timezone.utc), "fx:future"),
+        average_rate=FXRate("avg", "EUR", "USD", "1.05", now, "fx:avg"),
+        historical_equity_rates={"capital": FXRate("hist", "EUR", "USD", "1.0", now, "fx:hist")},
+        reporting_date=date(2026, 11, 6),
+        translation_adjustment_account_id="cta",
+    )
+    with pytest.raises(ValueError, match="post-date"):
+        translate_trial_balance(equity, future_policy, "USD")
