@@ -354,3 +354,8 @@ SYNERGY develops a connected family of research models for productive-capacity r
 - [V7 invariant tests](tests/test_synergy_v7_kernel.py)
 
 V7 establishes append-only domain events, stable graph identities, evidence-qualified resource capacity, physical-flow consolidation, non-duplicative benefit attribution, empirical CVaR and Pareto-frontier primitives. It is a research kernel, not an operational ledger or validated digital twin. Scenario outputs must remain distinct from observed enterprise performance.
+
+- [V7.1 Time-Expanded Production Feasibility](docs/47_SYNERGY_V7_1_TIME_EXPANDED_PRODUCTION.md)
+- [V7.1 production feasibility implementation](src/synergy_v7/production.py)
+
+V7.1 adds discrete-period recipes, integer batch orders, material inventory, delivery receipts, demand priorities, lead times and shared resource-capacity checks. It validates proposed schedules; it does not yet optimize them.
