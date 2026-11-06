@@ -2,7 +2,7 @@
 
 **Status:** target architecture / research specification.  
 **Date:** 2026-11-06.  
-**Companion:** [Audit V1](64_SYNERGY_UNIFIED_ECONOMIC_SYSTEM_AUDIT_V1.md), [Typed Contracts and Journal V1](65_SYNERGY_UNIFIED_ECONOMIC_SYSTEM_CONTRACTS_AND_JOURNAL_V1.md).
+**Companion:** [Audit V1](64_SYNERGY_UNIFIED_ECONOMIC_SYSTEM_AUDIT_V1.md), [Typed Contracts and Journal V1](65_SYNERGY_UNIFIED_ECONOMIC_SYSTEM_CONTRACTS_AND_JOURNAL_V1.md), [Mathematical Specification V1](67_SYNERGY_UNIFIED_ECONOMIC_MODEL_MATHEMATICAL_SPEC_V1.md).
 
 ## 1. Design objective
 
