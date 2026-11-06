@@ -161,3 +161,7 @@ A declared `credit_maturity_period` now forces the facility balance to zero by t
 ### V7.6.4 update — borrowing-base covenant
 
 V7.6.4 adds period-specific maximum drawn-debt limits on top of the contractual facility cap and reports borrowing-base headroom. This makes collateral availability a first-class planning constraint, while keeping collateral eligibility, aging, concentration and advance-rate certification outside the optimizer until those inputs are evidence-backed. See [V7.6.4 specification](docs/59_SYNERGY_V7_6_4_BORROWING_BASE_COVENANT.md).
+
+### V7.6.5 update — evidence-derived borrowing base
+
+V7.6.5 derives period borrowing-base ceilings from eligible receivables and inventory. It applies overdue/dispute/related-party and inventory-quality/location/consignment filters, counterparty concentration caps, advance rates and reserves, then passes the lower of calculated and externally supplied caps to the credit-aware optimizer. This creates a traceable bridge from collateral records to borrowing capacity, without pretending that supplied evidence has been independently audited or accepted by a lender. See [V7.6.5 specification](docs/60_SYNERGY_V7_6_5_EVIDENCE_BORROWING_BASE.md).
