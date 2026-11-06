@@ -387,6 +387,8 @@ class SQLiteAuthorizationPolicyStore:
     def snapshot(self, tenant_id: str) -> PolicySnapshot:
         if not isinstance(tenant_id, str) or not tenant_id.strip():
             raise ValueError("tenant_id is required")
+        if not self.verify():
+            raise ValueError("authorization policy history integrity verification failed")
         with self._session() as db:
             row = db.execute(
                 "SELECT version,policy_json,policy_hash FROM authorization_policy_changes "
@@ -397,12 +399,15 @@ class SQLiteAuthorizationPolicyStore:
         rules = tuple(self._rule_from_document(item) for item in json.loads(row["policy_json"]))
         return PolicySnapshot(tenant_id, int(row["version"]), str(row["policy_hash"]), rules)
 
-    def load_policy(self, tenant_id: str) -> FederationAuthorizationPolicy:
-        snapshot = self.snapshot(tenant_id)
+    @staticmethod
+    def _policy_from_snapshot(snapshot: PolicySnapshot) -> FederationAuthorizationPolicy:
         policy = FederationAuthorizationPolicy()
         for rule in snapshot.rules:
             policy.register_rule(rule)
         return policy
+
+    def load_policy(self, tenant_id: str) -> FederationAuthorizationPolicy:
+        return self._policy_from_snapshot(self.snapshot(tenant_id))
 
     def authorize(
         self,
@@ -413,7 +418,7 @@ class SQLiteAuthorizationPolicyStore:
     ) -> AuthorizationDecision:
         requester = registry.verify(request, received_at)
         snapshot = self.snapshot(requester.tenant_id)
-        decision = self.load_policy(requester.tenant_id).authorize(
+        decision = self._policy_from_snapshot(snapshot).authorize(
             request, approvals, registry, received_at
         )
         return replace(decision, policy_version=snapshot.version, policy_hash=snapshot.policy_hash)
@@ -442,15 +447,48 @@ class SQLiteAuthorizationPolicyStore:
                         or not isinstance(request, dict) or not isinstance(approvals, list)
                         or not isinstance(policy_doc, list)):
                     return False
+                request_envelope = self._decode_envelope(request)
+                change_event = request_envelope.event
+                change_payload = change_event.get("payload")
+                if (change_event.get("event_type") != "AUTHORIZATION_POLICY_CHANGE"
+                        or change_event.get("event_id") != row["request_event_id"]
+                        or change_event.get("event_hash") != row["request_event_hash"]
+                        or request_envelope.tenant_id != tenant
+                        or not isinstance(change_payload, dict)
+                        or change_payload.get("tenant_id") != tenant
+                        or change_payload.get("change_id") != row["change_id"]
+                        or change_payload.get("expected_version") != expected_version - 1
+                        or change_payload.get("operation") != row["operation"]
+                        or request_envelope.identity_id not in self.administrators.get(tenant, ())):
+                    return False
+                if not approvals:
+                    return False
+                for approval_document in approvals:
+                    approval_envelope = self._decode_envelope(approval_document)
+                    approval_event = approval_envelope.event
+                    approval_payload = approval_event.get("payload")
+                    if (approval_event.get("event_type") != "AUTHORIZATION_POLICY_APPROVAL"
+                            or approval_envelope.tenant_id != tenant
+                            or approval_envelope.identity_id not in self.administrators.get(tenant, ())
+                            or approval_envelope.identity_id == request_envelope.identity_id
+                            or not isinstance(approval_payload, dict)
+                            or approval_payload.get("change_id") != row["change_id"]
+                            or approval_payload.get("tenant_id") != tenant
+                            or approval_payload.get("expected_version") != expected_version - 1
+                            or approval_payload.get("policy_change_event_id") != row["request_event_id"]
+                            or approval_payload.get("policy_change_event_hash") != row["request_event_hash"]
+                            or approval_payload.get("decision") != "APPROVE"):
+                        return False
                 rules = rules_by_tenant.setdefault(tenant, {})
                 operation = row["operation"]
                 if operation == "UPSERT_RULE":
-                    request_envelope = self._decode_envelope(request)
-                    change_payload = request_envelope.event["payload"]
                     rule = self._rule_from_document(change_payload["rule"])
+                    if rule.rule_id != row["rule_id"] or rule.tenant_id != tenant:
+                        return False
                     rules[rule.rule_id] = rule
                 elif operation == "REVOKE_RULE":
-                    if row["rule_id"] not in rules:
+                    if (change_payload.get("rule_id") != row["rule_id"]
+                            or row["rule_id"] not in rules):
                         return False
                     del rules[row["rule_id"]]
                 else:
