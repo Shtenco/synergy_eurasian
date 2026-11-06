@@ -127,7 +127,7 @@ V7.5 replays a fixed production schedule under correlated common shocks, resourc
 
 ## V7 research-branch validation checkpoint
 
-At head `82078ed244f1d8af928a0b6343894f860713f85a`, GitHub Actions completed successfully: **128 tests passed** in EIIOM CI run [42168437910](https://github.com/Shtenco/synergy_eurasian/actions/runs/42168437910); README integrity run [42168437895](https://github.com/Shtenco/synergy_eurasian/actions/runs/42168437895) also passed. PR #10 remains open and unmerged. These tests establish software invariants and reproducibility of the included synthetic fixtures, not calibration against real enterprise data or proof of economic impact.
+At head `90dc6e841a415d75e4e9aa0b1a794babc83f116c`, GitHub Actions completed successfully: **146 tests passed** in EIIOM CI run [42178996729](https://github.com/Shtenco/synergy_eurasian/actions/runs/42178996729); README integrity run [42178996693](https://github.com/Shtenco/synergy_eurasian/actions/runs/42178996693) also passed. PR #10 remains open and unmerged. These tests establish software invariants and reproducibility of the included synthetic fixtures, not calibration against real enterprise data or proof of economic impact.
 
 ### V7.6 update — cash-constrained production scheduling
 
