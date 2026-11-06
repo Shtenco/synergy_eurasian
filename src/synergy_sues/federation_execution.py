@@ -58,6 +58,19 @@ class AuthorizedActionExecutor:
                     previous_hash TEXT NOT NULL,
                     receipt_hash TEXT NOT NULL UNIQUE
                 );
+                CREATE TABLE IF NOT EXISTS execution_outbox (
+                    message_id TEXT PRIMARY KEY,
+                    idempotency_key TEXT NOT NULL,
+                    destination TEXT NOT NULL,
+                    topic TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'PENDING'
+                        CHECK(status IN ('PENDING','DELIVERED','DEAD')),
+                    attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts >= 0),
+                    last_error TEXT,
+                    UNIQUE(idempotency_key, destination, topic)
+                );
                 CREATE TRIGGER IF NOT EXISTS execution_receipts_no_update
                 BEFORE UPDATE ON execution_receipts
                 BEGIN SELECT RAISE(ABORT, 'execution receipts are append-only'); END;
@@ -79,6 +92,38 @@ class AuthorizedActionExecutor:
             yield db
         finally:
             db.close()
+
+    @staticmethod
+    def enqueue_outbox(
+        db: sqlite3.Connection,
+        idempotency_key: str,
+        destination: str,
+        topic: str,
+        payload: Mapping[str, Any],
+    ) -> str:
+        """Insert external intent inside the handler transaction; never dispatch here."""
+        if any(not isinstance(value, str) or not value.strip()
+               for value in (idempotency_key, destination, topic)):
+            raise ValueError("outbox idempotency_key, destination and topic are required")
+        if not isinstance(payload, Mapping):
+            raise ValueError("outbox payload must be a JSON object")
+        payload_json = _canonical(dict(payload)).decode("utf-8")
+        identity = {"idempotency_key": idempotency_key,
+                    "destination": destination, "topic": topic}
+        message_id = sha256(_canonical(identity)).hexdigest()
+        existing = db.execute(
+            "SELECT payload_json FROM execution_outbox WHERE message_id=?", (message_id,)
+        ).fetchone()
+        if existing is not None:
+            if existing["payload_json"] != payload_json:
+                raise ValueError("outbox idempotency key reused with different payload")
+            return message_id
+        created_at = datetime.now(timezone.utc).isoformat()
+        db.execute("""INSERT INTO execution_outbox
+            (message_id,idempotency_key,destination,topic,payload_json,created_at)
+            VALUES(?,?,?,?,?,?)""",
+            (message_id, idempotency_key, destination, topic, payload_json, created_at))
+        return message_id
 
     @staticmethod
     def _receipt_hash(row: Mapping[str, Any]) -> str:
