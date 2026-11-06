@@ -305,7 +305,7 @@ def adapt_v7_realization_chain(
                 "benefit_stream_id": str(_value(output, "benefit_stream_id")),
                 "period_id": str(_value(output, "period")),
             })
-    for row in settlements:
+    for row in settlement_rows:
         add(row, "SETTLEMENT", "settlement_id", "settlement_date", "source_ref",
             ("source_ref",), ("document_id",), amount_field="amount", currency_field="currency")
     for row in collection_rows:
