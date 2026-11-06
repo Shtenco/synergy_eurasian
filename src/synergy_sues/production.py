@@ -262,11 +262,11 @@ def execute_production_order(
     conversion_costs: Iterable[ProductionCostEvent] = (),
     conversion_cost_accounts: dict[ProductionCostType | str, str] | None = None,
 ) -> ProductionExecution:
-    """Consume a complete BOM batch and capitalize direct materials into finished goods.
+    """Consume a complete BOM batch and capitalize evidenced material/conversion costs.
 
-    The inventory subledger records raw-material issues and finished output. The GL
-    posts direct materials to WIP, then WIP to finished goods. Labor, overhead,
-    depreciation, scrap variances and by-product credits are excluded from V1.
+    Conversion events carry externally measured amounts and source evidence; this
+    function does not calculate payroll, machine rates, energy tariffs or overhead
+    allocation. The inventory subledger records raw issues and finished output.
     """
     _aware(recorded_at, "recorded_at")
     if journal.functional_currency != inventory.functional_currency:
@@ -299,8 +299,8 @@ def execute_production_order(
         if not account_id:
             raise ValueError(f"Missing credit account mapping for production cost type {event.cost_type.value}")
         account = next((row for row in journal.accounts if row.account_id == account_id), None)
-        if account is None or account.normal_balance != NormalBalance.CREDIT:
-            raise ValueError("Production cost offset must be an existing credit-normal account")
+        if account is None or account.normal_balance != NormalBalance.CREDIT or account.account_type not in {AccountType.ASSET, AccountType.LIABILITY, AccountType.EXPENSE}:
+            raise ValueError("Production cost offset must be a credit-normal asset, liability or expense account")
         if account_id in {inventory_account_id, wip_account_id, finished_goods_account_id}:
             raise ValueError("Production cost offset cannot be a raw inventory, WIP or finished-goods account")
 
