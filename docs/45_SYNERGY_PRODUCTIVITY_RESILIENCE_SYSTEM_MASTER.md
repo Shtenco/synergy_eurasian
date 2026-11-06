@@ -104,3 +104,7 @@ No automated optimizer output may authorize credit, token issuance, payments, se
 ### V7.2.2 update — cash evidence
 
 The research branch now also includes explicit bank statement reconciliation: manually approved allocations connect signed bank lines to AR/AP documents, generate settlement events, preserve unmatched residuals for review and report gross cash control totals by currency. No automatic fuzzy matching is performed and unexplained cash is not recognized as revenue. See [V7.2.2 specification](docs/50_SYNERGY_V7_2_2_BANK_RECONCILIATION.md) and [PR #10](https://github.com/Shtenco/synergy_eurasian/pull/10).
+
+### V7.3 update — realization evidence chain
+
+V7.3 now validates the explicit chain from observed production output to customer acceptance, invoice allocations, settlement events and sourced cash attribution. It separately reports baseline output deltas, accepted quantities, invoiced revenue, collected cash and cost categories. It does **not** infer causality from a pre/post comparison, prorate cash receipts, or collapse recognized revenue into collected cash. See [V7.3 specification](docs/51_SYNERGY_V7_3_REALIZATION_EVIDENCE_CHAIN.md) and [PR #10](https://github.com/Shtenco/synergy_eurasian/pull/10).
