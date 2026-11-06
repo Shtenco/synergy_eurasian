@@ -536,3 +536,17 @@ def test_realization_chain_rejects_cost_without_matching_output_group():
     orphan=CostObservation("orphan","factory","other-project","stream","2026-Q1","DIRECT_COST",10,"USD","erp:orphan")
     with pytest.raises(ValueError,match="no matching output"):
         evaluate_realization_chain([o],[d],[a],[i],[s],[c],costs+[orphan],"2026-02-15")
+
+
+def test_realization_chain_cli_fixture_is_schema_valid_and_reproducible():
+    import json
+    from synergy_v7.realization_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_3_realization_chain_demo.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    r=evaluate_document(document)
+    report=r["benefit_stream_reports"][0]
+    assert report["observed_delta_vs_baseline"]==20
+    assert report["invoiced_amount_by_currency"]["USD"]==8000
+    assert report["collected_cash_by_currency"]["USD"]==5000
+    assert report["costs_by_currency"]["USD"]["REPLACEMENT_OBLIGATION"]==300
