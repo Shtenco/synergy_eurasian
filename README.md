@@ -383,3 +383,6 @@ Ed25519 signatures authenticate events from keys provisioned in an explicit trus
 - [Execution Outbox Schema](interfaces/synergy_sues_execution_outbox.schema.json)
 - [SUES Signed Versioned Authorization Policy Store V1](docs/74_SYNERGY_SUES_SIGNED_VERSIONED_AUTHORIZATION_POLICY_STORE_V1.md) — two-person signed administration, versioned snapshots, compare-and-swap and tamper-evident history.
 - [Signed Versioned Policy Store Schema](interfaces/synergy_sues_authorization_policy_store.schema.json)
+
+- [SUES Versioned Administrative Authorization Policies V1](docs/74_SYNERGY_SUES_VERSIONED_AUTHORIZATION_POLICIES_V1.md) — signed two-approver policy changes, tenant-wide compare-and-swap versions, immutable history and policy snapshot hashes.
+- [Policy Change Schema](interfaces/synergy_sues_policy_change.schema.json)
