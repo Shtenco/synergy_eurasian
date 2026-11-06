@@ -418,3 +418,27 @@ def test_bank_reconciliation_ignores_future_bank_lines_and_allocations():
     r=reconcile_bank_statement([doc],[],[line],[alloc],"2026-01-31")
     assert r["bank_lines"]==[]
     assert r["trade_ledger"]["documents"][0]["outstanding"]==1000
+
+
+def test_bank_reconciliation_cli_fixture_is_schema_valid_and_balances_gross_cash():
+    import json
+    from synergy_v7.reconciliation_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_2_2_reconciliation_demo.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    result=evaluate_document(document)
+    assert result["fully_reconciled"]
+    assert result["currency_control_totals"]["USD"]["statement_net"]==35000
+    assert result["currency_control_totals"]["USD"]["allocated_net"]==35000
+    balances={x["document_id"]:x["outstanding"] for x in result["trade_ledger"]["documents"]}
+    assert balances=={"AR-FACTORY-001":40000,"AP-FACTORY-001":15000}
+
+
+def test_bank_reconciliation_rejects_duplicate_statement_and_allocations():
+    doc=trade_doc("ar1","RECEIVABLE",1000,"buyer")
+    line=BankStatementLine("bank1","account","2026-02-01",500,"USD","ref","bank:1")
+    alloc=CashAllocation("alloc1","bank1","ar1",500,"match:1")
+    with pytest.raises(ValueError,match="Duplicate bank line"):
+        reconcile_bank_statement([doc],[],[line,line],[alloc],"2026-02-02")
+    with pytest.raises(ValueError,match="Duplicate cash allocation"):
+        reconcile_bank_statement([doc],[],[line],[alloc,alloc],"2026-02-02")
