@@ -349,3 +349,39 @@ def test_executor_rejects_policy_change_racing_between_authorization_and_commit(
     assert called == []
     assert executor.receipts() == ()
     assert racing.snapshot("tenant:one").version == 2
+
+def test_historical_signature_verification_accepts_keys_revoked_after_signing(tmp_path):
+    store, registry, keys = setup(tmp_path)
+    request, approvals = make_change(tmp_path, keys)
+    store.apply_change(request, approvals, registry, "2026-11-06T10:02:00+00:00")
+    registry.revoke_key("admin:one", "key-1", "2026-11-06T11:00:00+00:00")
+    assert store.verify(registry)
+    assert store.snapshot("tenant:one").version == 1
+
+
+def test_historical_signature_verification_detects_signature_tampering_even_if_chain_is_rehashed(tmp_path):
+    store, registry, keys = setup(tmp_path)
+    request, approvals = make_change(tmp_path, keys)
+    store.apply_change(request, approvals, registry, "2026-11-06T10:02:00+00:00")
+    path = str(tmp_path / "policy.db")
+    with sqlite3.connect(path) as db:
+        db.row_factory = sqlite3.Row
+        row = dict(db.execute("SELECT * FROM authorization_policy_changes").fetchone())
+        stored_approvals = json.loads(row["approvals_json"])
+        stored_approvals[0]["signature_b64"] = "AAAA"
+        row["approvals_json"] = json.dumps(stored_approvals, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        row["event_hash"] = store._event_hash(row)
+        db.execute("DROP TRIGGER authorization_policy_changes_no_update")
+        db.execute(
+            "UPDATE authorization_policy_changes SET approvals_json=?,event_hash=?",
+            (row["approvals_json"], row["event_hash"]),
+        )
+    assert store.verify()
+    assert not store.verify(registry)
+    with pytest.raises(ValueError, match="historical signature verification"):
+        store.authorize(
+            make_signed(tmp_path, keys, "user:operator", "AUTHORIZATION_REQUEST",
+                {"request_id": "request:tampered-history", "action": "JOURNAL_POST",
+                 "resource_type": "LEDGER", "resource_id": "ledger:alpha"},
+                "tampered-history-request", "2026-11-06T10:03:00+00:00"),
+            [], registry, "2026-11-06T10:04:00+00:00")
