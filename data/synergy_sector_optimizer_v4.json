@@ -1,0 +1,57 @@
+{
+  "model_id": "SYNERGY-SECTOR-CAPITAL-OPTIMIZER-V4",
+  "status": "ILLUSTRATIVE_PROJECT_FRONTIER_NOT_INVESTMENT_ADVICE",
+  "currency": "USD_2026_REAL",
+  "objective_weights": {
+    "annual_net_residual_yield": 0.35,
+    "output_gain_per_1000": 0.25,
+    "unit_cost_reduction_per_1000": 0.25,
+    "labor_hours_released_per_1000": 0.15
+  },
+  "normalization": {
+    "annual_net_residual_yield": 0.30,
+    "output_gain_per_1000": 1.0,
+    "unit_cost_reduction_per_1000": 2.0,
+    "labor_hours_released_per_1000": 1.0
+  },
+  "budget_sensitivity_usd": [100000, 250000, 500000],
+  "sector_min_investment_usd": {
+    "FOOD": 10000,
+    "HEALTH": 15000,
+    "EDUCATION": 20000,
+    "MOBILITY": 25000
+  },
+  "sector_max_share_of_budget": {
+    "FOOD": 0.35,
+    "HOUSING": 0.35,
+    "ENERGY": 0.35,
+    "HEALTH": 0.35,
+    "EDUCATION": 0.35,
+    "MOBILITY": 0.35,
+    "COMPUTE": 0.35
+  },
+  "shared_projects_max_share_of_budget": 0.50,
+  "projects": [
+    {"project_id":"FOOD_COLD_CHAIN","sector":"FOOD","max_investment_usd":60000,"annual_net_residual_yield":0.20,"network_spillover_yield":0.06,"output_gain_per_1000":0.80,"unit_cost_reduction_per_1000":1.20,"labor_hours_released_per_1000":0.40,"criticality_weight":1.30,"deployment_lag_months":6,"diffusion_reach_enterprises":20},
+    {"project_id":"HOUSING_RETROFIT","sector":"HOUSING","max_investment_usd":80000,"annual_net_residual_yield":0.16,"network_spillover_yield":0.04,"output_gain_per_1000":0.60,"unit_cost_reduction_per_1000":1.50,"labor_hours_released_per_1000":0.30,"criticality_weight":1.20,"deployment_lag_months":9,"diffusion_reach_enterprises":12},
+    {"project_id":"ENERGY_DEMAND_RESPONSE","sector":"ENERGY","max_investment_usd":90000,"annual_net_residual_yield":0.24,"network_spillover_yield":0.08,"output_gain_per_1000":0.90,"unit_cost_reduction_per_1000":2.00,"labor_hours_released_per_1000":0.20,"criticality_weight":1.50,"deployment_lag_months":6,"diffusion_reach_enterprises":35},
+    {"project_id":"HEALTH_WORKFLOW_AI","sector":"HEALTH","max_investment_usd":50000,"annual_net_residual_yield":0.12,"network_spillover_yield":0.07,"output_gain_per_1000":0.50,"unit_cost_reduction_per_1000":1.30,"labor_hours_released_per_1000":0.80,"criticality_weight":1.40,"deployment_lag_months":4,"diffusion_reach_enterprises":25},
+    {"project_id":"EDUCATION_OPEN_LEARNING","sector":"EDUCATION","max_investment_usd":55000,"annual_net_residual_yield":0.08,"network_spillover_yield":0.12,"output_gain_per_1000":0.70,"unit_cost_reduction_per_1000":1.60,"labor_hours_released_per_1000":0.90,"criticality_weight":1.30,"deployment_lag_months":5,"diffusion_reach_enterprises":50},
+    {"project_id":"MOBILITY_ROUTE_OPTIMIZER","sector":"MOBILITY","max_investment_usd":70000,"annual_net_residual_yield":0.15,"network_spillover_yield":0.09,"output_gain_per_1000":0.80,"unit_cost_reduction_per_1000":1.80,"labor_hours_released_per_1000":0.50,"criticality_weight":1.30,"deployment_lag_months":4,"diffusion_reach_enterprises":30},
+    {"project_id":"COMPUTE_EFFICIENCY","sector":"COMPUTE","max_investment_usd":65000,"annual_net_residual_yield":0.22,"network_spillover_yield":0.10,"output_gain_per_1000":0.70,"unit_cost_reduction_per_1000":2.20,"labor_hours_released_per_1000":0.30,"criticality_weight":1.20,"deployment_lag_months":3,"diffusion_reach_enterprises":40},
+    {"project_id":"SHARED_AI_KNOWLEDGE_GRAPH","sector":"SHARED","max_investment_usd":100000,"annual_net_residual_yield":0.10,"network_spillover_yield":0.18,"output_gain_per_1000":1.10,"unit_cost_reduction_per_1000":2.00,"labor_hours_released_per_1000":0.70,"criticality_weight":1.50,"deployment_lag_months":5,"diffusion_reach_enterprises":100},
+    {"project_id":"SHARED_AUTOMATION_LIBRARY","sector":"SHARED","max_investment_usd":75000,"annual_net_residual_yield":0.13,"network_spillover_yield":0.20,"output_gain_per_1000":0.90,"unit_cost_reduction_per_1000":2.40,"labor_hours_released_per_1000":0.80,"criticality_weight":1.50,"deployment_lag_months":4,"diffusion_reach_enterprises":150},
+    {"project_id":"SHARED_LOGISTICS_OPTIMIZER","sector":"SHARED","max_investment_usd":50000,"annual_net_residual_yield":0.14,"network_spillover_yield":0.12,"output_gain_per_1000":0.80,"unit_cost_reduction_per_1000":2.10,"labor_hours_released_per_1000":0.50,"criticality_weight":1.20,"deployment_lag_months":3,"diffusion_reach_enterprises":80}
+  ],
+  "accounting_rules": [
+    "Every project yield is a hypothetical annual incremental net residual after incremental OPEX and replacement obligations; no measured project data is yet supplied.",
+    "Network spillover yield is an estimated additional net residual at beneficiary enterprises, counted once at consolidated network level and only if independently verified.",
+    "Internal transfers, token issuance, debt proceeds, valuation gains and price-only increases are not productive gains.",
+    "Sector minimums are hard investment floors in this scenario, not claims that these amounts fully close sector reproduction deficits.",
+    "Project benefits are assumed linear up to each project's maximum investment; real deployment has fixed costs, thresholds, diminishing returns and uncertainty.",
+    "Output, unit-cost and labor-release metrics are normalized indices, not dollars, units of output or guaranteed hours saved.",
+    "Labor hours released are not automatically cash savings; they become social value only when workers can redirect time to useful production, care, learning or shorter working hours.",
+    "The optimizer is a one-period capital allocation model. It does not yet model cashflow timing, project interactions, failure probabilities, physical capital depreciation or multi-year reserve adequacy.",
+    "No investment decision should be made until project inputs are replaced by measured baselines and independently audited pilot outcomes."
+  ]
+}
