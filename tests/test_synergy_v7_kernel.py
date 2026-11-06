@@ -249,3 +249,105 @@ def test_cash_waterfall_funds_reserve_before_growth_and_distribution():
 def test_working_capital_rejects_negative_balances():
     with pytest.raises(ValueError,match="non-negative"):
         WorkingCapitalSnapshot(-1,0,0,0,0,0)
+
+
+from synergy_v7 import (TradeDocument, SettlementEvent, DocumentAdjustment,
+    DisputeEvent, CreditRiskAssessment, build_trade_ledger)
+
+
+def trade_doc(document_id="inv1",side="RECEIVABLE",amount=100,counterparty="buyer1"):
+    return TradeDocument(document_id,side,"enterprise1",counterparty,"2026-01-01",
+      "2026-01-31","USD",amount,"erp:invoice:"+document_id)
+
+
+def test_trade_ledger_partial_settlement_and_aging():
+    doc=trade_doc()
+    settlement=SettlementEvent("s1","inv1","2026-02-10",40,"USD","bank1","bank:tx1")
+    r=build_trade_ledger([doc],[settlement],[],[],"2026-03-05")
+    row=r["documents"][0]
+    assert row["outstanding"]==60
+    assert row["days_past_due"]==33
+    assert row["aging_bucket"]=="DUE_31_60"
+    assert r["totals_by_side_and_currency"]["RECEIVABLE::USD"]==60
+
+
+def test_trade_ledger_replays_disputes_and_settlements_chronologically():
+    doc=trade_doc(amount=100)
+    dispute=DisputeEvent("d1","inv1","2026-01-15",80,"USD","OPEN","case:1")
+    settlement=SettlementEvent("s1","inv1","2026-02-01",80,"USD","bank1","bank:1")
+    r=build_trade_ledger([doc],[settlement],[],[dispute],"2026-02-02")
+    row=r["documents"][0]
+    assert row["outstanding"]==20
+    assert row["disputed_outstanding"]==20
+
+
+def test_trade_ledger_rejects_settlement_over_open_balance():
+    doc=trade_doc(amount=100)
+    payments=[SettlementEvent("s1","inv1","2026-01-10",60,"USD","bank","tx1"),
+      SettlementEvent("s2","inv1","2026-01-11",50,"USD","bank","tx2")]
+    with pytest.raises(ValueError,match="exceeds open balance"):
+        build_trade_ledger([doc],payments,[],[],"2026-01-12")
+
+
+def test_trade_ledger_credit_adjustment_reduces_open_balance_once():
+    doc=trade_doc(amount=100)
+    adjustment=DocumentAdjustment("cn1","inv1","2026-01-15",25,"USD","credit note","erp:cn1")
+    r=build_trade_ledger([doc],[],[adjustment],[],"2026-01-20")
+    assert r["documents"][0]["outstanding"]==75
+
+
+def test_trade_ledger_dispute_resolution_and_limits():
+    doc=trade_doc(amount=100)
+    events=[DisputeEvent("d1","inv1","2026-01-10",60,"USD","OPEN","case:1"),
+      DisputeEvent("d2","inv1","2026-01-20",20,"USD","RESOLVE","case:2")]
+    r=build_trade_ledger([doc],[],[],events,"2026-01-25")
+    assert r["documents"][0]["disputed_outstanding"]==40
+    too_much=events+[DisputeEvent("d3","inv1","2026-01-21",50,"USD","RESOLVE","case:3")]
+    with pytest.raises(ValueError,match="exceeds disputed"):
+        build_trade_ledger([doc],[],[],too_much,"2026-01-25")
+
+
+def test_trade_ledger_expected_credit_loss_is_separate_from_cash():
+    doc=trade_doc(amount=200)
+    risk=CreditRiskAssessment("buyer1","USD",0.1,0.5,"2026-01-15","risk:rating1")
+    r=build_trade_ledger([doc],[],[],[],"2026-02-01",[risk])
+    exposure=r["counterparty_exposure"][0]
+    assert exposure["expected_credit_loss"]==10
+    assert r["expected_credit_loss_is_estimate_not_cash_or_provision"]
+
+
+def test_trade_ledger_future_settlements_and_risk_assessments_are_not_looked_ahead():
+    doc=trade_doc(amount=100)
+    future=SettlementEvent("s1","inv1","2026-02-01",100,"USD","bank","tx1")
+    future_risk=CreditRiskAssessment("buyer1","USD",1,1,"2026-02-01","risk:future")
+    r=build_trade_ledger([doc],[future],[],[],"2026-01-31",[future_risk])
+    assert r["documents"][0]["outstanding"]==100
+    assert r["counterparty_exposure"][0]["expected_credit_loss"] is None
+
+
+def test_trade_ledger_keeps_payable_and_receivable_gross_without_netting():
+    docs=[trade_doc("ar1","RECEIVABLE",100,"partner"),
+      trade_doc("ap1","PAYABLE",70,"partner")]
+    r=build_trade_ledger(docs,[],[],[],"2026-01-15")
+    assert r["totals_by_side_and_currency"]=={"PAYABLE::USD":70,"RECEIVABLE::USD":100}
+    assert r["internal_netting_applied"] is False
+
+
+def test_trade_ledger_rejects_currency_mismatch_and_unknown_document():
+    doc=trade_doc()
+    bad=SettlementEvent("s1","inv1","2026-01-10",10,"EUR","bank","tx")
+    with pytest.raises(ValueError,match="currency mismatch"):
+        build_trade_ledger([doc],[bad],[],[],"2026-01-11")
+    orphan=SettlementEvent("s2","missing","2026-01-10",10,"USD","bank","tx")
+    with pytest.raises(ValueError,match="Unknown document"):
+        build_trade_ledger([doc],[orphan],[],[],"2026-01-11")
+
+
+def test_trade_ledger_rejects_duplicate_documents_and_conflicting_same_day_risk():
+    doc=trade_doc()
+    risk1=CreditRiskAssessment("buyer1","USD",0.1,0.5,"2026-01-15","risk:1")
+    risk2=CreditRiskAssessment("buyer1","USD",0.2,0.5,"2026-01-15","risk:2")
+    with pytest.raises(ValueError,match="Duplicate document"):
+        build_trade_ledger([doc,doc],[],[],[],"2026-01-20")
+    with pytest.raises(ValueError,match="Conflicting credit assessments"):
+        build_trade_ledger([doc],[],[],[],"2026-01-20",[risk1,risk2])
