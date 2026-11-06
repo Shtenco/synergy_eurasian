@@ -381,5 +381,5 @@ Ed25519 signatures authenticate events from keys provisioned in an explicit trus
 
 - [Execution Receipt Schema](interfaces/synergy_sues_execution_receipt.schema.json)
 - [Execution Outbox Schema](interfaces/synergy_sues_execution_outbox.schema.json)
-- [SUES Signed Versioned Authorization Policy Store V1](docs/74_SYNERGY_SUES_SIGNED_VERSIONED_AUTHORIZATION_POLICY_STORE_V1.md) — two-person signed administration, versioned snapshots, compare-and-swap and tamper-evident history.
+- [SUES Signed Versioned Authorization Policy Store V1](docs/74_SYNERGY_SUES_SIGNED_VERSIONED_AUTHORIZATION_POLICY_STORE_V1.md) — three-party signed administration (proposer + two independent approvers), versioned snapshots, compare-and-swap and tamper-evident history.
 - [Signed Versioned Policy Store Schema](interfaces/synergy_sues_authorization_policy_store.schema.json)
