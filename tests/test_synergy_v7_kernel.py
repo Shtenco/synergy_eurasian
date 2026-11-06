@@ -856,7 +856,7 @@ def test_v76_cash_constraint_rejects_invalid_periods_lags_and_fractions():
         optimize_production_schedule(*args,3,{"make":1},cash_inflows_by_period={3:10})
     with pytest.raises(ValueError,match="non-negative integer"):
         optimize_production_schedule(*args,3,{"make":1},collection_lag_by_demand={"sale":-1})
-    with pytest.raises(ValueError,match="in \[0,1\]"):
+    with pytest.raises(ValueError,match=r"in \[0,1\]"):
         optimize_production_schedule(*args,3,{"make":1},collection_fraction_by_demand={"sale":1.5})
 
 
