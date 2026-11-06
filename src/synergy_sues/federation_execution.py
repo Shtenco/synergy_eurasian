@@ -193,6 +193,8 @@ class AuthorizedActionExecutor:
                 if decision.policy_version is not None or decision.policy_hash is not None:
                     if decision.policy_version is None or not decision.policy_hash:
                         raise ValueError("incomplete versioned policy evidence")
+                    if getattr(policy, "database_path", None) != self.database_path:
+                        raise ValueError("versioned policy execution requires the policy store and executor to share one SQLite database")
                     policy_table = db.execute(
                         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='authorization_policy_changes'"
                     ).fetchone()
