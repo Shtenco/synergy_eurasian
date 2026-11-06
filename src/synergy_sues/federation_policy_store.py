@@ -117,6 +117,30 @@ class SQLiteAuthorizationPolicyStore:
                 );
                 CREATE INDEX IF NOT EXISTS authorization_policy_changes_tenant_sequence
                     ON authorization_policy_changes(tenant_id, sequence);
+                CREATE TABLE IF NOT EXISTS authorization_policy_admin_attempts (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id TEXT NOT NULL,
+                    attempt_id TEXT NOT NULL,
+                    attempted_at TEXT NOT NULL,
+                    claimed_actor_id TEXT,
+                    change_id TEXT,
+                    request_event_id TEXT,
+                    request_event_hash TEXT,
+                    request_envelope_json TEXT,
+                    outcome TEXT NOT NULL CHECK(outcome = 'REJECTED'),
+                    reason TEXT NOT NULL,
+                    previous_hash TEXT NOT NULL,
+                    event_hash TEXT NOT NULL,
+                    UNIQUE(tenant_id, attempt_id)
+                );
+                CREATE INDEX IF NOT EXISTS authorization_policy_admin_attempts_tenant_sequence
+                    ON authorization_policy_admin_attempts(tenant_id, sequence);
+                CREATE TRIGGER IF NOT EXISTS authorization_policy_admin_attempts_no_update
+                BEFORE UPDATE ON authorization_policy_admin_attempts
+                BEGIN SELECT RAISE(ABORT, 'authorization policy admin audit is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS authorization_policy_admin_attempts_no_delete
+                BEFORE DELETE ON authorization_policy_admin_attempts
+                BEGIN SELECT RAISE(ABORT, 'authorization policy admin audit is append-only'); END;
                 CREATE TRIGGER IF NOT EXISTS authorization_policy_changes_no_update
                 BEFORE UPDATE ON authorization_policy_changes
                 BEGIN SELECT RAISE(ABORT, 'authorization policy history is append-only'); END;
@@ -300,7 +324,84 @@ class SQLiteAuthorizationPolicyStore:
         approval_events = sorted(verified.values(), key=lambda item: item.event["event_id"])
         return tenant_id, change_id, expected_version, operation, rule_id, rule_doc, approval_events
 
+    @staticmethod
+    def _admin_attempt_hash(row: Mapping[str, Any]) -> str:
+        fields = (
+            "tenant_id", "attempt_id", "attempted_at", "claimed_actor_id",
+            "change_id", "request_event_id", "request_event_hash",
+            "request_envelope_json", "outcome", "reason", "previous_hash",
+        )
+        return sha256(_canonical({field: row[field] for field in fields})).hexdigest()
+
+    def _record_rejected_attempt(self, request: Any, error: Exception) -> None:
+        """Persist a rejected attempt without trusting its claimed identity."""
+        try:
+            envelope = request if isinstance(request, SignedEventEnvelope) else None
+            if envelope is None and isinstance(request, Mapping):
+                try:
+                    envelope = self._decode_envelope(request)
+                except (TypeError, ValueError):
+                    envelope = None
+            event = envelope.event if envelope is not None and isinstance(envelope.event, dict) else {}
+            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            tenant_id = envelope.tenant_id if envelope is not None and isinstance(envelope.tenant_id, str) else "_UNSCOPED"
+            claimed_actor = envelope.identity_id if envelope is not None else None
+            event_id = event.get("event_id") if isinstance(event.get("event_id"), str) else None
+            event_hash = event.get("event_hash") if isinstance(event.get("event_hash"), str) else None
+            change_id = payload.get("change_id") if isinstance(payload.get("change_id"), str) else None
+            envelope_json = self._envelope_json(envelope) if envelope is not None else None
+            attempted_at = datetime.now(timezone.utc).isoformat()
+            reason = str(error)[:2000] or type(error).__name__
+            seed = {
+                "tenant_id": tenant_id,
+                "attempted_at": attempted_at,
+                "claimed_actor_id": claimed_actor,
+                "change_id": change_id,
+                "request_event_id": event_id,
+                "request_event_hash": event_hash,
+                "request_envelope_json": envelope_json,
+                "outcome": "REJECTED",
+                "reason": reason,
+            }
+            attempt_id = sha256(_canonical(seed)).hexdigest()
+            with self._session() as db:
+                db.execute("BEGIN IMMEDIATE")
+                latest = db.execute(
+                    "SELECT event_hash FROM authorization_policy_admin_attempts "
+                    "WHERE tenant_id=? ORDER BY sequence DESC LIMIT 1", (tenant_id,)
+                ).fetchone()
+                previous_hash = "" if latest is None else str(latest["event_hash"])
+                row = {**seed, "attempt_id": attempt_id, "previous_hash": previous_hash}
+                digest = self._admin_attempt_hash(row)
+                db.execute("""INSERT OR IGNORE INTO authorization_policy_admin_attempts
+                    (tenant_id,attempt_id,attempted_at,claimed_actor_id,change_id,
+                     request_event_id,request_event_hash,request_envelope_json,
+                     outcome,reason,previous_hash,event_hash)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (tenant_id, attempt_id, attempted_at, claimed_actor, change_id,
+                     event_id, event_hash, envelope_json, "REJECTED", reason,
+                     previous_hash, digest))
+                db.commit()
+        except Exception:
+            # Never replace the original authorization failure with an audit
+            # write failure. Operational monitoring must alert on audit I/O loss.
+            return
+
     def apply_change(
+        self,
+        request: SignedEventEnvelope,
+        approvals: Iterable[SignedEventEnvelope],
+        registry: TrustedKeyRegistry,
+        received_at: datetime | str | None = None,
+    ) -> PolicyChangeResult:
+        """Validate, apply or persist a rejected administrative attempt."""
+        try:
+            return self._apply_change(request, approvals, registry, received_at)
+        except Exception as exc:
+            self._record_rejected_attempt(request, exc)
+            raise
+
+    def _apply_change(
         self,
         request: SignedEventEnvelope,
         approvals: Iterable[SignedEventEnvelope],
@@ -527,4 +628,32 @@ class SQLiteAuthorizationPolicyStore:
                 return False
             previous_by_tenant[tenant] = digest
             versions[tenant] = expected_version
+
+        with self._session() as db:
+            audit_rows = db.execute(
+                "SELECT * FROM authorization_policy_admin_attempts ORDER BY tenant_id,sequence"
+            ).fetchall()
+        audit_previous: dict[str, str] = {}
+        for row in audit_rows:
+            tenant = row["tenant_id"]
+            previous = audit_previous.get(tenant, "")
+            if row["previous_hash"] != previous or row["outcome"] != "REJECTED":
+                return False
+            try:
+                if row["request_envelope_json"] is not None:
+                    envelope_document = json.loads(row["request_envelope_json"])
+                    if _canonical(envelope_document).decode("utf-8") != row["request_envelope_json"]:
+                        return False
+                    envelope = self._decode_envelope(envelope_document)
+                    if (envelope.tenant_id != tenant
+                            or envelope.identity_id != row["claimed_actor_id"]
+                            or envelope.event.get("event_id") != row["request_event_id"]
+                            or envelope.event.get("event_hash") != row["request_event_hash"]):
+                        return False
+                digest = self._admin_attempt_hash(row)
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                return False
+            if digest != row["event_hash"]:
+                return False
+            audit_previous[tenant] = digest
         return True
