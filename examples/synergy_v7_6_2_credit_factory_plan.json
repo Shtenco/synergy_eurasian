@@ -48,5 +48,6 @@
   },
   "credit_interest_rates_by_period": {
     "2": 0.1
-  }
+  },
+  "terminal_credit_balance_limit": 0
 }
