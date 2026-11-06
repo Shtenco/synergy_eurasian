@@ -257,6 +257,17 @@ Modelled basket cost falls by $66.714 per $1,000 basket, to $933.286.
 
 This is not a forecast: it assumes the full gross saving can be translated into cost reduction and that the 35% technology-cost ratio captures all relevant incremental costs. It does not yet model wages, price pass-through, taxes, financing, quality, market power or rebound effects in the basket calculation.
 
+An earlier distribution experiment allocated the same $66.714 saving per $1,000 basket as follows:
+
+| Use | Share of net saving | Amount per $1,000 basket |
+|---|---:|---:|
+| Lower delivered price / household saving | 50% | $33.357 |
+| Participant dividend | 25% | $16.679 |
+| Productive reinvestment | 15% | $10.007 |
+| Stability reserve | 10% | $6.671 |
+
+This is an **alternative allocation policy**, not an additional source of value. The four uses sum to the same $66.714; they must not be added on top of the full $66.714 cost reduction. In an actual accounting system, lower prices, retained earnings, reserve funding and dividends must be reconciled to one realized surplus ledger.
+
 The labor-hours model uses a separate employment-share vector and deducts rebound (20%) and additional supply-chain labor (15%):
 
 [
@@ -376,6 +387,17 @@ This is an endowment arithmetic exercise, not a claim that the fund can buy or p
 ### 10.5 Monthly contribution accumulation
 
 A separate illustrative accumulation exercise used $10,007 monthly contributions and a 3% nominal annual rate compounded monthly, contributions at month-end. It is not the same as the seven-sector portfolio model and should not be combined with its cashflows.
+
+Using (FV=P\times[((1+r/12)^{12n}-1)/(r/12)]), with (P=\$10,007), (r=3\%), month-end deposits:
+
+| Horizon | Accumulated balance | 3% annual payout equivalent / month |
+|---|---:|---:|
+| 10 years | $1,398,392 | $3,496 |
+| 20 years | $3,285,318 | $8,213 |
+| 30 years | $5,831,448 | $14,579 |
+| 40 years | $9,267,077 | $23,168 |
+
+This assumes an unchanged contribution in real terms only if the contribution is indexed; the stated 3% is a nominal accumulation assumption in this isolated example. Fees, taxes, default, volatility, contribution interruptions and inflation treatment are not modelled. The payout column is 3% of accumulated capital divided by 12; it is not guaranteed income.
 
 ### 10.6 Three ownership architectures
 
