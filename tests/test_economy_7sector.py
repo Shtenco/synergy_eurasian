@@ -1,4 +1,5 @@
 from pathlib import Path
+import copy
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -94,3 +95,45 @@ def test_reproduction_repair_sector_pools_reconcile():
     assert abs(public["net_residual_usd"] - 9_116.25) < 1e-6
     assert abs(private["net_residual_usd"] - 12_976.25) < 1e-6
     assert abs(public["net_residual_usd"] + private["net_residual_usd"] - whole["net_residual_usd"]) < 1e-6
+
+
+
+def test_leontief_rejects_nonproductive_or_invalid_input_output_matrices():
+    cfg = config()
+    unstable = copy.deepcopy(cfg)
+    unstable["input_output_matrix"][0][0] = 1.1
+    try:
+        leontief_results(unstable)
+    except ValueError as exc:
+        assert "spectral radius" in str(exc)
+    else:
+        raise AssertionError("Unstable Leontief matrix was accepted")
+
+    negative = copy.deepcopy(cfg)
+    negative["input_output_matrix"][0][0] = -0.01
+    try:
+        leontief_results(negative)
+    except ValueError as exc:
+        assert "non-negative" in str(exc)
+    else:
+        raise AssertionError("Negative input-output coefficient was accepted")
+
+    malformed = copy.deepcopy(cfg)
+    malformed["input_output_matrix"].pop()
+    try:
+        leontief_results(malformed)
+    except ValueError as exc:
+        assert "square" in str(exc) or "dimensions" in str(exc)
+    else:
+        raise AssertionError("Non-square Leontief matrix was accepted")
+
+
+def test_supply_solver_rejects_invalid_capacity_multipliers():
+    cfg = config()
+    for multipliers in ([1, 1], [1, 1, -0.1, 1, 1, 1, 1], [1, 1, float("nan"), 1, 1, 1, 1]):
+        try:
+            solve_supply(cfg, multipliers)
+        except ValueError as exc:
+            assert "Capacity multiplier" in str(exc) or "finite and non-negative" in str(exc)
+        else:
+            raise AssertionError(f"Invalid capacity multipliers were accepted: {multipliers}")
