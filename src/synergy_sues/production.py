@@ -248,6 +248,7 @@ def execute_production_order(
         raise ValueError(f"Production order already journalized: {order.order_id}")
 
     required: list[tuple[BOMComponent, Quantity]] = []
+    previewed_cost = Decimal("0")
     for component in order.components:
         quantity = Quantity(
             component.quantity_per_output_unit.amount * order.output_quantity.amount,
@@ -258,7 +259,12 @@ def execute_production_order(
             raise ValueError(
                 f"Insufficient component {component.item_id}: required {quantity.amount}, available {available.amount}"
             )
+        previewed_cost += inventory.preview_issue_cost(component.item_id, order.location_id, quantity).amount
         required.append((component, quantity))
+    # Validate output pool units and zero-cost policy before consuming any input.
+    inventory.available(order.product_id, order.location_id, order.output_quantity.unit)
+    if previewed_cost <= 0:
+        raise ValueError("Zero-cost production batch cannot be capitalized in the monetary journal")
 
     input_movements = tuple(
         inventory.issue(
@@ -272,8 +278,8 @@ def execute_production_order(
         sum((movement.cost.amount for movement in input_movements), Decimal("0")),
         inventory.functional_currency,
     )
-    if total_cost.amount <= 0:
-        raise ValueError("Zero-cost production batch cannot be capitalized in the monetary journal")
+    if total_cost.amount != previewed_cost:
+        raise ValueError("FIFO issue cost changed between preflight and consumption")
 
     output_movement = inventory.receive(
         f"production:{order.order_id}:output",
