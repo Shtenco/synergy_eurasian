@@ -59,8 +59,11 @@ def _event_hash(event: Mapping[str, Any]) -> str:
             raise ValueError(f"{name} must be a non-empty string")
     _utc(event["effective_at"], "effective_at")
     _utc(event["recorded_at"], "recorded_at")
-    if not isinstance(event["previous_hash"], str):
-        raise ValueError("previous_hash must be a string")
+    if not isinstance(event["idempotency_key"], str):
+        raise ValueError("idempotency_key must be a string")
+    previous = event["previous_hash"]
+    if not isinstance(previous, str) or (previous and (len(previous) != 64 or any(ch not in "0123456789abcdef" for ch in previous))):
+        raise ValueError("previous_hash must be empty or a lowercase SHA-256 digest")
     unsigned = {name: event[name] for name in _EVENT_FIELDS[:-1]}
     unsigned["evidence_ids"] = list(evidence)
     digest = sha256(_canonical(unsigned)).hexdigest()
@@ -192,6 +195,8 @@ class TrustedKeyRegistry:
         if now.tzinfo is None or now.utcoffset() is None:
             raise ValueError("received_at must be timezone-aware")
         now = now.astimezone(timezone.utc)
+        if signed_at > now:
+            raise ValueError("signature timestamp is in the future")
         start = _utc(key.valid_from, "valid_from")
         end = _utc(key.valid_until, "valid_until") if key.valid_until else None
         revoked = _utc(key.revoked_at, "revoked_at") if key.revoked_at else None
