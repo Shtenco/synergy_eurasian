@@ -1,0 +1,160 @@
+"""Monte Carlo stress model for the SYNERGY productivity flywheel.
+
+All distributions are illustrative and uncalibrated. The output is conditional
+on assumptions, not a forecast or empirical probability of failure.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CONFIG = ROOT / "data" / "synergy_productivity_flywheel_monte_carlo_v3.json"
+
+
+def load_config(path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def simulate_paths(cfg: dict[str, Any], shock_probability: float) -> dict[str, Any]:
+    if not 0.0 <= shock_probability <= 1.0:
+        raise ValueError("Shock probability must be between 0 and 1.")
+    rng = np.random.default_rng(int(cfg["random_seed"]))
+    n_paths = int(cfg["paths"])
+    years = int(cfg["horizon_years"])
+    start = cfg["starting_point"]
+    uncertainty = cfg["annual_uncertainty"]
+    shock = cfg["correlated_shock"]
+    auto = cfg["automation_projects"]
+    rd = cfg["rd_projects"]
+    allocation = cfg["fund_allocation"]
+    if abs(sum(float(x) for x in allocation.values()) - 1.0) > 1e-9:
+        raise ValueError("Fund allocation shares must sum to 1.0.")
+
+    initial_reserve = (
+        float(start["productive_capital_usd"])
+        * float(start["initial_reserve_share_of_productive_capital"])
+    )
+    final_reserves = np.zeros(n_paths)
+    total_unfunded = np.zeros(n_paths)
+    ever_exhausted = np.zeros(n_paths, dtype=bool)
+    first_exhaustion_year = np.zeros(n_paths, dtype=int)
+    final_year_residual = np.zeros(n_paths)
+
+    for path in range(n_paths):
+        gross = float(start["gross_cashflow_after_opex_before_replacement_usd"])
+        replacement = float(start["replacement_capex_usd"])
+        reserve = initial_reserve
+        auto_cohorts: list[tuple[int, float, float]] = []
+        rd_cohorts: list[tuple[int, float, int]] = []
+        unfunded = 0.0
+        exhausted_year = 0
+
+        for year in range(1, years + 1):
+            growth = float(np.clip(
+                rng.normal(uncertainty["cashflow_growth_mean"], uncertainty["cashflow_growth_std"]),
+                uncertainty["cashflow_growth_min"],
+                uncertainty["cashflow_growth_max"],
+            ))
+            inflation = float(np.clip(
+                rng.normal(uncertainty["replacement_inflation_mean"], uncertainty["replacement_inflation_std"]),
+                uncertainty["replacement_inflation_min"],
+                uncertainty["replacement_inflation_max"],
+            ))
+            if rng.random() < shock_probability:
+                growth = max(-0.50, growth + float(shock["cashflow_growth_additive_shock"]))
+                inflation = min(0.50, inflation + float(shock["replacement_inflation_additive_shock"]))
+            gross *= 1.0 + growth
+            replacement *= 1.0 + inflation
+
+            automation_return = sum(
+                amount * yield_rate
+                for deployed, amount, yield_rate in auto_cohorts
+                if deployed + int(auto["deployment_lag_years"]) <= year
+                < deployed + int(auto["deployment_lag_years"]) + int(auto["benefit_life_years"])
+            )
+            rd_return = sum(
+                amount * successes / int(rd["independent_projects_per_year"])
+                * float(rd["annual_net_residual_yield_if_success"])
+                for deployed, amount, successes in rd_cohorts
+                if deployed + int(rd["deployment_lag_years"]) <= year
+                < deployed + int(rd["deployment_lag_years"]) + int(rd["benefit_life_years"])
+            )
+            residual = gross - replacement + automation_return + rd_return
+            if residual >= 0.0:
+                auto_amount = residual * float(allocation["productive_automation"])
+                rd_amount = residual * float(allocation["breakthrough_rd"])
+                reserve += residual * float(allocation["resilience_reserve"])
+                auto_yield = max(
+                    float(auto["yield_min"]),
+                    float(rng.normal(auto["annual_net_residual_yield_mean"], auto["annual_net_residual_yield_std"])),
+                )
+                successes = int(rng.binomial(
+                    int(rd["independent_projects_per_year"]),
+                    float(rd["success_probability_per_project"]),
+                ))
+                auto_cohorts.append((year, auto_amount, auto_yield))
+                rd_cohorts.append((year, rd_amount, successes))
+            else:
+                shortfall = -residual
+                reserve_draw = min(reserve, shortfall)
+                reserve -= reserve_draw
+                unfunded += shortfall - reserve_draw
+                if reserve <= 1e-9 and unfunded > 0.0 and exhausted_year == 0:
+                    exhausted_year = year
+
+            if reserve <= 1e-9 and exhausted_year == 0 and unfunded > 0.0:
+                exhausted_year = year
+            if year == years:
+                final_year_residual[path] = residual
+
+        final_reserves[path] = reserve
+        total_unfunded[path] = unfunded
+        ever_exhausted[path] = exhausted_year > 0
+        first_exhaustion_year[path] = exhausted_year
+
+    def quantiles(values: np.ndarray) -> dict[str, float]:
+        q = np.quantile(values, [0.05, 0.50, 0.95])
+        return {"p05": float(q[0]), "median": float(q[1]), "p95": float(q[2])}
+
+    exhausted_years = first_exhaustion_year[first_exhaustion_year > 0]
+    return {
+        "shock_probability_per_year": shock_probability,
+        "paths": n_paths,
+        "reserve_exhaustion_probability": float(ever_exhausted.mean()),
+        "reserve_end_usd_quantiles": quantiles(final_reserves),
+        "cumulative_unfunded_gap_usd_quantiles": quantiles(total_unfunded),
+        "mean_cumulative_unfunded_gap_usd": float(total_unfunded.mean()),
+        "probability_of_any_unfunded_gap": float((total_unfunded > 0).mean()),
+        "median_first_exhaustion_year_conditioned_on_exhaustion": (
+            float(np.median(exhausted_years)) if len(exhausted_years) else None
+        ),
+        "year_10_residual_usd_quantiles": quantiles(final_year_residual),
+    }
+
+
+def build_report(cfg: dict[str, Any]) -> dict[str, Any]:
+    scenarios = [
+        simulate_paths(cfg, float(p))
+        for p in cfg["correlated_shock"]["annual_probability_sensitivity"]
+    ]
+    return {
+        "model_id": cfg["model_id"],
+        "status": cfg["status"],
+        "horizon_years": cfg["horizon_years"],
+        "paths_per_scenario": cfg["paths"],
+        "random_seed": cfg["random_seed"],
+        "initial_reserve_usd": (
+            float(cfg["starting_point"]["productive_capital_usd"])
+            * float(cfg["starting_point"]["initial_reserve_share_of_productive_capital"])
+        ),
+        "shock_sensitivity": scenarios,
+        "accounting_rules": cfg["accounting_rules"],
+        "interpretation": (
+            "These are conditional simulated frequencies under hypothetical distributions. "
+            "They are not empirical forecasts, credit ratings, or guarantees."
+        ),
+    }
