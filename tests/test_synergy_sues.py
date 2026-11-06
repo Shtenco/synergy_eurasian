@@ -13,7 +13,8 @@ from synergy_sues import (
     FXRate, Journal, JournalEntry, JournalLine, Money, NormalBalance, Quantity,
     BenefitAttribution, BenefitAttributionRegistry, BenefitEvent, FlowBoundary,
     PhysicalFlow, summarize_physical_flows, IntercompanyRecord, IntercompanyRecordType,
-    reconcile_intercompany,
+    reconcile_intercompany, BankAllocation, BankStatement, BankStatementLine,
+    reconcile_bank_account,
 )
 
 
@@ -317,3 +318,59 @@ def test_intercompany_reconciliation_reports_missing_reciprocal_side():
     assert result["transactions"][0]["eliminations"]["P_AND_L"] == "0"
     assert result["exceptions"][0]["seller_unmatched"] == "25"
     assert result["exceptions"][0]["buyer_unmatched"] == "0"
+
+
+def test_bank_reconciliation_matches_statement_lines_to_cash_journal():
+    journal = new_journal()
+    journal.add_account(account("opex", "6000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    now = datetime(2026, 11, 6, 9, tzinfo=timezone.utc)
+    sale = JournalEntry("bank-sale", date(2026, 11, 6), now, "USD",
+        (JournalLine("cash-in", "cash", "DEBIT", Money("50", "USD"), Money("50", "USD"), "co1", "bank:in"),
+         JournalLine("rev", "revenue", "CREDIT", Money("50", "USD"), Money("50", "USD"), "co1", "sale:1")),
+        "evt-sale", "idem-sale", "External receipt")
+    expense = JournalEntry("bank-opex", date(2026, 11, 6), now, "USD",
+        (JournalLine("expense", "opex", "DEBIT", Money("20", "USD"), Money("20", "USD"), "co1", "bill:1"),
+         JournalLine("cash-out", "cash", "CREDIT", Money("20", "USD"), Money("20", "USD"), "co1", "bank:out")),
+        "evt-opex", "idem-opex", "Operating payment")
+    journal.post(sale)
+    journal.post(expense)
+    period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
+    statement = BankStatement("stmt1", "cash", "USD", period, Money("100", "USD"),
+        Money("130", "USD"), Money("100", "USD"),
+        (BankStatementLine("b1", date(2026, 11, 6), Money("50", "USD"), "bank:1", "statement:1"),
+         BankStatementLine("b2", date(2026, 11, 6), Money("-20", "USD"), "bank:2", "statement:2")))
+    allocations = [
+        BankAllocation("a1", "b1", "bank-sale", "cash-in", Money("50", "USD"), "allocation:1"),
+        BankAllocation("a2", "b2", "bank-opex", "cash-out", Money("20", "USD"), "allocation:2"),
+    ]
+    result = reconcile_bank_account(journal, statement, allocations)
+    assert result["fully_reconciled"]
+    assert result["bank_closing_balance"] == result["ledger_closing_balance"] == "130"
+
+
+def test_bank_reconciliation_preserves_unmatched_cash_and_closing_difference():
+    journal = new_journal()
+    now = datetime(2026, 11, 6, 9, tzinfo=timezone.utc)
+    sale = JournalEntry("bank-sale", date(2026, 11, 6), now, "USD",
+        (JournalLine("cash-in", "cash", "DEBIT", Money("45", "USD"), Money("45", "USD"), "co1", "bank:in"),
+         JournalLine("rev", "revenue", "CREDIT", Money("45", "USD"), Money("45", "USD"), "co1", "sale:1")),
+        "evt-sale", "idem-sale", "External receipt")
+    journal.post(sale)
+    period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
+    statement = BankStatement("stmt2", "cash", "USD", period, Money("100", "USD"),
+        Money("150", "USD"), Money("100", "USD"),
+        (BankStatementLine("b1", date(2026, 11, 6), Money("50", "USD"), "bank:1", "statement:1"),))
+    result = reconcile_bank_account(journal, statement, [
+        BankAllocation("a1", "b1", "bank-sale", "cash-in", Money("45", "USD"), "allocation:1")
+    ])
+    assert not result["fully_reconciled"]
+    assert result["bank_minus_ledger_closing_difference"] == "5"
+    assert result["unmatched_statement_lines"][0]["signed_unmatched_amount"] == "5"
+
+
+def test_bank_statement_rejects_invalid_opening_movement_closing_identity():
+    period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
+    with pytest.raises(ValueError, match="does not equal closing"):
+        BankStatement("bad", "cash", "USD", period, Money("100", "USD"),
+            Money("140", "USD"), Money("100", "USD"),
+            (BankStatementLine("b1", date(2026, 11, 6), Money("50", "USD"), "bank:1", "statement:1"),))
