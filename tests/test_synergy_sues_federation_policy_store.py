@@ -385,3 +385,27 @@ def test_historical_signature_verification_detects_signature_tampering_even_if_c
                  "resource_type": "LEDGER", "resource_id": "ledger:alpha"},
                 "tampered-history-request", "2026-11-06T10:03:00+00:00"),
             [], registry, "2026-11-06T10:04:00+00:00")
+
+def test_rejected_policy_admin_attempt_is_audited_and_audit_chain_is_tamper_evident(tmp_path):
+    store, registry, keys = setup(tmp_path)
+    request, approvals = make_change(tmp_path, keys, approver_ids=("admin:one",))
+    with pytest.raises(ValueError, match="quorum"):
+        store.apply_change(request, approvals, registry, "2026-11-06T10:02:00+00:00")
+    path = str(tmp_path / "policy.db")
+    with sqlite3.connect(path) as db:
+        row = db.execute(
+            "SELECT outcome,claimed_actor_id,change_id,request_event_id,reason "
+            "FROM authorization_policy_admin_attempts"
+        ).fetchone()
+    assert row[0] == "REJECTED"
+    assert row[1] == "admin:proposer"
+    assert row[2] == "change:one"
+    assert row[3] == request.event["event_id"]
+    assert "quorum" in row[4]
+    assert store.verify()
+    with sqlite3.connect(path) as db:
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            db.execute("UPDATE authorization_policy_admin_attempts SET reason='hidden'")
+        db.execute("DROP TRIGGER authorization_policy_admin_attempts_no_update")
+        db.execute("UPDATE authorization_policy_admin_attempts SET reason='hidden'")
+    assert not store.verify()
