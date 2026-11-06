@@ -801,3 +801,58 @@ def test_v75_stress_cli_fixture_is_schema_valid_and_reproducible():
     assert a["scenario_count"]==250
     assert 0<=a["mean_weighted_service_level"]<=1
     assert 0<=a["empirical_cvar_service_shortfall"]<=1
+
+
+def cash_planner_fixture():
+    recipe=ProductionRecipe("make","finished",1,"unit",(),(),1)
+    demand=[PlanDemand("sale","finished",1,"unit",1,100,"USD")]
+    return [recipe],demand,[],[]
+
+
+def test_v76_cash_constraint_prevents_unfunded_production_before_collection():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_opening_balance=0,collection_lag_by_demand={"sale":1})
+    assert r["feasible"]
+    assert r["schedule"]==[]
+    assert r["demand"][0]["fulfilled"]==0
+
+
+def test_v76_cash_constraint_allows_production_when_opening_working_capital_exists():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_opening_balance=20,collection_lag_by_demand={"sale":1})
+    assert r["feasible"] and r["optimality_proven"]
+    assert r["schedule"][0]["start_period"]==0
+    assert r["demand"][0]["fulfilled"]==1
+    assert r["ending_cash_by_period"]==pytest.approx([0,0,100])
+    assert r["deferred_collection_demands"]==[]
+
+
+def test_v76_cash_constraint_includes_external_funding_and_minimum_cash_floor():
+    args=cash_planner_fixture()
+    funded=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_inflows_by_period={0:20},collection_lag_by_demand={"sale":1})
+    assert funded["demand"][0]["fulfilled"]==1
+    constrained=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_opening_balance=20,cash_minimum_balance=5,collection_lag_by_demand={"sale":1})
+    assert not constrained["feasible"]
+
+
+def test_v76_cash_constraint_reports_receipts_beyond_horizon_and_fractional_collection():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,2,{"make":1},{"make":20},
+      cash_opening_balance=20,collection_lag_by_demand={"sale":4})
+    assert r["feasible"] and r["demand"][0]["fulfilled"]==1
+    assert r["deferred_collection_demands"]==["sale"]
+    assert r["ending_cash_by_period"]==pytest.approx([0,0])
+
+
+def test_v76_cash_constraint_rejects_invalid_periods_lags_and_fractions():
+    args=cash_planner_fixture()
+    with pytest.raises(ValueError,match="outside horizon"):
+        optimize_production_schedule(*args,3,{"make":1},cash_inflows_by_period={3:10})
+    with pytest.raises(ValueError,match="non-negative integer"):
+        optimize_production_schedule(*args,3,{"make":1},collection_lag_by_demand={"sale":-1})
+    with pytest.raises(ValueError,match="in \[0,1\]"):
+        optimize_production_schedule(*args,3,{"make":1},collection_fraction_by_demand={"sale":1.5})
