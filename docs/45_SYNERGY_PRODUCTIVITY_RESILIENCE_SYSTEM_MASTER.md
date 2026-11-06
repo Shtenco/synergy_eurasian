@@ -77,3 +77,26 @@ Until that common data and evidence layer exists, V1–V6 remain a family of rel
 ## Reproducibility and current CI note
 
 V1–V4 source and tests are in this repository. V5–V6 source, config, tests, docs and outputs are included in the companion extension package; its tests were run locally: **23 passed**. The PR #9 resilience branch initially failed test collection because pandas was absent; `pandas>=2.2,<4` was added in commit `9c8e4cb503d33e82cc4bb9add729514db1a42587`. After adding pandas, the follow-up GitHub Actions run 42149696277 completed successfully. PR #9 remains open and has not been merged.
+
+## V7 implementation status (research branch)
+
+The V7 line has now progressed from architecture into an executable reference kernel. See [PR #10](https://github.com/Shtenco/synergy_eurasian/pull/10); it remains a research branch until reviewed and merged.
+
+| Layer | Implementation | Boundary |
+|---|---|---|
+| V7 core | Event envelope, per-aggregate sequence/idempotency, hash-chain verification, graph projection, evidence-qualified resource capacity, physical-flow consolidation, benefit ledger, NPV/CVaR/Pareto primitives | In-memory reference kernel; no durable distributed event store |
+| V7.1 | Time-expanded recipes, integer batches, inventory receipts, lead times, shared resource buckets, demand fulfillment and executable integrated factory fixture | Deterministic feasibility validator, not a production scheduler optimizer |
+| V7.2 | Working-capital metrics, DSO/DIO/DPO/CCC, cash release from NWC movement and prioritized cash waterfall | Period-level liquidity calculator, not double-entry accounting |
+| V7.2.1 | AR/AP documents, partial settlements, credit adjustments, disputes, aging, gross counterparty exposure and sourced PD×LGD estimate | In-memory subledger projection; no legal netting, FX conversion or statutory impairment |
+
+V7 acceptance still requires durable event storage, signed evidence, access controls, trusted checkpoints, concurrency/recovery tests, independent accounting/legal/security review and calibration against real enterprise data. Scenario and synthetic examples are not enterprise forecasts.
+
+## Next development frontier
+
+1. **V7.2.2 — cash reconciliation:** bank statement lines, settlement allocation, unmatched receipts, reversals, cash-account controls and reconciliation evidence.
+2. **V7.3 — causal operating performance:** link production orders, delivery acceptance, invoice issuance, collections, asset costs and benefit claims to a single evidence chain. Separate physical output, recognized revenue, collected cash and incremental net value.
+3. **V7.4 — temporal supply network:** supplier shipment lead times, lot/serial traceability, inventory aging, safety stock, substitutions, transport capacity, storage and disruptions.
+4. **V7.5 — constrained optimization:** MILP/CP-SAT over order timing, scarce resources, inventory, cash constraints and essential-service minimums; preserve Pareto alternatives rather than hiding trade-offs in one score.
+5. **V7.6 — resilience and learning:** correlated shocks, recovery policies, formal CVaR/chance constraints, verified reusable technology packages and measured R&D-capability reproduction.
+
+No automated optimizer output may authorize credit, token issuance, payments, securities distribution or legally binding commitments.
