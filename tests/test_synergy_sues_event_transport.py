@@ -184,7 +184,7 @@ def test_inbox_message_id_reuse_with_another_valid_event_hash_is_rejected(tmp_pa
     receiver = DurableEventStore(str(tmp_path / "receiver.db"))
     first = sender.append(event(), now=utc())
     second = sender.append(event("evt-2", 2, first.event_hash, "idem-2"), now=utc(9, 2))
-    messages = sender.claim_outbox(now=utc(), limit=2)
+    messages = sender.claim_outbox(now=utc(9, 2), limit=2)
     handler = lambda db, incoming: None
     one = next(x for x in messages if x.event_id == first.event_id)
     two = next(x for x in messages if x.event_id == second.event_id)
