@@ -187,6 +187,27 @@ class AuthorizedActionExecutor:
                 if event_existing is not None:
                     raise ValueError("signed request event ID has already been consumed")
 
+                # A persisted policy decision is valid only for the exact snapshot
+                # still current in this same SQLite database. BEGIN IMMEDIATE
+                # prevents a policy mutation from racing this check and commit.
+                if decision.policy_version is not None or decision.policy_hash is not None:
+                    if decision.policy_version is None or not decision.policy_hash:
+                        raise ValueError("incomplete versioned policy evidence")
+                    policy_table = db.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='authorization_policy_changes'"
+                    ).fetchone()
+                    if policy_table is None:
+                        raise ValueError("versioned policy execution requires the policy store in the same database")
+                    current_policy = db.execute(
+                        "SELECT version,policy_hash FROM authorization_policy_changes "
+                        "WHERE tenant_id=? ORDER BY version DESC LIMIT 1",
+                        (request.tenant_id,),
+                    ).fetchone()
+                    if (current_policy is None
+                            or int(current_policy["version"]) != decision.policy_version
+                            or str(current_policy["policy_hash"]) != decision.policy_hash):
+                        raise ValueError("authorization policy snapshot changed before execution")
+
                 result = handler(db, request, decision)
                 result_json = _canonical(result).decode("utf-8")
                 decision_document = {
