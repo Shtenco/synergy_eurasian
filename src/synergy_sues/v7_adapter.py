@@ -216,7 +216,7 @@ def adapt_v7_realization_chain(
     infer cash, create GL entries, or turn pre/post output deltas into causal claims.
     """
     try:
-        cutoff = date.fromisoformat(as_of)
+        date.fromisoformat(as_of)
     except (TypeError, ValueError) as exc:
         raise ValueError("as_of must be ISO YYYY-MM-DD") from exc
     if not callable(evaluator):
@@ -324,7 +324,6 @@ def adapt_v7_realization_chain(
             "enterprise_id", "project_id", "benefit_stream_id", "period",
             amount_field="amount", currency_field="currency", status_field="source_class")
 
-    # Dates after the as-of cut-off remain in the source payload but are not
-    # represented as effective events in this point-in-time bridge.
-    links = [link for link in links if link.effective_date is None or link.effective_date <= cutoff]
+    # Preserve the complete source set. The V7 evaluator owns as-of semantics;
+    # dropping source rows here would make the bridge incomplete and non-replayable.
     return SUESRealizationBridge(as_of, tuple(links), report_json)
