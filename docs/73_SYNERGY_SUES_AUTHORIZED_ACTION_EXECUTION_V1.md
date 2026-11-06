@@ -49,3 +49,10 @@ V1 is single-host SQLite. It does not provide distributed locking, cross-databas
 ## Tests
 
 Tests cover one-time consumption, request-ID conflict, event-ID reuse prevention, denied request non-execution, handler rollback and retry, concurrent executor instances, append-only receipts, hash-chain tamper detection, canonical JSON result validation and transactional outbox idempotency/rollback.
+
+
+## Versioned policy snapshot guard
+
+When the executor receives a decision carrying `policy_version` and `policy_hash`, it requires the policy store table to exist in the **same SQLite database**. After acquiring `BEGIN IMMEDIATE` and before invoking the handler, it compares the decision's tenant policy version/hash with the latest persisted snapshot. A missing store or stale snapshot fails closed. Because the policy store uses the same database, the write lock prevents a concurrent policy mutation between this check and the execution receipt commit.
+
+This closes the local check-to-commit race for the single-host SQLite reference. It is not a distributed transaction: separate databases, hosts or regions require a managed shared transactional authority or a separately designed consensus/fencing protocol. The execution handler still may perform only local SQL effects in the executor transaction.
