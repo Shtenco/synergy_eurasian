@@ -165,3 +165,7 @@ V7.6.4 adds period-specific maximum drawn-debt limits on top of the contractual 
 ### V7.6.5 update — evidence-derived borrowing base
 
 V7.6.5 derives period borrowing-base ceilings from eligible receivables and inventory. It applies overdue/dispute/related-party and inventory-quality/location/consignment filters, counterparty concentration caps, advance rates and reserves, then passes the lower of calculated and externally supplied caps to the credit-aware optimizer. This creates a traceable bridge from collateral records to borrowing capacity, without pretending that supplied evidence has been independently audited or accepted by a lender. When collateral mode is enabled, missing period snapshots fail closed to zero borrowing-base availability. See [V7.6.5 specification](docs/60_SYNERGY_V7_6_5_EVIDENCE_BORROWING_BASE.md).
+
+### V7.6.6 update — collateral aging, dilution and auditability
+
+V7.6.6 adds receivable aging haircuts, inventory aging haircuts, receivable dilution reserves, receivable/inventory-specific fixed reserves and an asset-level audit trail with evidence IDs and explicit exclusion reasons. All additions are optional and preserve V7.6.5 input compatibility. This improves traceability and conservative valuation but does not independently authenticate the evidence or certify lender eligibility. See [V7.6.6 specification](docs/61_SYNERGY_V7_6_6_ADVANCED_COLLATERAL_RISK.md).
