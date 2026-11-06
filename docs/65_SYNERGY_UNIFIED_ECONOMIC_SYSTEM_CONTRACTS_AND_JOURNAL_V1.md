@@ -38,7 +38,7 @@ A `BenefitEvent` identifies the underlying measurement, enterprise, period, metr
 
 ## 5. Intercompany reconciliation
 
-The intercompany engine pairs seller and buyer records by a stable transaction ID and reciprocal entity identities. It separately reconciles P&L revenue/expense, balance-sheet receivable/payable and cash-in/cash-out pairs. Only the amount present on both sides is eligible for elimination; unmatched residuals remain explicit exceptions. Cross-currency netting is rejected.
+The intercompany engine pairs seller and buyer records by a stable transaction ID, reciprocal entity identities and matching period. It separately reconciles P&L revenue/expense, balance-sheet receivable/payable and cash-in/cash-out pairs. Only the amount present on both sides is eligible for elimination; unmatched residuals remain explicit exceptions. Cross-currency netting is rejected.
 
 This is an elimination control, not yet a full multi-entity consolidation engine. It does not translate subsidiary trial balances, calculate CTA, consolidate ownership/non-controlling interests, or post elimination journals automatically.
 
