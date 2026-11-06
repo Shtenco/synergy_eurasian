@@ -40,7 +40,7 @@ An approval is counted only when its scope exactly matches the signed request, i
 - Authorized REJECT approval → deny.
 - Otherwise → allow with selected rule ID and verified approver identities.
 
-The engine returns an `AuthorizationDecision` with a machine-readable reason. It performs no external side effect and does not write a journal, send a payment, mint a token, transfer custody or alter ownership.
+The engine returns an `AuthorizationDecision` with a machine-readable reason. It performs no external side effect and does not write a journal, send a payment, mint a token, transfer custody or alter ownership. V1 does not persist or consume request IDs. The eventual executor must atomically record and consume each request_id with its action to prevent duplicate execution/replay; a positive decision must never be treated as a reusable bearer token.
 
 ## V1 limitations
 
