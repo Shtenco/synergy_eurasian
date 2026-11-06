@@ -604,3 +604,14 @@ def test_matched_pair_did_requires_multiple_pairs_and_valid_confidence():
         matched_pair_difference_in_differences(rows)
     with pytest.raises(ValueError,match="confidence_level"):
         matched_pair_difference_in_differences(did_fixture(),1.0)
+
+
+def test_matched_pair_did_cli_fixture_is_schema_valid_and_returns_expected_effect():
+    import json
+    from synergy_v7.causal_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_3_1_matched_did_demo.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    r=evaluate_document(document)
+    assert r["matched_pair_count"]==4
+    assert r["effect_estimate"]==pytest.approx(5)
