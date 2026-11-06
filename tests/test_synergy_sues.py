@@ -1,7 +1,12 @@
+import sys
+from pathlib import Path
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 
 from synergy_sues import (
     Account, AccountType, EconomicPeriod, EvidenceRecord, EvidenceStatus,
