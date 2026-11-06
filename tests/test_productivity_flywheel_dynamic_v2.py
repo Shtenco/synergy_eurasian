@@ -49,3 +49,17 @@ def test_report_contains_all_six_macro_scenarios():
     report = build_report(load_config())
     assert len(report["macro_scenarios"]) == 6
     assert len(report["break_even_cashflow_growth_without_project_returns"]) == 3
+
+
+def test_sector_reconciliation_exposes_hidden_sector_gaps():
+    from synergy_productivity_flywheel_dynamic_v2 import sector_reconciliation
+    cfg = load_config()
+    moderate = sector_reconciliation(cfg, 0.025, 0.02)
+    strong_cost_pressure = sector_reconciliation(cfg, 0.05, 0.05)
+    assert abs(moderate["net_residual_usd"] - 92175.65049759479) < 1e-5
+    assert abs(moderate["negative_sector_gap_usd"] - 158607.7956229701) < 1e-5
+    sectors = {x["sector"]: x for x in moderate["sectors"]}
+    assert sectors["EDUCATION"]["year_n_residual_usd"] < -56000
+    assert sectors["MOBILITY"]["year_n_residual_usd"] < -87000
+    assert abs(strong_cost_pressure["net_residual_usd"] - 35986.35454208049) < 1e-5
+    assert abs(strong_cost_pressure["reconciliation_error_usd"]) < 1e-7
