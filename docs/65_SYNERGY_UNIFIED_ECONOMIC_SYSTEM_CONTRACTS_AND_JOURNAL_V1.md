@@ -62,7 +62,7 @@ Credit notes, write-offs, discounts, disputes, ECL provisions, taxes and payment
 
 ## 9. FIFO inventory subledger
 
-The inventory kernel tracks lot-level remaining quantity and functional-currency cost. Receipts create FIFO lots; issues and write-offs consume oldest lots and return the associated cost; internal location transfers consume source lots and create destination lots preserving the transferred cost. Pools are keyed by item and location and reject mixed units. Insufficient stock and duplicate movement/lot IDs are rejected before inventory is mutated.
+The inventory kernel tracks lot-level remaining quantity and functional-currency cost. Receipts create FIFO lots; issues and write-offs consume oldest lots and return the associated cost with exact lot-allocation provenance; internal location transfers consume source lots and create destination lots preserving cost and source-lot links. Pools are keyed by item and location and reject mixed units. Insufficient stock and duplicate movement/lot IDs are rejected before inventory is mutated.
 
 Receipt postings debit inventory and credit an explicitly selected offset account (for example GRNI); issues/write-offs debit an explicitly selected WIP/COGS/loss account and credit inventory. Internal same-entity location transfers do not create new GL expense or revenue. Inventory costs must already be valued in the entity functional currency; procurement FX valuation must be explicit upstream.
 
