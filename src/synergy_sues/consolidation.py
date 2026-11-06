@@ -78,10 +78,16 @@ def reconcile_intercompany(records: Iterable[IntercompanyRecord]) -> dict:
     exceptions = []
 
     for transaction_id, tx_rows in sorted(grouped.items()):
-        sellers = {row.entity_id for row in tx_rows if row.record_type in _SELLER_TYPES}
-        buyers = {row.entity_id for row in tx_rows if row.record_type in _BUYER_TYPES}
+        sellers = (
+            {row.entity_id for row in tx_rows if row.record_type in _SELLER_TYPES}
+            | {row.counterparty_id for row in tx_rows if row.record_type in _BUYER_TYPES}
+        )
+        buyers = (
+            {row.counterparty_id for row in tx_rows if row.record_type in _SELLER_TYPES}
+            | {row.entity_id for row in tx_rows if row.record_type in _BUYER_TYPES}
+        )
         if len(sellers) != 1 or len(buyers) != 1:
-            raise ValueError(f"Transaction {transaction_id} must identify exactly one seller and one buyer")
+            raise ValueError(f"Transaction {transaction_id} must identify one reciprocal seller/buyer pair")
         seller, buyer = next(iter(sellers)), next(iter(buyers))
         if seller == buyer:
             raise ValueError(f"Transaction {transaction_id} has identical seller and buyer")
