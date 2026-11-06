@@ -1,0 +1,62 @@
+{
+  "as_of": "2026-03-05",
+  "documents": [
+    {
+      "document_id": "AR-001",
+      "side": "RECEIVABLE",
+      "enterprise_id": "factory-01",
+      "counterparty_id": "buyer-01",
+      "issue_date": "2026-01-01",
+      "due_date": "2026-01-31",
+      "currency": "USD",
+      "original_amount": 100000,
+      "source_ref": "erp:invoice:AR-001",
+      "contract_ref": "sales-contract-77"
+    },
+    {
+      "document_id": "AP-001",
+      "side": "PAYABLE",
+      "enterprise_id": "factory-01",
+      "counterparty_id": "steel-supplier-01",
+      "issue_date": "2026-02-01",
+      "due_date": "2026-02-20",
+      "currency": "USD",
+      "original_amount": 30000,
+      "source_ref": "erp:invoice:AP-001",
+      "contract_ref": "supply-contract-12"
+    }
+  ],
+  "settlements": [
+    {
+      "settlement_id": "BANK-001",
+      "document_id": "AR-001",
+      "settlement_date": "2026-02-10",
+      "amount": 40000,
+      "currency": "USD",
+      "cash_account_id": "USD-OPERATING",
+      "source_ref": "bank:statement:line-001"
+    }
+  ],
+  "adjustments": [],
+  "disputes": [
+    {
+      "dispute_id": "CASE-001",
+      "document_id": "AR-001",
+      "event_date": "2026-02-15",
+      "amount": 10000,
+      "currency": "USD",
+      "action": "OPEN",
+      "source_ref": "crm:case:001"
+    }
+  ],
+  "credit_assessments": [
+    {
+      "counterparty_id": "buyer-01",
+      "currency": "USD",
+      "probability_of_default": 0.03,
+      "loss_given_default": 0.45,
+      "assessment_date": "2026-02-28",
+      "source_ref": "credit-review:2026-02"
+    }
+  ]
+}
