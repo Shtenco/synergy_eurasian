@@ -165,6 +165,27 @@ class InventoryLedger:
         amount = sum((lot.remaining_quantity.amount for lot in self._lots.get(key, [])), Decimal("0"))
         return Quantity(amount, unit)
 
+    def preview_issue_cost(self, item_id: str, location_id: str, quantity: Quantity) -> Money:
+        """Return FIFO issue cost without mutating lots or recording a movement."""
+        key = self._check_pool(item_id, location_id, quantity.unit)
+        lots = self._lots.get(key, [])
+        available = sum((lot.remaining_quantity.amount for lot in lots), Decimal("0"))
+        if quantity.amount <= 0 or available < quantity.amount:
+            raise ValueError(f"Insufficient inventory: requested {quantity.amount}, available {available}")
+        remaining = quantity.amount
+        total_cost = Decimal("0")
+        for lot in lots:
+            if remaining <= 0:
+                break
+            lot_qty = lot.remaining_quantity.amount
+            if lot_qty <= 0:
+                continue
+            take = min(remaining, lot_qty)
+            take_cost = lot.remaining_cost.amount if take == lot_qty else lot.remaining_cost.amount * take / lot_qty
+            total_cost += take_cost
+            remaining -= take
+        return Money(total_cost, self.functional_currency)
+
     def _consume_fifo(self, item_id: str, location_id: str, quantity: Quantity) -> list[tuple[Quantity, Money, _InventoryLot]]:
         key = self._check_pool(item_id, location_id, quantity.unit)
         lots = self._lots.get(key, [])
