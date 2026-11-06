@@ -58,6 +58,7 @@ def optimize_production_schedule(
     credit_draw_limits_by_period: dict[int,float] | None = None,
     credit_repayment_limits_by_period: dict[int,float] | None = None,
     credit_interest_rates_by_period: dict[int,float] | None = None,
+    terminal_credit_balance_limit: float | None = None,
 ) -> dict:
     """Maximize demand value less production/holding costs under physical constraints.
 
@@ -91,6 +92,9 @@ def optimize_production_schedule(
     credit_repayment_limits_by_period=credit_repayment_limits_by_period or {}
     credit_interest_rates_by_period=credit_interest_rates_by_period or {}
     if credit_enabled:
+        if terminal_credit_balance_limit is not None and (not math.isfinite(terminal_credit_balance_limit)
+            or terminal_credit_balance_limit<0 or terminal_credit_balance_limit>credit_limit):
+            raise ValueError("terminal_credit_balance_limit must be between zero and credit_limit")
         if not math.isfinite(credit_limit) or credit_limit<0: raise ValueError("credit_limit must be finite and non-negative")
         if not math.isfinite(credit_opening_balance) or credit_opening_balance<0 or credit_opening_balance>credit_limit:
             raise ValueError("credit_opening_balance must be between zero and credit_limit")
@@ -104,7 +108,7 @@ def optimize_production_schedule(
             raise ValueError("Per-period credit draw limit cannot exceed facility limit")
         if any(v>credit_limit for v in credit_repayment_limits_by_period.values()):
             raise ValueError("Per-period repayment limit cannot exceed facility limit")
-    elif credit_opening_balance or credit_draw_limits_by_period or credit_repayment_limits_by_period or credit_interest_rates_by_period:
+    elif credit_opening_balance or credit_draw_limits_by_period or credit_repayment_limits_by_period or credit_interest_rates_by_period or terminal_credit_balance_limit is not None:
         raise ValueError("Credit terms require credit_limit")
     if not math.isfinite(cash_opening_balance) or cash_opening_balance<0:
         raise ValueError("cash_opening_balance must be finite and non-negative")
@@ -266,10 +270,10 @@ def optimize_production_schedule(
                     if req.unit!=cap.unit: raise ValueError(f"Resource unit mismatch for {resource} in period {period}")
                     coeff[idx]=coeff.get(idx,0.0)+req.quantity_per_batch
         if coeff: add_constraint(coeff,-math.inf,cap.available_quantity,f"resource::{resource}::{period}")
+    deferred_collections=[]
     if cash_enabled:
         # Cash is paid for production at start period and inventory holding at
         # period end. Demand value enters cash only at the modeled collection period.
-        deferred_collections=[]
         for d in demand_rows:
             collection_period=d.due_period+collection_lag_by_demand.get(d.demand_id,0)
             if collection_period>=horizon_periods:
@@ -311,8 +315,9 @@ def optimize_production_schedule(
                 add_constraint(repay_cap,-math.inf,0.0,f"credit_repay_prior_balance::{period}")
             else:
                 add_constraint(repay_cap,-math.inf,credit_opening_balance,f"credit_repay_prior_balance::{period}")
-    else:
-        deferred_collections=[]
+    if credit_enabled and terminal_credit_balance_limit is not None:
+        add_constraint({credit_balance_index[horizon_periods-1]:1.0},-math.inf,
+            terminal_credit_balance_limit,"terminal_credit_balance_limit")
     matrix=coo_matrix((vals,(rows,cols)),shape=(len(row_lb),nvars)).tocsr()
     constraints=LinearConstraint(matrix,np.asarray(row_lb),np.asarray(row_ub))
     result=milp(c=np.asarray(objective),integrality=np.asarray(integrality),
@@ -379,7 +384,8 @@ def optimize_production_schedule(
             "opening_balance":credit_opening_balance if credit_enabled else None,"draws_by_period":credit_draws,
             "repayments_by_period":credit_repayments,"ending_balance_by_period":credit_balances,
             "interest_cost_by_period":interest_costs,"total_interest_cost":total_interest,
-            "repayment_cannot_exceed_prior_period_balance":True},
+            "repayment_cannot_exceed_prior_period_balance":True,
+            "terminal_balance_limit":terminal_credit_balance_limit},
         "cash_model":{"opening_balance":cash_opening_balance if cash_enabled else None,
             "minimum_balance":cash_minimum_balance if cash_enabled else None,
             "exogenous_inflows":cash_inflows_by_period if cash_enabled else {},
