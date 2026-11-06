@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from enum import Enum
 from typing import Iterable
 
 from .contracts import Money, Quantity, _aware
@@ -191,18 +192,54 @@ class ProductionOrder:
             raise ValueError("Production planned_date must be a date")
 
 
+class ProductionCostType(str, Enum):
+    LABOR = "LABOR"
+    ENERGY = "ENERGY"
+    MACHINE = "MACHINE"
+    MAINTENANCE = "MAINTENANCE"
+    DEPRECIATION = "DEPRECIATION"
+    SUBCONTRACT = "SUBCONTRACT"
+    OTHER_OVERHEAD = "OTHER_OVERHEAD"
+
+
+@dataclass(frozen=True)
+class ProductionCostEvent:
+    event_id: str
+    order_id: str
+    entity_id: str
+    cost_type: ProductionCostType
+    amount: Money
+    effective_date: date
+    source_ref: str
+    evidence_ref: str
+
+    def __post_init__(self) -> None:
+        if not all((self.event_id, self.order_id, self.entity_id, self.source_ref, self.evidence_ref)):
+            raise ValueError("Production cost event identity and evidence are required")
+        if not isinstance(self.cost_type, ProductionCostType):
+            object.__setattr__(self, "cost_type", ProductionCostType(self.cost_type))
+        if self.amount.amount <= 0 or not isinstance(self.effective_date, date):
+            raise ValueError("Production cost event requires positive amount and valid date")
+
+
 @dataclass(frozen=True)
 class ProductionExecution:
     order_id: str
     output_movement: InventoryMovement
     input_movements: tuple[InventoryMovement, ...]
     direct_material_cost: Money
+    conversion_cost: Money
+    capitalized_cost: Money
     output_quantity: Quantity
     journal_entry_ids: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        if self.output_movement.cost != self.direct_material_cost:
-            raise ValueError("Finished-goods cost must reconcile to consumed WIP cost")
+        if self.direct_material_cost.currency != self.conversion_cost.currency or self.direct_material_cost.currency != self.capitalized_cost.currency:
+            raise ValueError("Production cost currencies must match")
+        if self.capitalized_cost != self.direct_material_cost + self.conversion_cost:
+            raise ValueError("Capitalized cost must equal direct material plus conversion cost")
+        if self.output_movement.cost != self.capitalized_cost:
+            raise ValueError("Finished-goods cost must reconcile to total capitalized WIP cost")
         if self.output_movement.quantity != self.output_quantity:
             raise ValueError("Finished-goods quantity differs from production output")
 
@@ -222,6 +259,8 @@ def execute_production_order(
     wip_account_id: str,
     finished_goods_account_id: str,
     recorded_at: datetime,
+    conversion_costs: Iterable[ProductionCostEvent] = (),
+    conversion_cost_accounts: dict[ProductionCostType | str, str] | None = None,
 ) -> ProductionExecution:
     """Consume a complete BOM batch and capitalize direct materials into finished goods.
 
@@ -242,10 +281,40 @@ def execute_production_order(
     prefix = f"production:{order.order_id}:"
     if any(row.movement_id.startswith(prefix) for row in inventory.movements):
         raise ValueError(f"Production order already executed: {order.order_id}")
+    cost_events = tuple(conversion_costs)
+    if len({row.event_id for row in cost_events}) != len(cost_events):
+        raise ValueError("Production cost event IDs must be unique")
+    account_map: dict[ProductionCostType, str] = {}
+    for key, account_id in (conversion_cost_accounts or {}).items():
+        kind = key if isinstance(key, ProductionCostType) else ProductionCostType(key)
+        account_map[kind] = account_id
+    for event in cost_events:
+        if event.order_id != order.order_id or event.entity_id != order.entity_id:
+            raise ValueError("Production cost event order/entity mismatch")
+        if event.effective_date > order.planned_date:
+            raise ValueError("Production cost event cannot post after batch completion date")
+        if event.amount.currency != journal.functional_currency:
+            raise ValueError("Production cost event currency must equal functional currency")
+        account_id = account_map.get(event.cost_type)
+        if not account_id:
+            raise ValueError(f"Missing credit account mapping for production cost type {event.cost_type.value}")
+        account = next((row for row in journal.accounts if row.account_id == account_id), None)
+        if account is None or account.normal_balance != NormalBalance.CREDIT:
+            raise ValueError("Production cost offset must be an existing credit-normal account")
+        if account_id in {inventory_account_id, wip_account_id, finished_goods_account_id}:
+            raise ValueError("Production cost offset cannot be a raw inventory, WIP or finished-goods account")
+
     expected_entries = {f"inventory:{prefix}issue:{row.item_id}" for row in order.components}
+    expected_entries.update(f"{prefix}cost:{row.event_id}" for row in cost_events)
     expected_entries.add(f"{prefix}capitalize")
-    if expected_entries & {row.entry_id for row in journal.entries}:
+    existing_entries = {row.entry_id for row in journal.entries}
+    if expected_entries & existing_entries:
         raise ValueError(f"Production order already journalized: {order.order_id}")
+    expected_idempotency = {f"production-consumption:production:{order.order_id}:issue:{row.item_id}" for row in order.components}
+    expected_idempotency.update(f"production-cost:{row.event_id}" for row in cost_events)
+    expected_idempotency.add(f"production-completion:{order.order_id}")
+    if expected_idempotency & {row.idempotency_key for row in journal.entries}:
+        raise ValueError(f"Production order idempotency key already used: {order.order_id}")
 
     required: list[tuple[BOMComponent, Quantity]] = []
     previewed_cost = Decimal("0")
@@ -274,12 +343,17 @@ def execute_production_order(
         )
         for component, quantity in required
     )
-    total_cost = Money(
+    direct_material_cost = Money(
         sum((movement.cost.amount for movement in input_movements), Decimal("0")),
         inventory.functional_currency,
     )
-    if total_cost.amount != previewed_cost:
+    if direct_material_cost.amount != previewed_cost:
         raise ValueError("FIFO issue cost changed between preflight and consumption")
+    conversion_cost = Money(
+        sum((event.amount.amount for event in cost_events), Decimal("0")),
+        inventory.functional_currency,
+    )
+    capitalized_cost = direct_material_cost + conversion_cost
 
     output_movement = inventory.receive(
         f"production:{order.order_id}:output",
@@ -287,7 +361,7 @@ def execute_production_order(
         order.product_id,
         order.location_id,
         order.output_quantity,
-        total_cost,
+        capitalized_cost,
         order.planned_date,
         f"production-order:{order.order_id}:completed-output",
     )
@@ -309,14 +383,28 @@ def execute_production_order(
             f"production-consumption:{movement.movement_id}",
             f"Consume BOM component {movement.item_id} for {order.order_id}",
         ))
+    for event in cost_events:
+        entry_id = f"production:{order.order_id}:cost:{event.event_id}"
+        amount = event.amount
+        entries.append(JournalEntry(
+            entry_id, event.effective_date, recorded_at, journal.functional_currency,
+            (
+                JournalLine(f"{entry_id}:dr", wip_account_id, PostingSide.DEBIT,
+                    amount, amount, order.entity_id, event.source_ref, evidence_ids=(event.evidence_ref,)),
+                JournalLine(f"{entry_id}:cr", account_map[event.cost_type], PostingSide.CREDIT,
+                    amount, amount, order.entity_id, event.source_ref, evidence_ids=(event.evidence_ref,)),
+            ),
+            f"production-cost:{event.event_id}", f"production-cost:{event.event_id}",
+            f"Capitalize {event.cost_type.value.lower()} cost for {order.order_id}",
+        ))
     completion_id = f"production:{order.order_id}:capitalize"
     entries.append(JournalEntry(
         completion_id, order.planned_date, recorded_at, journal.functional_currency,
         (
             JournalLine(f"{completion_id}:dr", finished_goods_account_id, PostingSide.DEBIT,
-                total_cost, total_cost, order.entity_id, output_movement.source_ref),
+                capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref),
             JournalLine(f"{completion_id}:cr", wip_account_id, PostingSide.CREDIT,
-                total_cost, total_cost, order.entity_id, output_movement.source_ref),
+                capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref),
         ),
         f"production-completion:{order.order_id}",
         f"production-completion:{order.order_id}",
@@ -324,8 +412,8 @@ def execute_production_order(
     ))
     journal.post_many(entries)
     return ProductionExecution(
-        order.order_id, output_movement, input_movements, total_cost,
-        order.output_quantity, tuple(x.entry_id for x in entries),
+        order.order_id, output_movement, input_movements, direct_material_cost,
+        conversion_cost, capitalized_cost, order.output_quantity, tuple(x.entry_id for x in entries),
     )
 
 
