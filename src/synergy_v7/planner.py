@@ -407,7 +407,12 @@ def optimize_production_schedule(
             "repayments_by_period":credit_repayments,"ending_balance_by_period":credit_balances,
             "interest_cost_by_period":interest_costs,"total_interest_cost":total_interest,
             "repayment_cannot_exceed_prior_period_balance":True,
-            "terminal_balance_limit":terminal_credit_balance_limit},
+            "terminal_balance_limit":terminal_credit_balance_limit,
+            "maturity_period":credit_maturity_period if credit_enabled else None,
+            "borrowing_base_by_period":credit_borrowing_base_by_period if credit_enabled else {},
+            "borrowing_base_headroom_by_period":(
+                {t:credit_borrowing_base_by_period.get(t,credit_limit)-credit_balances[t]
+                 for t in range(horizon_periods)} if credit_enabled else {})},
         "cash_model":{"opening_balance":cash_opening_balance if cash_enabled else None,
             "minimum_balance":cash_minimum_balance if cash_enabled else None,
             "exogenous_inflows":cash_inflows_by_period if cash_enabled else {},
