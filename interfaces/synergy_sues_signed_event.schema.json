@@ -1,0 +1,36 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://synergy.example/schemas/synergy_sues_signed_event.schema.json",
+  "title":"SYNERGY SUES Signed Event Envelope V1",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["schema_version","algorithm","identity_id","tenant_id","key_id","signed_at","event","signature_b64"],
+  "properties":{
+    "schema_version":{"const":"synergy.signed-event.v1"},
+    "algorithm":{"const":"Ed25519"},
+    "identity_id":{"type":"string","minLength":1},
+    "tenant_id":{"type":"string","minLength":1},
+    "key_id":{"type":"string","minLength":1},
+    "signed_at":{"type":"string","format":"date-time"},
+    "signature_b64":{"type":"string","contentEncoding":"base64","minLength":80},
+    "event":{
+      "type":"object","additionalProperties":false,
+      "required":["event_id","aggregate_type","aggregate_id","sequence","event_type","effective_at","recorded_at","payload","source_ref","evidence_ids","idempotency_key","previous_hash","event_hash"],
+      "properties":{
+        "event_id":{"type":"string","minLength":1},
+        "aggregate_type":{"type":"string","minLength":1},
+        "aggregate_id":{"type":"string","minLength":1},
+        "sequence":{"type":"integer","minimum":1},
+        "event_type":{"type":"string","minLength":1},
+        "effective_at":{"type":"string","format":"date-time"},
+        "recorded_at":{"type":"string","format":"date-time"},
+        "payload":{"type":"object"},
+        "source_ref":{"type":"string","minLength":1},
+        "evidence_ids":{"type":"array","uniqueItems":true,"items":{"type":"string","minLength":1}},
+        "idempotency_key":{"type":"string"},
+        "previous_hash":{"type":"string"},
+        "event_hash":{"type":"string","pattern":"^[a-f0-9]{64}$"}
+      }
+    }
+  }
+}
