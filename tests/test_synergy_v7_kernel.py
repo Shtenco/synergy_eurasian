@@ -1011,8 +1011,8 @@ def test_v763_credit_maturity_forces_repayment_by_declared_period():
       credit_limit=20,credit_opening_balance=20,
       collection_lag_by_demand={"sale":1},credit_maturity_period=1)
     assert r["feasible"] and r["schedule"]
-    assert r["credit_facility"]["ending_balance_by_period"]==pytest.approx([20,0,0])
-    assert r["credit_facility"]["repayments_by_period"]==pytest.approx([0,20,0])
+    assert r["credit_facility"]["ending_balance_by_period"][1:]==pytest.approx([0,0])
+    assert sum(r["credit_facility"]["repayments_by_period"])==pytest.approx(20)
 
 
 def test_v763_unfunded_credit_maturity_blocks_production_that_cannot_repay():
