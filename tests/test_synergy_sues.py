@@ -16,6 +16,7 @@ from synergy_sues import (
     reconcile_intercompany, post_intercompany_eliminations, BankAllocation, BankStatement, BankStatementLine,
     reconcile_bank_account, TranslationPolicy, TrialBalanceAccount, translate_trial_balance,
     TradeAccountMap, TradeDocument, TradeSettlement, TradeSide, TradeSubledger,
+    InventoryLedger, InventoryMovementType,
 )
 
 
@@ -608,3 +609,77 @@ def test_trade_subledger_batch_is_atomic_when_later_fx_evidence_is_invalid():
             {"invoice:atomic": "valid-invoice-rate", "bank:atomic": "future-settlement-rate"},
         )
     assert journal.entries == ()
+
+
+def test_fifo_inventory_issues_oldest_lots_and_preserves_quantity_value():
+    ledger = InventoryLedger("USD")
+    ledger.receive("r1", "lot-1", "steel", "warehouse-a", Quantity("10", "tonne"),
+        Money("100", "USD"), date(2026, 11, 1), "receipt:1")
+    ledger.receive("r2", "lot-2", "steel", "warehouse-a", Quantity("10", "tonne"),
+        Money("150", "USD"), date(2026, 11, 2), "receipt:2")
+    issue = ledger.issue("issue-1", "steel", "warehouse-a", Quantity("12", "tonne"),
+        date(2026, 11, 3), "production:1")
+    assert issue.cost == Money("130", "USD")
+    pool = ledger.summary()["pools"][0]
+    assert pool["quantity"] == "8"
+    assert pool["inventory_cost"] == "120"
+
+
+def test_fifo_inventory_transfer_preserves_cost_and_rejects_mutating_failures():
+    ledger = InventoryLedger("USD")
+    ledger.receive("r1", "lot-1", "copper", "warehouse-a", Quantity("10", "kg"),
+        Money("100", "USD"), date(2026, 11, 1), "receipt:1")
+    ledger.receive("r2", "transfer-1:LOT:1", "copper", "warehouse-b", Quantity("1", "kg"),
+        Money("10", "USD"), date(2026, 11, 1), "receipt:collision")
+    before = ledger.summary()
+    with pytest.raises(ValueError, match="Duplicate destination lot ID"):
+        ledger.transfer("transfer-1", "copper", "warehouse-a", "warehouse-b",
+            Quantity("5", "kg"), date(2026, 11, 2), "transfer:1")
+    assert ledger.summary() == before
+
+    out_move, in_move = ledger.transfer("transfer-2", "copper", "warehouse-a", "warehouse-b",
+        Quantity("4", "kg"), date(2026, 11, 3), "transfer:2")
+    assert out_move.cost == in_move.cost == Money("40", "USD")
+    pools = {row["location_id"]: row for row in ledger.summary()["pools"]}
+    assert pools["warehouse-a"]["quantity"] == "6"
+    assert pools["warehouse-a"]["inventory_cost"] == "60"
+    assert pools["warehouse-b"]["quantity"] == "5"
+    assert pools["warehouse-b"]["inventory_cost"] == "50"
+
+
+def test_fifo_inventory_rejects_insufficient_stock_without_mutation_and_mixed_units():
+    ledger = InventoryLedger("USD")
+    ledger.receive("r1", "lot-1", "grain", "silo-a", Quantity("5", "tonne"),
+        Money("25", "USD"), date(2026, 11, 1), "receipt:grain")
+    before = ledger.summary()
+    with pytest.raises(ValueError, match="Insufficient inventory"):
+        ledger.issue("issue-too-large", "grain", "silo-a", Quantity("6", "tonne"),
+            date(2026, 11, 2), "production:too-large")
+    assert ledger.summary() == before
+    with pytest.raises(ValueError, match="cannot mix units"):
+        ledger.receive("r2", "lot-2", "grain", "silo-a", Quantity("1", "MWh"),
+            Money("5", "USD"), date(2026, 11, 2), "receipt:wrong-unit")
+
+
+def test_fifo_inventory_movements_post_to_balanced_journal():
+    ledger = InventoryLedger("USD")
+    receipt = ledger.receive("r1", "lot-1", "components", "factory",
+        Quantity("10", "unit"), Money("100", "USD"), date(2026, 11, 1), "receipt:components")
+    issue = ledger.issue("i1", "components", "factory", Quantity("4", "unit"),
+        date(2026, 11, 2), "production:components")
+    transfer = ledger.transfer("t1", "components", "factory", "line-2",
+        Quantity("2", "unit"), date(2026, 11, 3), "transfer:components")
+
+    journal = Journal("USD", entity_id="co1")
+    journal.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    journal.add_account(account("wip", "1400", AccountType.ASSET, NormalBalance.DEBIT))
+    assert ledger.post_to_journal(receipt.movement_id, journal, "inventory", "grni", "co1",
+        datetime(2026, 11, 4, tzinfo=timezone.utc)) is not None
+    assert ledger.post_to_journal(issue.movement_id, journal, "inventory", "wip", "co1",
+        datetime(2026, 11, 4, tzinfo=timezone.utc)) is not None
+    assert ledger.post_to_journal(transfer[0].movement_id, journal, "inventory", "wip", "co1",
+        datetime(2026, 11, 4, tzinfo=timezone.utc)) is None
+    assert journal.trial_balance()["balanced"]
+    assert journal.trial_balance()["total_debits"] == journal.trial_balance()["total_credits"] == "140"
+    assert [x.movement_type for x in ledger.movements].count(InventoryMovementType.TRANSFER_OUT) == 1
