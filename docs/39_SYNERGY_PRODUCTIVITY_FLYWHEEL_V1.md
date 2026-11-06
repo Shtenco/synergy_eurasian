@@ -121,3 +121,32 @@ The system should release the next funding tranche only when the prior tranche r
 ## 9. Interpretation
 
 The flywheel is a governance and accounting mechanism, not perpetual motion. It becomes self-reinforcing only when the real operating gains exceed the full cost of automation and technology, and when part of the verified surplus is reinvested in assets and research. The executable model is `src/synergy_productivity_flywheel.py`; assumptions are in `data/synergy_productivity_flywheel_v1.json`; regression tests are in `tests/test_productivity_flywheel.py`.
+
+
+## 10. DECOCI / DEGOV cellular-automata integration boundary
+
+The intended neighboring architecture is **DECOCI / DEGOV**: decentralized communal intelligence and governance built around DAO cells, AI agents, reputation, voluntary cooperation and fractal governance. The earlier design used a reference cell of 11 people plus 11 SOTA DAO robots. This is a governance / coordination architecture; it must not be confused with a demonstrated factory productivity result.
+
+Proposed integration path:
+
+- **DECOCI / DEGOV cells:** identify local needs, available skills, constraints, proposals and cooperative commitments; record consent and responsibility.
+- **Cellular-automata layer:** simulate local state transitions, neighborhood effects, resource contention, routing and coordination rules. It proposes candidate schedules and allocations; it does not autonomously override safety, legal obligations or human consent.
+- **SYNERGY AI Economic Council / agents:** evaluate proposals against service levels, unit economics, capacity, risk, fairness and system-wide dependencies.
+- **MIDAS:** evaluate and prioritize investment proposals among cells and productive projects using risk-adjusted, evidence-backed economics.
+- **MetaPay / DAO economy:** settle approved contributions, service contracts and transfers; transfers remain transfers in consolidated accounting.
+- **Economic Oracle + digital twins + Economic Event Ledger:** ingest verified ERP/accounting/banking, marketplace and production events; compare predicted and observed outcomes; preserve audit trails.
+- **RAG / decision memory:** preserve the evidence, assumptions, approvals, failed experiments and post-deployment results needed to reproduce decisions.
+
+### Performance evidence boundary
+
+A prior Python CPU benchmark for a 16×16 stochastic cellular-automata reservoir on a binary smooth-versus-bursty time-series classification task reported accuracy 0.5736 and F1 0.5812, versus logistic baseline accuracy 0.525 and F1 0.488. However, its per-object prediction was about 90.7× slower than the simple baseline. That experiment supports exploring cellular automata as a nonlinear feature extractor / reservoir for selected tasks; it does **not** demonstrate faster general computation, higher factory throughput, lower unit cost or an enterprise-level productivity gain.
+
+Therefore the flywheel may recognize a DECOCI / DEGOV / cellular-automata productivity gain only after a controlled deployment measures:
+- the task and baseline algorithm being replaced;
+- decision latency and compute / energy cost;
+- quality-adjusted throughput and error rate;
+- human review and override cost;
+- system uptime, resilience and failure modes;
+- net cashflow after all integration and operating costs.
+
+The integration is an architectural proposal until the relevant software modules are connected and measured in a real operating process.
