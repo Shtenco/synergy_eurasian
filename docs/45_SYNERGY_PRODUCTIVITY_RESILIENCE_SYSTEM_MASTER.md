@@ -147,3 +147,9 @@ All V7.6 values are planning inputs. A feasible MILP schedule is not a solvency 
 V7.6.1 adds dated supplier payment commitments for deposits, dispatch, receipt, milestones and final payments. Firm observed/committed obligations are aggregated into cash outflows before the MILP chooses a feasible production schedule. Scenario commitments require explicit inclusion; planned payments remain excluded. These commitments are not treated as bank settlements and must not be duplicated in the generic cash-outflow input. See [V7.6.1 specification](docs/56_SYNERGY_V7_6_1_SUPPLIER_PAYMENT_CALENDAR.md).
 
 The next financial constraint layer is V7.6.2: financing facilities, drawdown limits, debt service, interest and covenant headroom. This must remain separate from verified bank cash and from legal authority to borrow.
+
+### V7.6.2 update — revolving credit and financing cost
+
+V7.6.2 adds a revolving facility with per-period draw and repayment limits, a hard outstanding-balance ceiling, and interest charged on beginning-period debt. The cash equation includes drawdowns, repayments and interest; the objective penalizes financing interest, while principal remains a balance-sheet liability rather than operating expense. No terminal repayment is assumed unless a later policy explicitly requires it. See [V7.6.2 specification](docs/57_SYNERGY_V7_6_2_REVOLVING_CREDIT_FACILITY.md).
+
+The financing model remains a planning abstraction: no covenant, collateral, fees, FX, default, legal approval or lender commitment is inferred. Actual draws and repayments must be reconciled to bank evidence.
