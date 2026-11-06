@@ -44,6 +44,9 @@ def _event_hash(event: Mapping[str, Any]) -> str:
     missing = [field for field in _EVENT_FIELDS if field not in event]
     if missing:
         raise ValueError(f"event missing fields: {', '.join(missing)}")
+    extra = set(event) - set(_EVENT_FIELDS)
+    if extra:
+        raise ValueError(f"event contains unsupported fields: {', '.join(sorted(extra))}")
     if not isinstance(event["payload"], dict):
         raise ValueError("event payload must be an object")
     evidence = event["evidence_ids"]
