@@ -84,6 +84,7 @@ def test_signed_request_and_distinct_signed_approval_authorize(tmp_path):
     assert decision.reason == "authorized_by_policy"
     assert decision.matched_rule_ids == ("rule:journal",)
     assert decision.approval_identity_ids == ("org:approver",)
+    assert decision.approval_event_refs == ((approval.event["event_id"], approval.event["event_hash"]),)
 
 
 def test_authorization_is_deny_by_default_and_requires_quorum(tmp_path):
