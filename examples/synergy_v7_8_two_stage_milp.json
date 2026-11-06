@@ -1,0 +1,23 @@
+{
+  "precommit_capacity": 100,
+  "precommit_unit_cost": 2,
+  "production_unit_cost": 1,
+  "emergency_unit_cost": 5,
+  "lost_sales_penalty": 20,
+  "risk_alpha": 0.95,
+  "risk_weight": 0.5,
+  "scenarios": [
+    {
+      "scenario_id": "normal",
+      "probability": 0.8,
+      "demand_quantity": 100,
+      "available_capacity": 100
+    },
+    {
+      "scenario_id": "capacity_shock",
+      "probability": 0.2,
+      "demand_quantity": 100,
+      "available_capacity": 40
+    }
+  ]
+}
