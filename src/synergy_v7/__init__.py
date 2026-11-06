@@ -15,6 +15,10 @@ from .trade_ledger import (TradeDocument, SettlementEvent, DocumentAdjustment,
 from .cash_reconciliation import (BankStatementLine, CashAllocation,
     reconcile_bank_statement)
 
+from .realization import (OutputObservation, DeliveryAcceptance,
+    InvoiceDeliveryAllocation, CollectionAttribution, CostObservation,
+    evaluate_realization_chain)
+
 __all__ = ["DomainEvent","EventStore","GraphNode","GraphEdge","EconomicGraph",
     "PhysicalFlow","physical_flow_summary","ResourceCapacity","ResourceCommitment",
     "validate_resource_capacity","graph_from_events","BenefitClaim","BenefitLedger",
@@ -22,5 +26,7 @@ __all__ = ["DomainEvent","EventStore","GraphNode","GraphEdge","EconomicGraph",
     "ResourceRequirement","ProductionRecipe","ProductionOrder","InventoryReceipt",
     "ProductDemand","evaluate_production_plan","TradeDocument","SettlementEvent",
     "DocumentAdjustment","DisputeEvent","CreditRiskAssessment","build_trade_ledger",
-    "BankStatementLine","CashAllocation","reconcile_bank_statement","WorkingCapitalSnapshot",
+    "BankStatementLine","CashAllocation","reconcile_bank_statement","OutputObservation",
+    "DeliveryAcceptance","InvoiceDeliveryAllocation","CollectionAttribution","CostObservation",
+    "evaluate_realization_chain","WorkingCapitalSnapshot",
     "working_capital_cash_impact","CashWaterfallInput","run_cash_waterfall"]
