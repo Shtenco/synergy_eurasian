@@ -182,7 +182,7 @@ class AuthorityScopeEngine:
             if amount <= 0 or usage < 0:
                 raise ValueError("amount must be positive and period usage non-negative")
             currency = payload["currency"]
-            if currency != currency.upper() or len(currency) != 3 or not currency.isalpha():
+            if currency != currency.upper() or len(currency) != 3 or not currency.isascii() or not currency.isalpha():
                 raise ValueError("currency must use a canonical uppercase three-letter code")
             candidates = [
                 scope for scope in self._scopes.values()
@@ -194,15 +194,13 @@ class AuthorityScopeEngine:
             ]
             if not candidates:
                 return ScopeEvaluation(False, "no_matching_authority_scope", None, str(request_id))
-            candidates.sort(key=lambda item: (
-                -sum(bool(x) for x in (
-                    item.resource_id, item.allowed_organization_ids,
-                    item.allowed_account_ids, item.allowed_counterparty_ids,
-                    item.initiator_role,
-                )),
-                item.scope_id,
+            specificity = lambda item: sum(bool(x) for x in (
+                item.resource_id, item.allowed_organization_ids,
+                item.allowed_account_ids, item.allowed_counterparty_ids,
+                item.initiator_role,
             ))
-            if len(candidates) > 1 and candidates[0] == candidates[1]:
+            candidates.sort(key=lambda item: (-specificity(item), item.scope_id))
+            if len(candidates) > 1 and specificity(candidates[0]) == specificity(candidates[1]):
                 raise ValueError("ambiguous_authority_scope")
             scope = candidates[0]
             if currency not in scope.currencies:
@@ -225,13 +223,16 @@ class AuthorityScopeEngine:
             approvers = tuple(sorted(set(decision.approval_identity_ids)))
             if requester in approvers:
                 raise ValueError("initiator_cannot_approve")
+            used_approvers: set[str] = set()
             for requirement in scope.approval_roles:
-                eligible = {
+                eligible = sorted(
                     identity for identity in approvers
-                    if requirement.role_id in self._identity_roles.get(identity, frozenset())
-                }
+                    if identity not in used_approvers
+                    and requirement.role_id in self._identity_roles.get(identity, frozenset())
+                )
                 if len(eligible) < requirement.minimum_approvals:
                     raise ValueError("approval_role_quorum_not_met:" + requirement.role_id)
+                used_approvers.update(eligible[:requirement.minimum_approvals])
             return ScopeEvaluation(
                 True, "within_authority_scope", scope.scope_id, str(request_id),
                 format(amount, "f"), currency, payload["period_key"], approvers,

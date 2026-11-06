@@ -42,7 +42,7 @@ def request(**overrides):
         signed_at="2026-11-06T10:00:00+00:00",
         event={"event_type": "AUTHORIZATION_REQUEST", "event_id": "evt:1",
                "event_hash": "a" * 64, "payload": payload},
-        signature="signature",
+        signature_b64="c2lnbmF0dXJl",
     )
 
 
@@ -123,3 +123,31 @@ def test_scope_configuration_rejects_ambiguous_limits_and_duplicate_roles():
     with pytest.raises(ValueError):
         AuthorityScopeEngine([scope(approval_roles=(
             ScopeRoleRequirement("RISK", 1), ScopeRoleRequirement("RISK", 2)))], {})
+
+
+def test_one_identity_cannot_fill_two_distinct_control_roles():
+    engine_with_shared_identity = AuthorityScopeEngine(
+        [scope()],
+        {
+            "user:treasurer": ("TREASURER",),
+            "user:dual": ("FINANCE_DIRECTOR", "RISK_OFFICER"),
+        },
+    )
+    result = engine_with_shared_identity.evaluate(
+        request(), decision(approval_identity_ids=("user:dual",)), "0"
+    )
+    assert result.reason == "approval_role_quorum_not_met:RISK_OFFICER"
+
+
+def test_equal_specificity_matching_scopes_are_rejected_as_ambiguous():
+    first = scope(scope_id="scope:a")
+    second = scope(scope_id="scope:b")
+    result = AuthorityScopeEngine(
+        [first, second],
+        {
+            "user:treasurer": ("TREASURER",),
+            "user:finance": ("FINANCE_DIRECTOR",),
+            "user:risk": ("RISK_OFFICER",),
+        },
+    ).evaluate(request(), decision(), "0")
+    assert result.reason == "ambiguous_authority_scope"
