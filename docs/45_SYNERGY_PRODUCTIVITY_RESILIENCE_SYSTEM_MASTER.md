@@ -76,4 +76,4 @@ Until that common data and evidence layer exists, V1–V6 remain a family of rel
 
 ## Reproducibility and current CI note
 
-V1–V4 source and tests are in this repository. V5–V6 source, config, tests, docs and outputs are included in the companion extension package; its tests were run locally: **23 passed**. The PR #9 resilience branch initially failed test collection because pandas was absent; `pandas>=2.2,<4` was added in commit `9c8e4cb503d33e82cc4bb9add729514db1a42587`. The follow-up CI run must be checked before declaring that branch green.
+V1–V4 source and tests are in this repository. V5–V6 source, config, tests, docs and outputs are included in the companion extension package; its tests were run locally: **23 passed**. The PR #9 resilience branch initially failed test collection because pandas was absent; `pandas>=2.2,<4` was added in commit `9c8e4cb503d33e82cc4bb9add729514db1a42587`. After adding pandas, the follow-up GitHub Actions run 42149696277 completed successfully. PR #9 remains open and has not been merged.
