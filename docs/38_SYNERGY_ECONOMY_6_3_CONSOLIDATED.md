@@ -399,7 +399,29 @@ Using the ordinary annuity formula `FV = P * (((1 + r/12)^(12*n) - 1) / (r/12))`
 
 This assumes an unchanged contribution in real terms only if the contribution is indexed; the stated 3% is a nominal accumulation assumption in this isolated example. Fees, taxes, default, volatility, contribution interruptions and inflation treatment are not modelled. The payout column is 3% of accumulated capital divided by 12; it is not guaranteed income.
 
-### 10.6 Three ownership architectures
+### 10.6 Preliminary labor baseline and energy-node examples
+
+An early scale illustration used 1,000 people, 160 work hours per person per month and an assumed $15/hour labor cost:
+
+```text
+Monthly labor hours = 1,000 * 160 = 160,000 hours
+Illustrative monthly payroll = 160,000 * $15 = $2,400,000
+```
+
+A separate $8m monthly gross-output placeholder was mentioned in the early discussion, but it was not derived from a sector production model or an input-output table. It is therefore **superseded and not a validated output, revenue or GVA figure**.
+
+An energy-node example used $1m CAPEX, $220,000 annual savings, a 10-year horizon and an 8% discount rate:
+
+```text
+NPV = 220,000 * PVAF(8%, 10) - 1,000,000
+    ≈ +$476,000
+```
+
+This is only a simple annuity illustration. It excludes any unlisted installation, replacement, tax, financing, degradation, residual-value, outage, counterparty and operating risks. It is not an investment case until all those items and the physical energy savings are evidenced.
+
+A related basket sensitivity assumed a $100 energy component in a $1,000 basket. A 50% energy-cost shock adds $50. Against the modelled $66.714 automation saving, $16.714 remains. This is arithmetic sensitivity only; it is not a price forecast and assumes the automation saving is fully realized.
+
+### 10.7 Three ownership architectures
 
 The conversation compared market-led, mixed and cooperative/public ownership structures. These remain hypotheses. A valid comparison must hold physical technology, demand, initial capital and external shocks constant, then vary governance, investment decisions, financing costs, risk allocation and service obligations. Ownership share alone does not generate productivity.
 
