@@ -615,3 +615,66 @@ def test_matched_pair_did_cli_fixture_is_schema_valid_and_returns_expected_effec
     r=evaluate_document(document)
     assert r["matched_pair_count"]==4
     assert r["effect_estimate"]==pytest.approx(5)
+
+
+from synergy_v7 import PlanDemand, optimize_production_schedule
+
+
+def test_v74_milp_optimizer_finds_feasible_integrated_factory_schedule():
+    recipes=[
+      ProductionRecipe("smelt","steel",80,"kg",(MaterialRequirement("ore",100,"kg"),),
+        (ResourceRequirement("electricity",40,"MWh"),),1),
+      ProductionRecipe("machine","machine_part",4,"unit",(MaterialRequirement("steel",20,"kg"),),
+        (ResourceRequirement("electricity",10,"MWh"),),1)]
+    demands=[PlanDemand("customer","machine_part",12,"unit",2,100,"USD")]
+    receipts=[InventoryReceipt("ore1","ore",100,"kg",0,"OBSERVED")]
+    caps=[ResourceCapacity("electricity","0",40,"MWh","OBSERVED","meter:p0"),
+      ResourceCapacity("electricity","1",30,"MWh","OBSERVED","meter:p1")]
+    r=optimize_production_schedule(recipes,demands,receipts,caps,3,
+      {"smelt":1,"machine":3},{"smelt":10,"machine":5},{"steel":0.1},"USD")
+    assert r["feasible"] and r["optimality_proven"]
+    assert r["demand"][0]["fulfilled"]==12
+    assert {x["recipe_id"]:x["batch_count"] for x in r["schedule"]}=={"smelt":1,"machine":3}
+    assert r["resource_usage"][0]["used"]==40
+    assert r["objective_value"]==pytest.approx(1173)
+
+
+def test_v74_milp_optimizer_respects_shared_resource_scarcity():
+    recipe=ProductionRecipe("machine","parts",1,"unit",(),
+      (ResourceRequirement("power",10,"MWh"),),1)
+    demand=[PlanDemand("d1","parts",2,"unit",1,100,"USD")]
+    caps=[ResourceCapacity("power","0",10,"MWh","OBSERVED","meter")]
+    r=optimize_production_schedule([recipe],demand,[],caps,2,{"machine":2},{"machine":1})
+    assert r["feasible"]
+    assert r["demand"][0]["fulfilled"]==1
+    assert r["resource_usage"][0]["used"]==10
+
+
+def test_v74_milp_optimizer_excludes_nonfirm_inventory_and_capacity():
+    recipe=ProductionRecipe("r","finished",1,"unit",(MaterialRequirement("raw",1,"kg"),),
+      (ResourceRequirement("power",1,"MWh"),),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,100,"USD")]
+    receipts=[InventoryReceipt("i1","raw",1,"kg",0,"PLANNED")]
+    caps=[ResourceCapacity("power","0",1,"MWh","PLANNED","plan")]
+    r=optimize_production_schedule([recipe],demand,receipts,caps,2,{"r":1})
+    assert r["feasible"] and r["schedule"]==[]
+    assert r["demand"][0]["fulfilled"]==0
+    assert r["excluded_nonfirm_receipts"]==["i1"]
+
+
+def test_v74_milp_optimizer_does_not_produce_when_economic_value_is_below_cost():
+    recipe=ProductionRecipe("r","finished",1,"unit",(),(),1)
+    demand=[PlanDemand("d1","finished",10,"unit",1,1,"USD")]
+    r=optimize_production_schedule([recipe],demand,[],[],2,{"r":10},{"r":100})
+    assert r["feasible"] and r["schedule"]==[]
+    assert r["demand"][0]["fulfilled"]==0
+
+
+def test_v74_milp_optimizer_rejects_missing_limits_and_unit_mismatch():
+    recipe=ProductionRecipe("r","finished",1,"unit",(),(ResourceRequirement("power",1,"MWh"),),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
+    with pytest.raises(ValueError,match="batch_limits"):
+        optimize_production_schedule([recipe],demand,[],[],2,{})
+    caps=[ResourceCapacity("power","0",1,"kWh","OBSERVED","meter")]
+    with pytest.raises(ValueError,match="unit mismatch"):
+        optimize_production_schedule([recipe],demand,[],caps,2,{"r":1})
