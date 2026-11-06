@@ -6,6 +6,7 @@ import sqlite3
 import pytest
 
 from synergy_sues.event_transport import DurableEventStore
+from synergy_sues.v7_adapter import adapt_v7_event_store
 
 
 @dataclass(frozen=True)
@@ -197,3 +198,15 @@ def test_inbox_message_id_reuse_with_another_valid_event_hash_is_rejected(tmp_pa
 def test_event_store_requires_file_backed_database(tmp_path):
     with pytest.raises(ValueError, match="persistent SQLite"):
         DurableEventStore(":memory:")
+
+
+def test_durable_store_remains_compatible_with_v7_sues_event_adapter(tmp_path):
+    store = DurableEventStore(str(tmp_path / "v7-compat.db"))
+    stored = store.append(event(), now=utc())
+    adapted = adapt_v7_event_store(store)
+    assert len(adapted) == 1
+    assert adapted[0].source_event_id == stored.event_id
+    assert adapted[0].source_event_hash == stored.event_hash
+    assert adapted[0].payload_json == json.dumps(
+        stored.payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    )
