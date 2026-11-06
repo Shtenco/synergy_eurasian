@@ -388,7 +388,7 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
         if not identity.identity_id.strip() or not identity.tenant_id.strip() or not identity.identity_type.strip():
             raise ValueError("identity_id, tenant_id and identity_type are required")
         stamp = datetime.now(timezone.utc).isoformat()
-        with self._connect() as db:
+        with self._session() as db:
             db.execute("BEGIN IMMEDIATE")
             try:
                 existing = db.execute("SELECT * FROM trust_identities WHERE identity_id=?",
@@ -424,7 +424,7 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
         if len(raw) != 32:
             raise ValueError("Ed25519 public key must be exactly 32 bytes")
         stamp = datetime.now(timezone.utc).isoformat()
-        with self._connect() as db:
+        with self._session() as db:
             db.execute("BEGIN IMMEDIATE")
             try:
                 identity = db.execute("SELECT tenant_id FROM trust_identities WHERE identity_id=?",
@@ -454,7 +454,7 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
     def revoke_key(self, identity_id: str, key_id: str, revoked_at: str) -> None:
         _utc(revoked_at, "revoked_at")
         stamp = datetime.now(timezone.utc).isoformat()
-        with self._connect() as db:
+        with self._session() as db:
             db.execute("BEGIN IMMEDIATE")
             try:
                 key = db.execute("SELECT * FROM trust_keys WHERE identity_id=? AND key_id=?",
@@ -480,7 +480,7 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
         return super().verify(envelope, received_at)
 
     def audit_events(self) -> tuple[dict[str, Any], ...]:
-        with self._connect() as db:
+        with self._session() as db:
             rows = db.execute("SELECT * FROM trust_audit ORDER BY sequence").fetchall()
         return tuple(dict(row) for row in rows)
 
