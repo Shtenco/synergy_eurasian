@@ -252,7 +252,7 @@ Scenario values cannot silently satisfy an observed/verified hard constraint. Ev
 This document does not merge PR #9 or PR #10, does not claim the whole economy has been fully calibrated, does not authorize payments/credit/token issuance, and does not replace statutory accounting, legal review or independent model validation.
 
 
-### F-21 — V2 deterministic scenario domain excludes recession/deflation (MEDIUM)
+### F-21 — V2 deterministic scenario domain excludes recession/deflation (MEDIUM) — FIX IMPLEMENTED, CI PENDING
 
 `simulate_case` rejects negative annual cashflow growth and negative replacement inflation. This prevents the deterministic scenario engine from expressing declining operating cashflow or falling replacement prices. V3 has a wider stochastic growth domain, but V2 should accept explicit negative scenarios with bounded validation.
 
@@ -264,10 +264,6 @@ The optimizer checks budget positivity, non-negative objective weights, weight s
 
 `deployment_lag_months` and `diffusion_reach_enterprises` are emitted in the allocation report but do not affect the LP objective or constraints. They are descriptive fields until a time-expanded, adoption-aware model uses them.
 
-### F-24 — V1 supply feasibility does not guard the Leontief stability condition (HIGH)
-
-The current input-output fixture is stable, but `leontief_results` and `solve_supply` invert `I-A` before checking the spectral radius. The runtime should validate non-negative finite coefficients, square dimensions, `rho(A) < 1` and matrix conditioning before using the inverse.
-
 ### F-25 — EIIOM output needs a full objective/metric bridge (HIGH)
 
 EIIOM reports both a weighted LP objective and an unweighted 2045 annual GVA-equivalent total. The distinction is explainable by stage weights, but the output does not publish a clear reconciliation between these values or a full project commissioning/capital-stock bridge. Future reports must publish both measures, stage contribution and assumptions side by side.
@@ -277,6 +273,7 @@ EIIOM reports both a weighted LP objective and an unweighted 2045 annual GVA-equ
 
 Two findings have now been addressed in executable code:
 - F-13: seven-sector Leontief matrix now checks rectangular/square shape, finite non-negative coefficients, sector dimensions, spectral radius below 1, and conditioning before solving. Capacity multipliers and critical-service constraints are validated.
+- F-21: V2 deterministic scenarios now accept bounded recession and replacement-deflation assumptions down to -100%, while rejecting invalid factors.
 - F-22: V4 optimizer now validates finite budgets/weights/project metrics, positive normalization denominators, project criticality, integer lag/diffusion fields, sector caps/floors and project capacity before calling the LP solver.
 
 The new adversarial tests for these controls are committed in `research/sues-audit-v1`. They are not considered accepted until the exact branch-head CI run completes successfully.
