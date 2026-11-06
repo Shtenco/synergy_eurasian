@@ -87,7 +87,7 @@ def reconcile_intercompany(records: Iterable[IntercompanyRecord]) -> dict:
             | {row.entity_id for row in tx_rows if row.record_type in _BUYER_TYPES}
         )
         if len(sellers) != 1 or len(buyers) != 1:
-            raise ValueError(f"Transaction {transaction_id} must identify one reciprocal seller/buyer pair")
+            raise ValueError(f"Counterparty mismatch or ambiguous seller/buyer pair in transaction {transaction_id}")
         seller, buyer = next(iter(sellers)), next(iter(buyers))
         if seller == buyer:
             raise ValueError(f"Transaction {transaction_id} has identical seller and buyer")
