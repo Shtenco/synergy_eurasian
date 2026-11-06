@@ -367,3 +367,11 @@ V7.1 adds discrete-period recipes, integer batch orders, material inventory, del
 - [V7.2 finance primitives](src/synergy_v7/finance.py)
 
 V7.2 adds working-capital/CCC metrics and an explicit cash waterfall. Financing proceeds and internal transfers are reported separately from consolidated external operating cash generation.
+
+- [V7.2.1 Invoice, Settlement and Counterparty Exposure Ledger](docs/49_SYNERGY_V7_2_1_TRADE_LEDGER.md)
+- [V7.2.1 trade-ledger implementation](src/synergy_v7/trade_ledger.py)
+- [V7.2.1 input schema](interfaces/synergy_v7_trade_ledger.schema.json)
+- [V7.2.1 demonstration fixture](examples/synergy_v7_2_1_trade_ledger_demo.json)
+- [V7.2.1 command-line evaluator](src/synergy_v7/trade_cli.py)
+
+V7.2.1 adds dated AR/AP documents, partial settlement replay, credit adjustments, dispute states, aging buckets and counterparty exposure. AR and AP are not netted by default; expected credit loss is a sourced estimate, not cash or an accounting provision.
