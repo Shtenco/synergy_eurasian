@@ -32,6 +32,7 @@
 - [SUES Architecture V1 — федеративная экономика и 12 bounded contexts](docs/66_SYNERGY_UNIFIED_ECONOMIC_SYSTEM_ARCHITECTURE_V1.md)
 - [SUES Mathematical Specification V1 — физические, денежные, кредитные и децентрализованные балансы](docs/67_SYNERGY_UNIFIED_ECONOMIC_MODEL_MATHEMATICAL_SPEC_V1.md)
 - [SUES Production / GRNI / WIP Bridge V1 — трёхсторонняя сверка закупок, BOM, FIFO и капитализация выпуска](docs/68_SYNERGY_SUES_PRODUCTION_GRNI_WIP_BRIDGE_V1.md)
+- [SUES Procurement & Production JSON Schema — PO, receipt, invoice, BOM, production and cost events](interfaces/synergy_sues_production.schema.json)
 
 **Статус:** исследовательская ветка `research/sues-audit-v1`, PR #11. Новые SUES-модули — reference implementation; не являются промышленной бухгалтерской системой, платёжной инфраструктурой или лицензированным финансовым продуктом. PR #9 и PR #10 сохраняются отдельно до завершения аудита и интеграционных тестов.
 
