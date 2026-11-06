@@ -135,7 +135,7 @@ class AuthorizedActionExecutor:
                     raise ValueError("signed request event ID has already been consumed")
 
                 result = handler(db, request, decision)
-                result_json = _canonical(result)
+                result_json = _canonical(result).decode("utf-8")
                 prior = db.execute(
                     "SELECT sequence, receipt_hash FROM execution_receipts ORDER BY sequence DESC LIMIT 1"
                 ).fetchone()
@@ -182,7 +182,7 @@ class AuthorizedActionExecutor:
                 return False
             try:
                 result = json.loads(row["result_json"])
-                if _canonical(result) != row["result_json"]:
+                if _canonical(result).decode("utf-8") != row["result_json"]:
                     return False
             except (TypeError, ValueError):
                 return False
