@@ -371,3 +371,5 @@ Ed25519 signatures authenticate events from keys provisioned in an explicit trus
 - [SUES Federation Identity and Signed Event Envelope V1](docs/71_SYNERGY_SUES_FEDERATION_IDENTITY_AND_SIGNED_EVENT_ENVELOPE_V1.md) — Ed25519 identity authentication, durable SQLite trust registry and administrative audit chain.
 
 - [SUES Federation Authorization Policy V1](docs/72_SYNERGY_SUES_FEDERATION_AUTHORIZATION_POLICY_V1.md) — signed requests, signed multi-party approvals, deny-by-default action/resource policy.
+
+- [SUES Authorized Action Execution V1](docs/73_SYNERGY_SUES_AUTHORIZED_ACTION_EXECUTION_V1.md) — one-time request consumption, atomic local effects and append-only execution receipts.
