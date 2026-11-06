@@ -928,7 +928,7 @@ def test_v761_supplier_payment_commitments_reduce_cash_available_for_production(
     r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
       cash_opening_balance=40,cash_outflows_by_period=report["cash_outflows_by_period"],
       collection_lag_by_demand={"sale":1})
-    assert r["feasible"] and r["schedule"]==[]
+    assert r["feasible"] and r["schedule"]==[], r
     assert r["demand"][0]["fulfilled"]==0
 
 
@@ -945,4 +945,5 @@ def test_v761_supplier_payment_cli_aggregates_calendar_and_runs_cash_optimizer()
     document["cash_opening_balance"]=40
     result=evaluate_document(document)
     assert result["supplier_payment_commitments"]["cash_outflows_by_period"]=={0:20}
+    assert result["schedule"], result
     assert result["ending_cash_by_period"]==pytest.approx([0,0,100])
