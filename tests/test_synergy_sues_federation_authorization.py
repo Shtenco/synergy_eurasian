@@ -181,3 +181,17 @@ def test_rule_validation_rejects_ambiguous_or_overbroad_allow():
     with pytest.raises(ValueError, match="already exists"):
         engine.register_rule(AuthorizationRule("r", "t", "ALLOW", "A", "R",
             ("subject",)))
+
+def test_unlisted_identity_cannot_disrupt_authorization_with_malformed_decision(tmp_path):
+    registry, keys = setup_registry()
+    request = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
+        keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "request")
+    malformed = approval_payload("MAYBE")
+    outsider = signed_event(tmp_path, "org:outsider", "tenant:one", "key-1",
+        keys["org:outsider"], "AUTHORIZATION_APPROVAL", malformed, "outsider-invalid",
+        "2026-11-06T10:01:00+00:00")
+    approval = signed_event(tmp_path, "org:approver", "tenant:one", "key-1",
+        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(), "approval",
+        "2026-11-06T10:01:00+00:00")
+    assert policy().authorize(request, [outsider, approval], registry,
+        "2026-11-06T10:02:00+00:00").allowed
