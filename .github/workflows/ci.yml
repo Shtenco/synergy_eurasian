@@ -91,3 +91,25 @@ jobs:
               "capital_30y_with_crises_usd": p["portfolio_30y_target_with_crises"]["final_productive_capital_usd"]
           }, indent=2))
           PY
+
+      - name: Run SYNERGY sector capital optimizer V4
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, "src")
+          from synergy_sector_optimizer_v4 import build_report, load_config
+          report = build_report(load_config())
+          Path("outputs").mkdir(exist_ok=True)
+          Path("outputs/synergy_sector_optimizer_v4.json").write_text(
+              json.dumps(report, indent=2), encoding="utf-8"
+          )
+          print(json.dumps([{
+              "budget_usd": case["budget_usd"],
+              "invested_usd": case["invested_usd"],
+              "direct_annual_net_residual_usd": case["portfolio_metrics"]["direct_annual_net_residual_usd"],
+              "network_spillover_annual_net_residual_usd": case["portfolio_metrics"]["network_spillover_annual_net_residual_usd"],
+              "sector_investment_usd": case["sector_investment_usd"],
+          } for case in report["budget_sensitivity"]], indent=2))
+          PY
