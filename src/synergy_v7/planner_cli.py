@@ -21,11 +21,14 @@ def evaluate_document(document,schema_path=None):
     demands=[PlanDemand(**x) for x in document["demands"]]
     receipts=[InventoryReceipt(**x) for x in document["inventory_receipts"]]
     capacities=[ResourceCapacity(**x) for x in document["resource_capacities"]]
+    cash_floor=document.get("cash_minimum_balance")
+    if isinstance(cash_floor,dict):
+        cash_floor={int(k):v for k,v in cash_floor.items()}
     return optimize_production_schedule(recipes,demands,receipts,capacities,
       document["horizon_periods"],document["batch_limits"],document.get("batch_costs",{}),
       document.get("holding_costs",{}),document.get("objective_currency","USD"),
       document.get("mip_rel_gap",0.0),document.get("time_limit_seconds",30.0),document.get("minimum_inventory",{}),document.get("storage_limits",{}),
-      document.get("cash_opening_balance"),document.get("cash_minimum_balance"),
+      document.get("cash_opening_balance"),cash_floor,
       ({int(k):v for k,v in document["cash_inflows_by_period"].items()} if "cash_inflows_by_period" in document else None),
       document.get("collection_lag_by_demand"),document.get("collection_fraction_by_demand"))
 
