@@ -1259,3 +1259,11 @@ def test_v77_scenario_cli_example_validates_schema_and_runs(capsys):
     assert code==0
     assert '"formal_two_stage_stochastic_milp": false' in captured.out
     assert '"complete": true' in captured.out
+
+
+def test_v77_credit_borrowing_base_shock_uses_facility_limit_as_explicit_base():
+    scenario=EconomicShockScenario("collateral-haircut",1.0,credit_borrowing_base_multipliers={"0":0.5})
+    changed=apply_scenario({"credit_limit":100},scenario)
+    assert changed["credit_borrowing_base_by_period"]=={"0":50}
+    with pytest.raises(ValueError,match="require credit_limit"):
+        apply_scenario({},scenario)
