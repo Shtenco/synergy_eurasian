@@ -4,8 +4,12 @@ from .core import (DomainEvent, EventStore, GraphNode, GraphEdge, EconomicGraph,
     validate_resource_capacity, graph_from_events)
 from .ledger import (BenefitClaim, BenefitLedger, cashflow_npv, empirical_cvar,
     pareto_frontier)
+from .production import (MaterialRequirement, ResourceRequirement, ProductionRecipe,
+    ProductionOrder, InventoryReceipt, ProductDemand, evaluate_production_plan)
 
 __all__ = ["DomainEvent","EventStore","GraphNode","GraphEdge","EconomicGraph",
     "PhysicalFlow","physical_flow_summary","ResourceCapacity","ResourceCommitment",
     "validate_resource_capacity","graph_from_events","BenefitClaim","BenefitLedger",
-    "cashflow_npv","empirical_cvar","pareto_frontier"]
+    "cashflow_npv","empirical_cvar","pareto_frontier","MaterialRequirement",
+    "ResourceRequirement","ProductionRecipe","ProductionOrder","InventoryReceipt",
+    "ProductDemand","evaluate_production_plan"]
