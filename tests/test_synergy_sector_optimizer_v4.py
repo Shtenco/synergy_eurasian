@@ -39,7 +39,7 @@ def test_all_budget_sensitivities_are_feasible():
 def test_infeasible_sector_floor_is_rejected():
     cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
     cfg["sector_min_investment_usd"]["FOOD"] = 1_000_000
-    with pytest.raises(ValueError, match="No feasible"):
+    with pytest.raises(ValueError, match="exceeds available project capacity"):
         optimize_portfolio(cfg, 100_000)
 
 
@@ -47,4 +47,38 @@ def test_weights_must_sum_to_one():
     cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
     cfg["objective_weights"]["annual_net_residual_yield"] = 0.9
     with pytest.raises(ValueError, match="sum to 1.0"):
+        optimize_portfolio(cfg, 100_000)
+
+
+
+def test_optimizer_rejects_nan_weights_zero_normalizers_and_bad_project_fields():
+    cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
+    cfg["objective_weights"]["annual_net_residual_yield"] = float("nan")
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        optimize_portfolio(cfg, 100_000)
+
+    cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
+    cfg["normalization"]["output_gain_per_1000"] = 0
+    with pytest.raises(ValueError, match="strictly positive"):
+        optimize_portfolio(cfg, 100_000)
+
+    cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
+    cfg["projects"][0]["criticality_weight"] = float("nan")
+    with pytest.raises(ValueError, match="must be finite"):
+        optimize_portfolio(cfg, 100_000)
+
+    cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
+    cfg["projects"][0]["deployment_lag_months"] = -1
+    with pytest.raises(ValueError, match="non-negative integer"):
+        optimize_portfolio(cfg, 100_000)
+
+
+def test_optimizer_rejects_nonfinite_budget_and_overcommitted_sector_minimums():
+    cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
+    with pytest.raises(ValueError, match="finite and positive"):
+        optimize_portfolio(cfg, float("nan"))
+
+    cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
+    cfg["sector_min_investment_usd"]["FOOD"] = 1_000_000
+    with pytest.raises(ValueError, match="exceeds available project capacity"):
         optimize_portfolio(cfg, 100_000)

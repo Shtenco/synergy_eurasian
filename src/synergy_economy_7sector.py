@@ -32,15 +32,38 @@ def _arrays(cfg: dict[str, Any]) -> dict[str, np.ndarray]:
     }
 
 
-def leontief_results(cfg: dict[str, Any]) -> dict[str, Any]:
-    a = _arrays(cfg)["A"]
-    identity = np.eye(a.shape[0])
-    inverse = np.linalg.inv(identity - a)
-    demand = np.ones(a.shape[0], dtype=float)
-    gross_output = inverse @ demand
+def _validated_leontief_components(cfg: dict[str, Any]) -> tuple[np.ndarray, float, float]:
+    try:
+        a = _arrays(cfg)["A"]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Input-output matrix A must be a rectangular numeric matrix") from exc
+    if a.ndim != 2 or a.shape[0] != a.shape[1]:
+        raise ValueError("Input-output matrix A must be square")
+    if not np.isfinite(a).all():
+        raise ValueError("Input-output matrix A must contain only finite values")
+    if np.any(a < 0):
+        raise ValueError("Input-output coefficients must be non-negative")
+    n = a.shape[0]
+    if len(cfg["sectors"]) != n:
+        raise ValueError("Sector count must match input-output matrix dimensions")
     rho = float(max(abs(np.linalg.eigvals(a))))
+    if not np.isfinite(rho) or rho >= 1.0:
+        raise ValueError(f"Leontief system is not productive: spectral radius must be < 1, got {rho}")
+    matrix = np.eye(n) - a
+    condition_number = float(np.linalg.cond(matrix))
+    if not np.isfinite(condition_number) or condition_number > 1e12:
+        raise ValueError(f"Leontief system is numerically ill-conditioned: cond(I-A)={condition_number}")
+    inverse = np.linalg.solve(matrix, np.eye(n))
+    return inverse, rho, condition_number
+
+
+def leontief_results(cfg: dict[str, Any]) -> dict[str, Any]:
+    inverse, rho, condition_number = _validated_leontief_components(cfg)
+    demand = np.ones(inverse.shape[0], dtype=float)
+    gross_output = inverse @ demand
     return {
         "spectral_radius": rho,
+        "condition_number_I_minus_A": condition_number,
         "leontief_inverse": inverse.tolist(),
         "final_demand": demand.tolist(),
         "gross_output": gross_output.tolist(),
@@ -58,13 +81,21 @@ def solve_supply(
     capacity_multipliers: list[float],
     enforce_critical_floor: bool = False,
 ) -> dict[str, Any]:
-    a = _arrays(cfg)["A"]
-    inverse = np.linalg.inv(np.eye(a.shape[0]) - a)
-    baseline_capacity = inverse @ np.ones(a.shape[0])
-    available_capacity = baseline_capacity * np.asarray(capacity_multipliers, dtype=float)
-    n = len(cfg["sectors"])
+    inverse, rho, condition_number = _validated_leontief_components(cfg)
+    n = inverse.shape[0]
+    multipliers = np.asarray(capacity_multipliers, dtype=float)
+    if multipliers.ndim != 1 or len(multipliers) != n:
+        raise ValueError("Capacity multiplier count must match sector count")
+    if not np.isfinite(multipliers).all() or np.any(multipliers < 0):
+        raise ValueError("Capacity multipliers must be finite and non-negative")
     critical = set(cfg["critical_sector_indices"])
+    if any(not isinstance(i, int) or i < 0 or i >= n for i in critical):
+        raise ValueError("Critical sector indices must be valid integer indices")
     floor = float(cfg["critical_minimum_service_share"])
+    if not np.isfinite(floor) or not 0.0 <= floor <= 1.0:
+        raise ValueError("Critical minimum service share must be between 0 and 1")
+    baseline_capacity = inverse @ np.ones(n)
+    available_capacity = baseline_capacity * multipliers
     bounds = [
         (floor, 1.0) if enforce_critical_floor and i in critical else (0.0, 1.0)
         for i in range(n)
@@ -82,6 +113,8 @@ def solve_supply(
             "status": result.message,
             "service": None,
             "average_service_share": None,
+            "leontief_spectral_radius": rho,
+            "condition_number_I_minus_A": condition_number,
         }
     return {
         "feasible": True,
@@ -89,6 +122,8 @@ def solve_supply(
         "service": result.x.tolist(),
         "average_service_share": float(result.x.mean()),
         "capacity": available_capacity.tolist(),
+        "leontief_spectral_radius": rho,
+        "condition_number_I_minus_A": condition_number,
     }
 
 

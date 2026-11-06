@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/synergy_sues_event_transport.schema.json",
+  "title": "SYNERGY SUES durable event transport contracts",
+  "oneOf": [
+    { "$ref": "#/$defs/event" },
+    { "$ref": "#/$defs/outbox_message" },
+    { "$ref": "#/$defs/inbox_receipt" }
+  ],
+  "$defs": {
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id", "aggregate_type", "aggregate_id", "sequence",
+        "event_type", "effective_at", "recorded_at", "payload",
+        "source_ref", "evidence_ids", "idempotency_key",
+        "previous_hash", "event_hash"
+      ],
+      "properties": {
+        "event_id": { "type": "string", "minLength": 1 },
+        "aggregate_type": { "type": "string", "minLength": 1 },
+        "aggregate_id": { "type": "string", "minLength": 1 },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "event_type": { "type": "string", "minLength": 1 },
+        "effective_at": { "type": "string", "format": "date-time" },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "payload": { "type": "object" },
+        "source_ref": { "type": "string", "minLength": 1 },
+        "evidence_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "idempotency_key": { "type": "string" },
+        "previous_hash": { "type": "string", "pattern": "^(?:[a-f0-9]{64})?$" },
+        "event_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "outbox_message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "event_id", "event_hash", "destination", "topic", "payload_json", "attempts", "lease_token", "lease_until"],
+      "properties": {
+        "message_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "event_id": { "type": "string", "minLength": 1 },
+        "event_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "destination": { "type": "string", "minLength": 1 },
+        "topic": { "type": "string", "minLength": 1 },
+        "payload_json": { "type": "string", "minLength": 2 },
+        "attempts": { "type": "integer", "minimum": 1 },
+        "lease_token": { "type": "string", "minLength": 1 },
+        "lease_until": { "type": "string", "format": "date-time" }
+      }
+    },
+    "inbox_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["consumer", "message_id", "event_id", "event_hash", "received_at"],
+      "properties": {
+        "consumer": { "type": "string", "minLength": 1 },
+        "message_id": { "type": "string", "minLength": 1 },
+        "event_id": { "type": "string", "minLength": 1 },
+        "event_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "received_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

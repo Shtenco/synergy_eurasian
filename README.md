@@ -23,6 +23,26 @@
 
 ---
 
+## SUES — единая федеративная экономика
+
+Исследовательский интеграционный трек объединяет EIIOM, семисекторную экономику, производственные сети V6.4–V6.5.6 и событийно-производственный стек V7.0–V7.8. Его цель — создать общую экономическую модель с проверяемыми физическими потоками, entity-scoped double-entry ledger, AR/AP и FIFO inventory subledgers, межфирменной и банковской сверкой, валютной консолидацией, взаимным кредитом, коллективным капиталом, доказательной базой и федеративным управлением.
+
+- [SUES Audit V1 — инвентаризация, находки и план интеграции](docs/64_SYNERGY_UNIFIED_ECONOMIC_SYSTEM_AUDIT_V1.md)
+- [SUES Contracts & Journal V1 — Money, Quantity, FX, Evidence, double-entry journal](docs/65_SYNERGY_UNIFIED_ECONOMIC_SYSTEM_CONTRACTS_AND_JOURNAL_V1.md)
+- [SUES Architecture V1 — федеративная экономика и 12 bounded contexts](docs/66_SYNERGY_UNIFIED_ECONOMIC_SYSTEM_ARCHITECTURE_V1.md)
+- [SUES Mathematical Specification V1 — физические, денежные, кредитные и децентрализованные балансы](docs/67_SYNERGY_UNIFIED_ECONOMIC_MODEL_MATHEMATICAL_SPEC_V1.md)
+- [SUES Production / GRNI / WIP Bridge V1 — трёхсторонняя сверка закупок, BOM, FIFO и капитализация выпуска](docs/68_SYNERGY_SUES_PRODUCTION_GRNI_WIP_BRIDGE_V1.md)
+- [SUES Procurement & Production JSON Schema — PO, receipt, invoice, BOM, production and cost events](interfaces/synergy_sues_production.schema.json)
+- [SUES V7 Event & Realization Bridge V1 — hash-verified event envelopes and output-to-cash evidence links](docs/69_SYNERGY_SUES_V7_EVENT_AND_REALIZATION_BRIDGE_V1.md)
+- [SUES V7 Bridge JSON Schema — event envelope and realization-link interchange](interfaces/synergy_sues_v7_bridge.schema.json)
+- [SUES V7 Projector Contracts — versioned graph-event payloads and projection records](interfaces/synergy_sues_v7_projector.schema.json)
+- [SUES Durable Event Transport — durable event log, transactional outbox/inbox contracts](interfaces/synergy_sues_event_transport.schema.json)
+- [SUES Durable Event Store & Transactional Inbox/Outbox V1](docs/70_SYNERGY_SUES_DURABLE_EVENT_STORE_AND_TRANSACTIONAL_INBOX_OUTBOX_V1.md)
+
+**Статус:** исследовательская ветка `research/sues-audit-v1`, PR #11. Новые SUES-модули — reference implementation. V7 adapter сохраняет и проверяет исходные события/доказательства; версионированные projectors пока формируют только graph read models для двух реализованных типов событий; Durable Event Store и transactional inbox/outbox добавляют постоянный журнал и повторяемую доставку. Ни один из этих слоёв не выполняет автоматические бухгалтерские проводки. Производственный контур ограничен полными партиями; автоматический расчёт ставок и durable transactional storage ещё не реализованы. Это не промышленная бухгалтерская система, платёжная инфраструктура или лицензированный финансовый продукт. PR #9 и PR #10 сохраняются отдельно до завершения аудита и интеграционных тестов.
+
+---
+
 ## Что такое SYNERGY EURASIAN
 
 **SYNERGY EURASIAN / Real Economy OS** — исследовательская архитектура экономического планирования и проектного управления в пространстве пяти стран ЕАЭС: **России, Казахстана, Беларуси, Армении и Кыргызстана**. Система задумывается как связующее звено между спросом, реальными ресурсами, производственными цепочками, инвестиционными решениями, подтверждёнными результатами и повторным накоплением капитала.
@@ -340,3 +360,14 @@ python src/eiiom_optimizer.py --config config/base_scenario.json --output output
 **Copyright © 2026 Evgeniy Koshtenko. All rights reserved.** Проект распространяется под собственной лицензией [`LICENSE`](LICENSE). Публичная доступность GitHub **не означает открытую лицензию** или разрешение на коммерческое использование. Права сторонних компонентов и уже выданные лицензии сохраняются в применимых пределах.
 
 <p align="center"><strong>SYNERGY EURASIAN — капитал имеет смысл тогда, когда превращается в проверяемую реальную производительность, устойчивость и благосостояние.</strong></p>
+
+### SUES federation security V1
+
+- [Federation Identity and Signed Event Envelope V1](docs/71_SYNERGY_SUES_FEDERATION_IDENTITY_AND_SIGNED_EVENT_ENVELOPE_V1.md)
+- [Signed Event JSON Schema](interfaces/synergy_sues_signed_event.schema.json)
+
+Ed25519 signatures authenticate events from keys provisioned in an explicit trust registry. Signature validity is not business or financial authorization.
+
+- [SUES Federation Identity and Signed Event Envelope V1](docs/71_SYNERGY_SUES_FEDERATION_IDENTITY_AND_SIGNED_EVENT_ENVELOPE_V1.md) — Ed25519 identity authentication, durable SQLite trust registry and administrative audit chain.
+
+- [SUES Federation Authorization Policy V1](docs/72_SYNERGY_SUES_FEDERATION_AUTHORIZATION_POLICY_V1.md) — signed requests, signed multi-party approvals, deny-by-default action/resource policy.
