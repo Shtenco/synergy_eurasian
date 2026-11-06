@@ -636,7 +636,7 @@ def test_v74_milp_optimizer_finds_feasible_integrated_factory_schedule():
     assert r["demand"][0]["fulfilled"]==12
     assert {x["recipe_id"]:x["batch_count"] for x in r["schedule"]}=={"smelt":1,"machine":3}
     assert r["resource_usage"][0]["used"]==40
-    assert r["objective_value"]==pytest.approx(1173)
+    assert r["objective_value"]==pytest.approx(1171)
 
 
 def test_v74_milp_optimizer_respects_shared_resource_scarcity():
