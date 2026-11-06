@@ -229,6 +229,11 @@ class TradeSubledger:
                 continue
             document = self._documents[settlement.document_id]
             require_account(settlement.cash_account_id, AccountType.ASSET, NormalBalance.DEBIT)
+            if settlement.cash_account_id in {
+                accounts.receivable_account_id, accounts.revenue_account_id,
+                accounts.payable_account_id, accounts.purchase_account_id,
+            }:
+                raise ValueError("Settlement cash account must be distinct from trade control accounts")
             functional_amount, fx_ref = functional(settlement.amount, settlement.source_ref)
             if document.side == TradeSide.RECEIVABLE:
                 expected_ar_delta -= functional_amount.amount
