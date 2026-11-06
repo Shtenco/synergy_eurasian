@@ -363,7 +363,8 @@ def test_trade_ledger_cli_fixture_is_schema_valid_and_reconciles():
     assert result["totals_by_side_and_currency"]=={"PAYABLE::USD":30000,"RECEIVABLE::USD":60000}
     ar=result["documents"][0]
     assert ar["disputed_outstanding"]==10000
-    assert result["counterparty_exposure"][0]["expected_credit_loss"]==pytest.approx(810)
+    buyer=next(x for x in result["counterparty_exposure"] if x["counterparty_id"]=="buyer-01")
+    assert buyer["expected_credit_loss"]==pytest.approx(810)
 
 
 from synergy_v7 import (BankStatementLine, CashAllocation, reconcile_bank_statement)
