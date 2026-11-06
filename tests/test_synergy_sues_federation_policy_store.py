@@ -13,6 +13,7 @@ from synergy_sues.federation_identity import (
 from synergy_sues.federation_authorization import AuthorizationRule
 from synergy_sues.federation_policy_store import SQLiteAuthorizationPolicyStore
 from synergy_sues.federation_execution import AuthorizedActionExecutor
+from synergy_sues.federation_execution import AuthorizedActionExecutor
 
 
 @dataclass(frozen=True)
@@ -314,3 +315,35 @@ def test_execution_rejects_policy_changed_after_authorization_before_commit(tmp_
             lambda *_: called.append(True), "2026-11-06T10:05:00+00:00")
     assert called == []
     assert executor.receipts() == ()
+
+
+
+def test_executor_rejects_policy_change_racing_between_authorization_and_commit(tmp_path):
+    store, registry, keys = setup(tmp_path)
+    first, first_approvals = make_change(tmp_path, keys)
+    store.apply_change(first, first_approvals, registry, "2026-11-06T10:02:00+00:00")
+    second_rule = rule_document()
+    second_rule["effect"] = "DENY"
+    second, second_approvals = make_change(tmp_path, keys, change_id="change:race",
+        expected_version=1, suffix="race", rule=second_rule)
+    auth_request = make_signed(tmp_path, keys, "user:operator", "AUTHORIZATION_REQUEST",
+        {"request_id": "request:race", "action": "JOURNAL_POST",
+         "resource_type": "LEDGER", "resource_id": "ledger:alpha"},
+        "auth-race", "2026-11-06T10:03:00+00:00")
+
+    class RacingPolicyStore(SQLiteAuthorizationPolicyStore):
+        def authorize(self, request, approvals, registry, received_at=None):
+            decision = super().authorize(request, approvals, registry, received_at)
+            self.apply_change(second, second_approvals, registry, "2026-11-06T10:04:00+00:00")
+            return decision
+
+    racing = RacingPolicyStore(str(tmp_path / "policy.db"),
+        {"tenant:one": ("admin:proposer", "admin:one", "admin:two", "admin:three")})
+    executor = AuthorizedActionExecutor(str(tmp_path / "policy.db"))
+    called = []
+    with pytest.raises(ValueError, match="policy snapshot changed"):
+        executor.execute(auth_request, [], racing, registry,
+            lambda *_: called.append(True), "2026-11-06T10:05:00+00:00")
+    assert called == []
+    assert executor.receipts() == ()
+    assert racing.snapshot("tenant:one").version == 2
