@@ -13,7 +13,7 @@ from synergy_sues import (
     FXRate, Journal, JournalEntry, JournalLine, Money, NormalBalance, Quantity,
     BenefitAttribution, BenefitAttributionRegistry, BenefitEvent, FlowBoundary,
     PhysicalFlow, summarize_physical_flows, IntercompanyRecord, IntercompanyRecordType,
-    reconcile_intercompany, BankAllocation, BankStatement, BankStatementLine,
+    reconcile_intercompany, post_intercompany_eliminations, BankAllocation, BankStatement, BankStatementLine,
     reconcile_bank_account,
 )
 
@@ -374,3 +374,49 @@ def test_bank_statement_rejects_invalid_opening_movement_closing_identity():
         BankStatement("bad", "cash", "USD", period, Money("100", "USD"),
             Money("140", "USD"), Money("100", "USD"),
             (BankStatementLine("b1", date(2026, 11, 6), Money("50", "USD"), "bank:1", "statement:1"),))
+
+
+def test_intercompany_eliminations_post_balanced_journal_entries():
+    journal = Journal("USD")
+    journal.add_account(account("seller-revenue", "4100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("buyer-expense", "5100", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_account(account("seller-ar", "1200", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("buyer-ap", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    rows = [
+        IntercompanyRecord("r1", "tx-elim", "seller", "buyer", "SELLER_REVENUE",
+            Money("100", "USD"), "2026-Q4", "erp:sale", "seller-revenue"),
+        IntercompanyRecord("e1", "tx-elim", "buyer", "seller", "BUYER_EXPENSE",
+            Money("100", "USD"), "2026-Q4", "erp:purchase", "buyer-expense"),
+        IntercompanyRecord("ar1", "tx-elim", "seller", "buyer", "SELLER_RECEIVABLE",
+            Money("60", "USD"), "2026-Q4", "erp:ar", "seller-ar"),
+        IntercompanyRecord("ap1", "tx-elim", "buyer", "seller", "BUYER_PAYABLE",
+            Money("55", "USD"), "2026-Q4", "erp:ap", "buyer-ap"),
+        IntercompanyRecord("ci1", "tx-elim", "seller", "buyer", "SELLER_CASH_IN",
+            Money("30", "USD"), "2026-Q4", "bank:in"),
+        IntercompanyRecord("co1", "tx-elim", "buyer", "seller", "BUYER_CASH_OUT",
+            Money("30", "USD"), "2026-Q4", "bank:out"),
+    ]
+    result = post_intercompany_eliminations(
+        journal, rows, {"2026-Q4": date(2026, 12, 31)},
+        datetime(2026, 12, 31, 23, tzinfo=timezone.utc), "consol-event", "consol-idem",
+    )
+    assert result["posted_entry_count"] == 2
+    assert result["cash_flow_eliminations_by_currency"] == {"USD": "30"}
+    trial = journal.trial_balance()
+    assert trial["balanced"]
+    assert trial["total_debits"] == trial["total_credits"] == "155"
+
+
+def test_intercompany_elimination_refuses_unmapped_period_and_wrong_accounts():
+    journal = Journal("USD")
+    journal.add_account(account("seller-revenue", "4100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("buyer-expense", "5100", AccountType.EXPENSE, NormalBalance.DEBIT))
+    rows = [
+        IntercompanyRecord("r1", "tx-elim", "seller", "buyer", "SELLER_REVENUE",
+            Money("10", "USD"), "2026-Q4", "erp:sale", "seller-revenue"),
+        IntercompanyRecord("e1", "tx-elim", "buyer", "seller", "BUYER_EXPENSE",
+            Money("10", "USD"), "2026-Q4", "erp:purchase", "buyer-expense"),
+    ]
+    with pytest.raises(ValueError, match="Missing effective date"):
+        post_intercompany_eliminations(journal, rows, {}, datetime(2026, 12, 31, tzinfo=timezone.utc),
+            "event", "idem")
