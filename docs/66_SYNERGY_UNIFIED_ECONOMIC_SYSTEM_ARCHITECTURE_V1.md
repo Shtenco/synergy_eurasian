@@ -35,6 +35,25 @@ SUES must expose trade-offs instead of hiding them inside one opaque score.
 11. **No hidden cross-subsidy:** transfers, grants, common services and solidarity pools are separately visible and governed.
 12. **Failure containment:** local insolvency, software failure or malicious actors must not automatically disable the entire federation.
 
+## 2A. Federation authority firewall
+
+SUES is the real-economy research and integration specification inside the existing federation. It does **not** absorb the canonical authorities already assigned in `config/federation_v4.json`.
+
+| Authority | Canonical owner | SUES relationship |
+|---|---|---|
+| Federation architecture, constitution and authority map | `Shtenco/synergy_system` | Consumes standards; cannot redefine authority unilaterally |
+| Real-economy resource state, project proposals and physical model | `Shtenco/synergy_eurasian` | SUES research/reference models live here |
+| Accounting, liabilities, liquidity, profit recognition and capital capacity | `Shtenco/synergy_financial_os` | SUES journal/subledgers are reference contracts until formally adopted |
+| Payment execution, routing and settlement receipt | `Shtenco/synergy_pay_system` | SUES emits intents/required flows; it does not execute payments |
+| Technology candidate evidence and hypothesis state | `Shtenco/nexus_science_agent` | SUES consumes qualified technology evidence |
+| Business intents and demand signals | `Shtenco/synergychain` and distributed sources | SUES consumes permissioned demand signals |
+| Network transport state | `Shtenco/synergynet` | Transport is not economic truth or financial authority |
+| Service lifecycle and node health | `Shtenco/synergy_meta_os` | Runtime orchestration is not accounting or settlement authority |
+
+**Hard prohibitions:** modelled GVA is not cash; own-token market capitalization is not collateral; internal AMM marks are not external profit; flash-loan principal is not owned capital; a blockchain commitment is not proof of physical/economic truth; an AI recommendation is not capital authorization. These are explicit federation invariants, not merely UI labels.
+
+The SUES in-memory journal, AR/AP, inventory, translation and consolidation modules are research reference implementations. They must not be represented as the canonical accounting ledger or payment service until independently reviewed and formally adopted by the relevant authority owners.
+
 ## 3. Federation levels
 
 | Level | Economic unit | Primary responsibilities | Authority boundary |
@@ -57,8 +76,8 @@ A higher level may coordinate shared externalities but cannot directly seize or 
 | Physical Economy | Product, recipe, resource, capacity, inventory, production, shipment, quality | Operator systems with evidence |
 | Market & Coordination | Demand, offer, order, allocation, procurement, capacity reservation | Contract/order service |
 | Trade & Contracts | Purchase/sales contract, acceptance, invoice, payable, receivable, dispute | Contract and trade subledger |
-| Accounting & Evidence | Chart of accounts, journal, evidence, audit trail, reconciliation | Entity's accounting ledger |
-| Money & Clearing | Payment instruction, account movement, netting obligation, FX execution | Licensed/contracted settlement providers and member ledgers |
+| Accounting & Evidence | Chart of accounts, journal, evidence, audit trail, reconciliation | Entity's books; federation-wide canonical accounting authority remains Financial OS |
+| Money & Clearing | Payment instruction, account movement, netting obligation, FX execution | Member ledgers and licensed/contracted providers; canonical settlement execution remains Pay System |
 | Capital & Risk | Equity, debt, facility, collateral, reserve, guarantee, default, recovery | Contractual capital provider / borrower |
 | Investment & Innovation | Project proposal, R&D, technology package, deployment cohort, benefit event | Project owner and evidence registry |
 | Optimization & Simulation | Scenario, model, parameters, solution, solver status, confidence, model card | Versioned model registry |
@@ -193,6 +212,32 @@ The clearing engine must:
 - model liquidity and settlement finality;
 - fail closed when legal authority or evidence is missing.
 
+
+### 9.1 Mutual-credit and household-capital discipline
+
+The household → cooperative → SME → project-capital ladder is a funding pathway, not a money multiplier. Each contribution is a separate tranche with owner, currency, callable date, maturity, liquidity class and risk limit.
+
+For a funded loan, the lender records a receivable and the borrower records a liability. Loan principal is not income or consolidated NAV. Credit sustainability requires realized interest/fees and recovered collateral to exceed credit losses, funding cost, OPEX and fraud losses.
+
+Maturity matching is mandatory:
+
+`WeightedFundingMaturity >= LoanMaturity + LiquidityBuffer`
+
+Callable emergency reserves must not finance long-dated illiquid loans unless a separately authorized maturity-transformation and liquidity-reserve policy exists.
+
+Keep at least three separate books:
+- **Social reserve:** grants and emergency support.
+- **Credit book:** loans, expected credit loss, collateral and loss reserves.
+- **Investment book:** long-term productive assets and equity.
+
+A social reserve must not silently recapitalize chronic investment losses. Repayments to earlier participants must be funded from realized income or explicitly disclosed reserve support, never disguised as new principal.
+
+### 9.2 Cross-border currency discipline
+
+SUES does not begin by assuming a common Eurasian currency. The first sequence is common data standards, interoperable payments, transparent FX, cross-border settlement, common project-finance passports, portable evidence/collateral, and only then a review of whether a shared monetary instrument is useful.
+
+Every project carries a currency vector for CAPEX, OPEX, revenue, debt and collateral. FX reference rates are not executable quotes. Currency mismatch, hedge/basis cost, settlement finality and jurisdiction are explicit constraints. DvP/PvP and legal eligibility govern asset/FX netting.
+
 ## 10. Capital, reserves and investment waterfall
 
 Capital is partitioned by legal/economic nature:
@@ -210,6 +255,28 @@ A reserve is not revenue. A credit line is not equity. Collateral is not cash. A
 
 Operating cash priority is policy-configurable but must protect mandatory obligations, asset replacement and liquidity. Distributions are gated by solvency, reserve policy, covenants, legal requirements and member approval. The cash waterfall is an allocation policy over actual cash; the journal remains the accounting source of truth.
 
+
+### 10.1 Delta at each economic scale
+
+SUES adopts the repository's Delta concept as a family of distinct metrics, not one universal cash number:
+
+- Household Delta = income − necessary expenses − debt service.
+- Business Delta = external revenue − cash OPEX − taxes − debt service − maintenance/replacement CAPEX.
+- Project Delta = realized operating cashflow − senior debt service − lifecycle reserve − required maintenance.
+- Regional/System Delta is a planning measure that separately adjusts external sales, import-substitution value, imported inputs, financing cost, infrastructure lifecycle cost and realized losses.
+
+Gross cashflow is not distributable Delta. Internal turnover and transfer payments cannot be counted as new external value. GDP/GVA and realized cashflow remain separate metrics.
+
+### 10.2 Five reinforcing but separately measured loops
+
+1. Financial loop: external realized P&L → Financial OS → reserves/reinvestment.
+2. Productive loop: capital → capacity → goods/services → customer cashflow → reinvestment.
+3. Human-capital loop: health/education/housing/mobility → productivity → household/business Delta.
+4. Science/IP loop: research → reproducible evidence → technology/IP → deployment → productivity/export → next research.
+5. Demand-localization loop: observed demand/import bottleneck → supplier candidate → verified local production → delivered-cost/resilience change.
+
+A loop may reinforce the next, but the same benefit event cannot be credited multiple times.
+
 ## 11. Governance and authorization
 
 Governance is federated and layered:
@@ -225,6 +292,24 @@ Governance is federated and layered:
 Economic voting must not silently convert into ownership rights. Token holdings must not automatically grant unlimited control over member property, personal data or essential services.
 
 Authorization checks must include role, jurisdiction, policy version, value threshold, risk tier, quorum/approval, segregation of duties and kill switch. The optimizer has no private key or payment credential.
+
+
+### 11.1 Institutional decision chain
+
+EIIOM is a planning core, not an investment committee. A major project moves through:
+- read-mostly project observatory and evidence baseline;
+- EIIOM scenario/portfolio recommendation;
+- technical domain review;
+- independent economic underwriting;
+- legal and jurisdictional opinion;
+- risk and environmental/social review where material;
+- authorized investment committee decision;
+- regulated execution and settlement;
+- delivery evidence and post-investment audit.
+
+Project SPVs or bounded project perimeters should make assets, debt, equity, contracts, offtake, insurance and cashflow waterfalls explicit. Project sponsors cannot be the only evidence source.
+
+Public capital is primarily catalytic: common infrastructure, R&D, standards, certification, or narrowly justified first-loss support. Guarantees are contingent liabilities; lifecycle OPEX and maintenance must be funded. PPP is justified only when risks are allocated to parties able to manage them, and availability payments depend on service/quality evidence.
 
 ## 12. AI and optimization stack
 
@@ -251,6 +336,11 @@ Authorization checks must include role, jurisdiction, policy version, value thre
 
 A solver may not convert scenario assumptions into observed facts or authorize its own recommendation.
 
+
+### 12.1 Current EIIOM implementation boundary
+
+The repository's executable `src/eiiom_optimizer.py` is a reference LP allocation model. The much broader EIIOM V4 stochastic spatial MILP described in `docs/23_EIIOM_V4_STOCHASTIC_MILP.md` is a target specification, not an implemented production optimizer. SUES must not report planned variables, scenario-tree logic, non-anticipativity or full commodity/resource balance as already deployed.
+
 ## 13. Unified optimization objective
 
 Do not compress the economy into one unreviewable scalar. Use a constrained multi-objective formulation:
@@ -268,6 +358,13 @@ subject to:
 - distributional fairness and concentration safeguards.
 
 Produce a Pareto frontier and explain trade-offs. Any weighted score must expose weights, stakeholder mandate and sensitivity.
+
+
+### 13.1 Resilience and concentration policy
+
+Stress must propagate through connected financial, physical, climate, digital and social dependencies. Report expected loss, VaR/CVaR, liquidity runway, concentration by supplier/country/grid/currency/customer/provider, recovery time and minimum essential-service levels.
+
+A backup supplier or corridor may have negative standalone NPV but positive resilience option value. Household capital contributions must pause safely under income shocks. Trading/AMM/token research is never a base funding assumption for essential production. A core project must remain solvent if trading P&L, arbitrage spreads and speculative token marks fall to zero.
 
 ## 14. Integration map from current repository
 
