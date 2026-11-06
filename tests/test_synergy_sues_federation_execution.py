@@ -228,3 +228,21 @@ def test_outbox_idempotency_conflict_rolls_back_protected_action(tmp_path):
     assert executor.receipts() == ()
     with sqlite3.connect(path) as db:
         assert db.execute("SELECT COUNT(*) FROM execution_outbox").fetchone()[0] == 0
+
+
+def test_outbox_payload_is_immutable_while_delivery_state_can_advance(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys)
+    path = str(tmp_path / "executor.db")
+    executor = AuthorizedActionExecutor(path)
+
+    def handler(db, request, decision):
+        return {"message_id": AuthorizedActionExecutor.enqueue_outbox(
+            db, "idem:immutable", "META_BANK", "TRANSFER", {"transfer_id": "t-1"})}
+
+    executor.execute(request, [approval], policy, registry, handler, now())
+    with sqlite3.connect(path) as db:
+        with pytest.raises(sqlite3.IntegrityError, match="identity is immutable"):
+            db.execute("UPDATE execution_outbox SET payload_json='{}'")
+        db.execute("UPDATE execution_outbox SET status='DELIVERED', attempts=1")
+        assert db.execute("SELECT status,attempts FROM execution_outbox").fetchone() == ("DELIVERED", 1)
