@@ -289,10 +289,10 @@ No legacy model is deleted. Each is versioned, wrapped, tested and compared agai
 ## 15. Implementation roadmap
 
 ### Phase A — Foundation
-Typed contracts, double-entry journal, physical-flow dimensions, benefit attribution, intercompany and bank reconciliation. **In progress in SUES V1 research branch.**
+Typed contracts, entity-scoped double-entry journal, atomic batch posting, physical-flow dimensions, benefit attribution, intercompany matching/elimination, bank reconciliation, FX translation, typed AR/AP subledger and FIFO inventory. **In progress in SUES V1 research branch.**
 
 ### Phase B — Subledger integration
-AR/AP, inventory, fixed assets, payroll/tax, loans, supplier commitments, collateral and bank feeds reconcile to the journal.
+Complete the AR/AP and FIFO inventory kernels; then add GRNI matching, BOM consumption, production output capitalization, fixed assets, payroll/tax, loans, supplier commitments, collateral and bank feeds reconciled to the journal.
 
 ### Phase C — Economic graph and event platform
 Durable events, signatures, bitemporal state, stable IDs, replay, projections, access controls and independent checkpoints.
