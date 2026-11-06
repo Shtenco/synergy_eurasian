@@ -30,6 +30,7 @@
 - [SUES Audit V1 — инвентаризация, находки и план интеграции](docs/64_SYNERGY_UNIFIED_ECONOMIC_SYSTEM_AUDIT_V1.md)
 - [SUES Contracts & Journal V1 — Money, Quantity, FX, Evidence, double-entry journal](docs/65_SYNERGY_UNIFIED_ECONOMIC_SYSTEM_CONTRACTS_AND_JOURNAL_V1.md)
 - [SUES Architecture V1 — федеративная экономика и 12 bounded contexts](docs/66_SYNERGY_UNIFIED_ECONOMIC_SYSTEM_ARCHITECTURE_V1.md)
+- [SUES Mathematical Specification V1 — физические, денежные, кредитные и децентрализованные балансы](docs/67_SYNERGY_UNIFIED_ECONOMIC_MODEL_MATHEMATICAL_SPEC_V1.md)
 
 **Статус:** исследовательская ветка `research/sues-audit-v1`, PR #11. Новые SUES-модули — reference implementation; не являются промышленной бухгалтерской системой, платёжной инфраструктурой или лицензированным финансовым продуктом. PR #9 и PR #10 сохраняются отдельно до завершения аудита и интеграционных тестов.
 
