@@ -103,6 +103,7 @@ def test_journal_rejects_unbalanced_entry_and_unknown_account():
 def test_foreign_currency_posting_requires_fx_reference_and_balances_functional_currency():
     journal = new_journal()
     now = datetime(2026, 11, 6, 8, tzinfo=timezone.utc)
+    journal.add_fx_rate(FXRate("EURUSD:2026-11-06", "EUR", "USD", "1.1", now, "market-feed:fx"))
     lines = (
         JournalLine("fx1", "cash", "DEBIT", Money("2", "EUR"), Money("2.2", "USD"),
                     "co1", "bank:fx", fx_rate_ref="EURUSD:2026-11-06"),
@@ -219,3 +220,34 @@ def test_benefit_registry_rejects_duplicate_measurement_and_preserves_scenario_s
             ("scenario:fixture-2",), EvidenceStatus.SCENARIO))
     registry.add_claim(BenefitAttribution("claim-1", "be1", "project-a", "1"))
     assert registry.summary()["events"][0]["scenario_is_not_observed_cash"]
+
+
+def test_journal_rejects_missing_wrong_direction_or_wrong_value_fx_rate():
+    journal = new_journal()
+    now = datetime(2026, 11, 6, 8, tzinfo=timezone.utc)
+    foreign_line = JournalLine("fx-debit", "cash", "DEBIT", Money("2", "EUR"),
+        Money("2.2", "USD"), "co1", "bank:fx", fx_rate_ref="EURUSD")
+    balancing_line = JournalLine("fx-credit", "revenue", "CREDIT", Money("2.2", "USD"),
+        Money("2.2", "USD"), "co1", "sale:fx")
+    missing = JournalEntry("fx-missing", date(2026, 11, 6), now, "USD",
+        (foreign_line, balancing_line), "event-missing", "idem-missing", "Missing FX")
+    with pytest.raises(ValueError, match="Unknown FX rate"):
+        journal.post(missing)
+
+    journal.add_fx_rate(FXRate("EURUSD", "EUR", "USD", "1.1", now, "feed:1"))
+    wrong_direction = Journal("USD")
+    wrong_direction.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    wrong_direction.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
+    wrong_direction.add_fx_rate(FXRate("USDEUR", "USD", "EUR", "0.9", now, "feed:2"))
+    wrong = JournalEntry("fx-wrong-direction", date(2026, 11, 6), now, "USD",
+        (foreign_line, balancing_line), "event-direction", "idem-direction", "Wrong direction")
+    with pytest.raises(ValueError, match="direction"):
+        wrong_direction.post(wrong)
+
+    bad_value = JournalEntry("fx-bad-value", date(2026, 11, 6), now, "USD",
+        (JournalLine("fx-debit-2", "cash", "DEBIT", Money("2", "EUR"),
+                     Money("2.3", "USD"), "co1", "bank:fx", fx_rate_ref="EURUSD"),
+         balancing_line),
+        "event-value", "idem-value", "Wrong FX valuation")
+    with pytest.raises(ValueError, match="does not match"):
+        journal.post(bad_value)
