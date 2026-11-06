@@ -4,8 +4,10 @@ This is a wait-and-see scenario evaluator, not a non-anticipative stochastic MIL
 Each scenario is re-optimized independently after its shock is revealed.
 """
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from copy import deepcopy
+from hashlib import sha256
+import json
 import math
 from typing import Any, Iterable
 from .planner_cli import evaluate_document
@@ -105,6 +107,11 @@ def weighted_cvar(losses:list[tuple[float,float]],alpha:float)->dict:
     return {"cvar":cvar,"var_threshold":threshold,"confidence_level":alpha}
 
 
+def _fingerprint(value:dict)->str:
+    payload=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False,allow_nan=False)
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
 def evaluate_scenario_set(base_document:dict,scenarios:Iterable[EconomicShockScenario|dict],
                           risk_alpha:float=0.95,risk_weight:float=0.5)->dict:
     rows=[x if isinstance(x,EconomicShockScenario) else EconomicShockScenario(**x) for x in scenarios]
@@ -116,6 +123,7 @@ def evaluate_scenario_set(base_document:dict,scenarios:Iterable[EconomicShockSce
     if not 0<risk_alpha<1: raise ValueError("risk_alpha must be in (0,1)")
     if not math.isfinite(risk_weight) or not 0<=risk_weight<=1:
         raise ValueError("risk_weight must be in [0,1]")
+    baseline_hash=_fingerprint(base_document)
     baseline=evaluate_document(deepcopy(base_document))
     if not baseline.get("feasible") or not baseline.get("optimality_proven"):
         raise RuntimeError("Baseline plan must be feasible and proven optimal before scenario comparison")
@@ -126,6 +134,7 @@ def evaluate_scenario_set(base_document:dict,scenarios:Iterable[EconomicShockSce
         feasible=bool(result.get("feasible"))
         proven=bool(result.get("optimality_proven"))
         row={"scenario_id":scenario.scenario_id,"probability":scenario.probability,
+             "scenario_input_sha256":_fingerprint(altered),"scenario_spec":asdict(scenario),
              "feasible":feasible,"optimality_proven":proven,"solver_status":result.get("solver_status"),
              "solver_message":result.get("solver_message")}
         if feasible:
@@ -141,7 +150,11 @@ def evaluate_scenario_set(base_document:dict,scenarios:Iterable[EconomicShockSce
                 "served_value":result["served_value"],"unserved_demand_value":shortfall_value,
                 "production_cost":result["production_cost"],"holding_cost":result["holding_cost"],
                 "interest_cost":result["credit_facility"]["total_interest_cost"],
-                "schedule":result["schedule"],"ending_cash_by_period":result["ending_cash_by_period"],
+                "schedule":result["schedule"],"demand_detail":result["demand"],
+                "resource_usage":result["resource_usage"],
+                "collateral_borrowing_base":result.get("collateral_borrowing_base"),
+                "supplier_payment_commitments":result.get("supplier_payment_commitments"),
+                "ending_cash_by_period":result["ending_cash_by_period"],
                 "ending_credit_balance_by_period":result["credit_facility"]["ending_balance_by_period"]})
         scenario_results.append(row)
     complete=all(x["feasible"] and x["optimality_proven"] for x in scenario_results)
@@ -158,7 +171,8 @@ def evaluate_scenario_set(base_document:dict,scenarios:Iterable[EconomicShockSce
             "worst_scenario_loss":max(x["loss_vs_baseline"] for x in scenario_results),
             "probability_weighted_loss":expected_loss}
     return {"model":"SYNERGY_V7_7_SCENARIO_RECOURSE_EVALUATOR",
-        "baseline":{"objective_value":baseline["objective_value"],"served_value":baseline["served_value"],
+        "input_sha256":baseline_hash,
+        "baseline":{"input_sha256":baseline_hash,"objective_value":baseline["objective_value"],"served_value":baseline["served_value"],
             "production_cost":baseline["production_cost"],"schedule":baseline["schedule"]},
         "scenarios":scenario_results,"risk_metrics":metrics,"complete":complete,
         "decision_timing":"WAIT_AND_SEE_INDEPENDENT_SCENARIO_REOPTIMIZATION",
