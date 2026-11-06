@@ -197,6 +197,8 @@ class AuthorizedActionExecutor:
                     "matched_rule_ids": list(decision.matched_rule_ids),
                     "approval_identity_ids": list(decision.approval_identity_ids),
                     "approval_event_refs": [list(item) for item in decision.approval_event_refs],
+                    "policy_version": decision.policy_version,
+                    "policy_hash": decision.policy_hash,
                 }
                 decision_json = _canonical(decision_document).decode("utf-8")
                 prior = db.execute(
