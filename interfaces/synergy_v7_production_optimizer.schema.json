@@ -327,6 +327,80 @@
         "minimum": 0
       },
       "description": "Committed cash outflows by zero-based period; JSON keys are strings."
+    },
+    "supplier_payment_commitments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "payment_id",
+          "supplier_id",
+          "purchase_order_id",
+          "input_product_id",
+          "period",
+          "amount",
+          "currency",
+          "payment_stage",
+          "status",
+          "evidence_id"
+        ],
+        "properties": {
+          "payment_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "supplier_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "purchase_order_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "input_product_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "period": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1
+          },
+          "payment_stage": {
+            "enum": [
+              "DEPOSIT",
+              "DISPATCH",
+              "RECEIPT",
+              "MILESTONE",
+              "FINAL"
+            ]
+          },
+          "status": {
+            "enum": [
+              "OBSERVED",
+              "COMMITTED",
+              "SCENARIO",
+              "PLANNED"
+            ]
+          },
+          "evidence_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "include_scenario_supplier_payments": {
+      "type": "boolean",
+      "default": false
     }
   }
 }
