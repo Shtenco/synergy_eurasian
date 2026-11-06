@@ -308,6 +308,8 @@ class SQLiteAuthorizationPolicyStore:
         received_at: datetime | str | None = None,
     ) -> PolicyChangeResult:
         """Validate signatures/quorum and atomically apply one expected-version change."""
+        if not self.verify():
+            raise ValueError("authorization policy history integrity verification failed")
         approvals = tuple(approvals)
         tenant_id, change_id, expected_version, operation, rule_id, rule_doc, approval_events = (
             self._validate_change(request, approvals, registry, received_at)
@@ -463,6 +465,7 @@ class SQLiteAuthorizationPolicyStore:
                         or change_payload.get("operation") != row["operation"]
                         or request_envelope.identity_id not in self.administrators.get(tenant, ())):
                     return False
+                request_signed_at = _utc(request_envelope.signed_at, "signed_at")
                 if not approvals:
                     return False
                 approval_identities: set[str] = set()
@@ -478,6 +481,7 @@ class SQLiteAuthorizationPolicyStore:
                             or approval_envelope.tenant_id != tenant
                             or approval_envelope.identity_id not in self.administrators.get(tenant, ())
                             or approval_envelope.identity_id == request_envelope.identity_id
+                            or _utc(approval_envelope.signed_at, "signed_at") < request_signed_at
                             or not isinstance(approval_payload, dict)
                             or approval_payload.get("change_id") != row["change_id"]
                             or approval_payload.get("tenant_id") != tenant
