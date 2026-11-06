@@ -50,6 +50,7 @@ def optimize_production_schedule(
     cash_opening_balance: float | None = None,
     cash_minimum_balance: float | dict[int,float] | None = None,
     cash_inflows_by_period: dict[int,float] | None = None,
+    cash_outflows_by_period: dict[int,float] | None = None,
     collection_lag_by_demand: dict[str,int] | None = None,
     collection_fraction_by_demand: dict[str,float] | None = None,
 ) -> dict:
@@ -74,9 +75,10 @@ def optimize_production_schedule(
         if not isinstance(limit,int) or limit<0: raise ValueError(f"batch limit for {rid} must be a non-negative integer")
     batch_costs=batch_costs or {}; holding_costs=holding_costs or {}
     minimum_inventory=minimum_inventory or {}; storage_limits=storage_limits or {}
-    cash_enabled=any(x is not None for x in (cash_opening_balance,cash_minimum_balance,cash_inflows_by_period,collection_lag_by_demand,collection_fraction_by_demand))
+    cash_enabled=any(x is not None for x in (cash_opening_balance,cash_minimum_balance,cash_inflows_by_period,cash_outflows_by_period,collection_lag_by_demand,collection_fraction_by_demand))
     cash_opening_balance=0.0 if cash_opening_balance is None else cash_opening_balance
     cash_inflows_by_period=cash_inflows_by_period or {}
+    cash_outflows_by_period=cash_outflows_by_period or {}
     collection_lag_by_demand=collection_lag_by_demand or {}
     collection_fraction_by_demand=collection_fraction_by_demand or {}
     if not math.isfinite(cash_opening_balance) or cash_opening_balance<0:
@@ -85,6 +87,10 @@ def optimize_production_schedule(
         raise ValueError("cash_inflows_by_period contains period outside horizon")
     for period,amount in cash_inflows_by_period.items():
         if not math.isfinite(amount) or amount<0: raise ValueError(f"Invalid cash inflow for period {period}")
+    if set(cash_outflows_by_period)-set(range(horizon_periods)):
+        raise ValueError("cash_outflows_by_period contains period outside horizon")
+    for period,amount in cash_outflows_by_period.items():
+        if not math.isfinite(amount) or amount<0: raise ValueError(f"Invalid cash outflow for period {period}")
     if set(collection_lag_by_demand)-{d.demand_id for d in demand_rows}:
         raise ValueError("collection_lag_by_demand contains unknown demand_id")
     if set(collection_fraction_by_demand)-{d.demand_id for d in demand_rows}:
@@ -247,7 +253,8 @@ def optimize_production_schedule(
                 if collection_period==period:
                     cash_value=d.unit_value*collection_fraction_by_demand.get(d.demand_id,1.0)
                     coeff[y_index[d.demand_id]]=coeff.get(y_index[d.demand_id],0.0)-cash_value
-            rhs=cash_inflows_by_period.get(period,0.0)+(cash_opening_balance if period==0 else 0.0)
+            rhs=(cash_inflows_by_period.get(period,0.0)-cash_outflows_by_period.get(period,0.0)
+                +(cash_opening_balance if period==0 else 0.0))
             add_constraint(coeff,rhs,rhs,f"cash_balance::{period}")
     else:
         deferred_collections=[]
@@ -310,6 +317,7 @@ def optimize_production_schedule(
         "cash_model":{"opening_balance":cash_opening_balance if cash_enabled else None,
             "minimum_balance":cash_minimum_balance if cash_enabled else None,
             "exogenous_inflows":cash_inflows_by_period if cash_enabled else {},
+            "committed_outflows":cash_outflows_by_period if cash_enabled else {},
             "collection_lags":collection_lag_by_demand if cash_enabled else {},
             "collection_fractions":collection_fraction_by_demand if cash_enabled else {},
             "production_cost_paid_at_start_period":True,
