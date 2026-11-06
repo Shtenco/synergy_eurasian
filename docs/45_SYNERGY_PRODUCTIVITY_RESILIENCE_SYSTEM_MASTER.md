@@ -120,3 +120,7 @@ V7.4 adds a SciPy/HiGHS mixed-integer scheduler over recipe batches, inventory b
 ### V7.4.1 update — inventory policy
 
 The V7.4 MILP now supports end-of-period minimum inventory (safety stock) and maximum storage bounds by product. Infeasible combinations are reported as infeasible, not silently relaxed. The factory fixture demonstrates a 10 kg steel safety stock and 30 kg storage ceiling.
+
+### V7.5 update — production resilience stress
+
+V7.5 replays a fixed production schedule under correlated common shocks, resource-specific capacity reductions and supplier receipt delays. It reports demand service distributions, complete-service frequency and empirical tail service shortfall. This is conditional Monte Carlo stress, not calibrated probability forecasting, recourse optimization or a formal CVaR-constrained solution. See [V7.5 specification](docs/54_SYNERGY_V7_5_MONTE_CARLO_RESILIENCE.md).
