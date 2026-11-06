@@ -1,0 +1,42 @@
+{
+  "system_id": "SYNERGY-PRODUCTIVITY-RESILIENCE-SYSTEM",
+  "consolidated_at": "2026-11-06",
+  "status": "CONNECTED_RESEARCH_MODEL_FAMILIES_NOT_ONE_CALIBRATED_END_TO_END_SIMULATOR",
+  "strategic_objective": "Maximize sustainable network-wide productive capability while preserving critical-sector reproduction, liquidity resilience and human agency.",
+  "families": [
+    {
+      "family_id": "EIIOM_REAL_ECONOMY",
+      "versions": ["EIIOM-v2", "EIIOM-v4"],
+      "role": "Spatial and sectoral project/resource/capital planning"
+    },
+    {
+      "family_id": "PRODUCTIVITY_FLYWHEEL",
+      "versions": ["SEVEN_SECTOR_BASELINE", "V1", "V2", "V3", "V4", "V5", "V6"],
+      "role": "Reproduction accounting, productivity, capital allocation, technology diffusion and innovation-capability feedback",
+      "main_repository_versions": ["SEVEN_SECTOR_BASELINE", "V1", "V2", "V3", "V4"],
+      "companion_extension_versions": ["V5", "V6"],
+      "extension_local_tests": 23
+    },
+    {
+      "family_id": "NETWORK_ECONOMICS_RESILIENCE",
+      "versions": ["V6.4", "V6.5.3", "V6.5.4", "V6.5.5", "V6.5.6"],
+      "role": "Production coordination, credit/liquidity, supplier resilience, self-healing and joint reserve allocation",
+      "status": "OPEN_PR_NOT_MERGED",
+      "pull_request": "https://github.com/Shtenco/synergy_eurasian/pull/9",
+      "branch": "research/self-healing-economy-v6.4-v6.5.6",
+      "dependency_fix_commit": "9c8e4cb503d33e82cc4bb9add729514db1a42587",
+      "dependency_fix": "pandas>=2.2,<4",
+      "followup_ci": "PENDING_AT_CONSOLIDATION"
+    }
+  ],
+  "accounting_invariants": [
+    "Internal transfers are not consolidated new value",
+    "Debt proceeds, token issuance and asset revaluation are not operating gains",
+    "Replacement CAPEX and critical-service obligations precede discretionary allocation",
+    "Duplicate enterprise benefit streams are rejected",
+    "Research capacity and physical/labor indices are not cash NPV",
+    "Labor time released is not automatically cash savings or layoffs",
+    "Optimizers recommend; independent human, legal and financial gates authorize"
+  ],
+  "next_target": "V7_EVENT_SOURCED_ENTERPRISE_RESOURCE_TECHNOLOGY_GRAPH"
+}
