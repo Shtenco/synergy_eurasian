@@ -178,9 +178,10 @@ def test_rule_validation_rejects_ambiguous_or_overbroad_allow():
     with pytest.raises(ValueError, match="exceeds"):
         engine.register_rule(AuthorizationRule("r", "t", "ALLOW", "A", "R",
             ("subject",), ("approver",), 2))
+    valid = AuthorizationRule("r", "t", "ALLOW", "A", "R", ("subject",))
+    engine.register_rule(valid)
     with pytest.raises(ValueError, match="already exists"):
-        engine.register_rule(AuthorizationRule("r", "t", "ALLOW", "A", "R",
-            ("subject",)))
+        engine.register_rule(valid)
 
 def test_unlisted_identity_cannot_disrupt_authorization_with_malformed_decision(tmp_path):
     registry, keys = setup_registry()
