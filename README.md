@@ -425,3 +425,8 @@ V7.5 stress-tests a fixed schedule under common resource shocks, resource-specif
 - [V7.6 command-line optimizer](src/synergy_v7/planner_cli.py)
 
 V7.6 adds period-by-period cash conservation to the V7.4 production MILP. It prevents the optimizer from spending future customer collections before they arrive, while keeping scenario cash assumptions separate from bank-reconciled actuals.
+
+- [V7.6.1 Supplier Payment Calendar](docs/56_SYNERGY_V7_6_1_SUPPLIER_PAYMENT_CALENDAR.md)
+- [V7.6.1 supplier payment model](src/synergy_v7/supplier_payments.py)
+
+V7.6.1 adds evidence-qualified supplier deposits, dispatch, receipt, milestone and final-payment commitments. Only observed and committed obligations reduce firm cash by default; scenario commitments require explicit opt-in, and planned payments are excluded.
