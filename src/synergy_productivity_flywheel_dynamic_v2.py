@@ -6,6 +6,7 @@ net residual yields after incremental OPEX and replacement obligations.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -29,12 +30,15 @@ def simulate_case(
     start = cfg["starting_point"]
     tech = cfg["technology_projects"]
     alloc = cfg["allocation"]
-    if abs(sum(float(v) for v in alloc.values()) - 1.0) > 1e-9:
+    allocation_values = [float(v) for v in alloc.values()]
+    if not all(math.isfinite(v) and v >= 0 for v in allocation_values):
+        raise ValueError("Fund allocation shares must be finite and non-negative.")
+    if abs(sum(allocation_values) - 1.0) > 1e-9:
         raise ValueError("Fund allocation shares must sum to 1.0.")
-    if not 0.0 <= annual_cashflow_growth:
-        raise ValueError("Cashflow growth cannot be negative in this scenario engine.")
-    if not 0.0 <= annual_replacement_inflation:
-        raise ValueError("Replacement inflation cannot be negative.")
+    if not math.isfinite(float(annual_cashflow_growth)) or annual_cashflow_growth < -1.0:
+        raise ValueError("Cashflow growth must be finite and at least -100%.")
+    if not math.isfinite(float(annual_replacement_inflation)) or annual_replacement_inflation < -1.0:
+        raise ValueError("Replacement inflation must be finite and at least -100%.")
     auto_yield = float(tech["automation_net_residual_yield_per_year"] if automation_yield is None else automation_yield)
     rd_success = float(tech["rd_success_probability"] if rd_success_probability is None else rd_success_probability)
     rd_yield = float(tech["rd_net_residual_yield_if_success_per_year"] if rd_yield_if_success is None else rd_yield_if_success)
