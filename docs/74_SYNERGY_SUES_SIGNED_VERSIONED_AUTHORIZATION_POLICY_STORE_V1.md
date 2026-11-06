@@ -51,7 +51,9 @@ The policy hash commits to tenant ID, version and the complete canonically order
 
 `store.authorize(...)` loads the current tenant snapshot, evaluates it using the existing deny-by-default evaluator and attaches `policy_version` and `policy_hash` to the resulting `AuthorizationDecision`. The authorized executor now includes these two fields in its immutable execution receipt decision record.
 
-This is an evidence pin, not a distributed lock spanning policy evaluation and execution. The local executor and policy store are separate SQLite transactions/databases unless explicitly configured to share a database in a future design. A production system must define how policy revocation races with already-authorized actions: short-lived decision leases, shared transactional storage, or a final policy-version check at the execution boundary. V1 records the exact policy snapshot used; it does not claim linearizable authorization plus execution across databases.
+This is an evidence pin, and the local reference now adds a final same-database guard: when the executor receives a decision with `policy_version` and `policy_hash`, it requires the policy store table in the same SQLite database, acquires `BEGIN IMMEDIATE`, and compares the current tenant version/hash before calling the handler. A missing policy table or stale snapshot fails closed. Sharing one SQLite database lets the write lock prevent a policy mutation between this check and the execution receipt commit.
+
+This is a single-host check-to-commit guarantee only. Separate databases, hosts or regions are not atomic; production requires a managed shared transactional authority or a separately designed consensus/fencing protocol.
 
 ## Persistence and integrity
 
