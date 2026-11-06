@@ -100,3 +100,7 @@ V7 acceptance still requires durable event storage, signed evidence, access cont
 5. **V7.6 — resilience and learning:** correlated shocks, recovery policies, formal CVaR/chance constraints, verified reusable technology packages and measured R&D-capability reproduction.
 
 No automated optimizer output may authorize credit, token issuance, payments, securities distribution or legally binding commitments.
+
+### V7.2.2 update — cash evidence
+
+The research branch now also includes explicit bank statement reconciliation: manually approved allocations connect signed bank lines to AR/AP documents, generate settlement events, preserve unmatched residuals for review and report gross cash control totals by currency. No automatic fuzzy matching is performed and unexplained cash is not recognized as revenue. See [V7.2.2 specification](docs/50_SYNERGY_V7_2_2_BANK_RECONCILIATION.md) and [PR #10](https://github.com/Shtenco/synergy_eurasian/pull/10).
