@@ -28,7 +28,7 @@ When multiple ALLOW rules match, approvals are evaluated independently per rule 
 
 ## Signed approvals and separation of duties
 
-Each approval must be a signed `AUTHORIZATION_APPROVAL` event. The event payload binds the approval to request_id, action, resource_type, resource_id, requester_identity_id and decision (APPROVE or REJECT). The identity registry verifies the approver's signature and tenant.
+Each approval must be a signed `AUTHORIZATION_APPROVAL` event. The event payload binds the approval to request_id, the exact request_event_id and request_event_hash, action, resource_type, resource_id, requester_identity_id and decision (APPROVE or REJECT). This cryptographic source binding prevents an otherwise valid approval from being replayed against a different signed request that reuses the same request_id and scope. The identity registry verifies the approver's signature and tenant.
 
 An approval is counted only when its scope exactly matches the signed request, it is signed no earlier than the request, the signer is explicitly listed as an approver in a matching ALLOW rule, and the signer is not the requester. Each identity counts at most once. A REJECT from an authorized approver vetoes the request. An unrelated trusted identity cannot veto or approve.
 
@@ -52,4 +52,4 @@ Rules currently live in process memory and must be provisioned by trusted applic
 - Contracts: `interfaces/synergy_sues_authorization.schema.json`
 - Tests: `tests/test_synergy_sues_federation_authorization.py`
 
-Tests cover signed requester and approver flows, deny-by-default, quorum, self-approval rejection, authorized veto, unlisted-identity veto prevention, deny precedence, request/approval scope binding, timestamp ordering, tampering and rule validation.
+Tests cover signed requester and approver flows, deny-by-default, quorum, self-approval rejection, authorized veto, unlisted-identity veto prevention, deny precedence, request/approval scope binding, exact request event ID/hash replay prevention, timestamp ordering, tampering and rule validation.
