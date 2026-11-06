@@ -151,3 +151,12 @@ def test_equal_specificity_matching_scopes_are_rejected_as_ambiguous():
         },
     ).evaluate(request(), decision(), "0")
     assert result.reason == "ambiguous_authority_scope"
+
+
+def test_decision_must_be_bound_to_the_exact_signed_request():
+    assert engine().evaluate(
+        request(), decision(request_id="req:other"), "0"
+    ).reason == "authorization decision request_id does not match signed request"
+    assert engine().evaluate(
+        request(), decision(requester_identity_id="user:other"), "0"
+    ).reason == "authorization decision requester does not match signed request"

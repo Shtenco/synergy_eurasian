@@ -166,6 +166,8 @@ class AuthorityScopeEngine:
         try:
             if not isinstance(payload, dict):
                 raise ValueError("request payload must be an object")
+            if request.event.get("event_type") != "AUTHORIZATION_REQUEST":
+                raise ValueError("expected AUTHORIZATION_REQUEST event")
             required = (
                 "request_id", "action", "resource_type", "resource_id",
                 "amount", "currency", "period_key", "organization_id",
@@ -177,7 +179,15 @@ class AuthorityScopeEngine:
             if any(not isinstance(payload[key], str) or not payload[key].strip()
                    for key in required if key != "amount"):
                 raise ValueError("scope request identifiers must be non-empty strings")
+            if request.identity_id != decision.requester_identity_id:
+                raise ValueError("authorization decision requester does not match signed request")
+            if request.tenant_id != getattr(decision, "tenant_id", request.tenant_id):
+                raise ValueError("authorization decision tenant does not match signed request")
+            if decision.request_id != payload["request_id"]:
+                raise ValueError("authorization decision request_id does not match signed request")
             amount = _decimal(payload["amount"], "amount")
+            # Period usage is a same-currency bucket. Cross-currency totals require
+            # a separately governed FX conversion and are never added implicitly.
             usage = _decimal(committed_period_total, "committed_period_total")
             if amount <= 0 or usage < 0:
                 raise ValueError("amount must be positive and period usage non-negative")

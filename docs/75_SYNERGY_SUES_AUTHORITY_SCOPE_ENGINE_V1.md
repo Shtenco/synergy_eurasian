@@ -18,11 +18,11 @@ Role membership is supplied as trusted deployment configuration. Roles are not a
 
 AuthorityScopeEngine.evaluate(request, decision, committed_period_total) accepts the signed authorization request envelope, an already-allowed AuthorizationDecision, and the authoritative committed amount for the same tenant, scope and period, supplied as a decimal string by the caller.
 
-The request payload must contain request_id, action, resource_type, resource_id, amount, currency, period_key, organization_id, account_id and counterparty_id.
+The evaluator also binds the decision's request ID and requester identity back to the signed request envelope; a decision for another request cannot be reused. The request payload must contain request_id, action, resource_type, resource_id, amount, currency, period_key, organization_id, account_id and counterparty_id.
 
 ## Important transactional limitation
 
-V1 is an evaluator, not a reservation engine. It does not itself read the ledger, lock a period bucket, reserve funds, or prevent two concurrent requests from both observing the same remaining period capacity. The caller must obtain committed_period_total from a trusted source. Until the evaluator is integrated into the executor's same-database transaction with an atomic usage reservation and receipt, it must not be used as the sole control for real payments, credit, token mint/burn or custody.
+V1 is an evaluator, not a reservation engine. It does not itself read the ledger, lock a period bucket, reserve funds, or prevent two concurrent requests from both observing the same remaining period capacity. The caller must obtain committed_period_total from a trusted source and it must be denominated in the same currency as the request. Cross-currency aggregation is forbidden unless a separate, governed FX conversion supplies a normalized ledger amount. Until the evaluator is integrated into the executor's same-database transaction with an atomic usage reservation and receipt, it must not be used as the sole control for real payments, credit, token mint/burn or custody.
 
 period_window declares the intended accounting window; the caller is responsible for deriving and verifying period_key and querying the matching ledger bucket. A later transactional integration must own period derivation and reservation rather than trusting caller-provided period labels.
 
