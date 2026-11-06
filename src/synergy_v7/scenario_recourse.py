@@ -90,7 +90,10 @@ def apply_scenario(base_document:dict, scenario:EconomicShockScenario)->dict:
             key=str(period)
             if key in base: base[key]*=factor
             elif int(period) in base: base[int(period)]*=factor
-            else: base[key]=0.0
+            else:
+                if "credit_limit" not in doc:
+                    raise ValueError("credit_borrowing_base_multipliers require credit_limit or an explicit borrowing-base schedule")
+                base[key]=doc["credit_limit"]*factor
     return doc
 
 
