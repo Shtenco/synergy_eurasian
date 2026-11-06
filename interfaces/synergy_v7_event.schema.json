@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/synergy_v7_event.schema.json",
+  "title": "SYNERGY V7 Domain Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "aggregate_type",
+    "aggregate_id",
+    "sequence",
+    "event_type",
+    "effective_at",
+    "recorded_at",
+    "payload",
+    "source_ref"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aggregate_type": {
+      "enum": [
+        "ENTERPRISE",
+        "ASSET",
+        "RESOURCE",
+        "TECHNOLOGY",
+        "PROJECT",
+        "CONTRACT",
+        "EVIDENCE",
+        "BENEFIT_STREAM"
+      ]
+    },
+    "aggregate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "event_type": {
+      "type": "string",
+      "minLength": 3
+    },
+    "effective_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object"
+    },
+    "source_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "idempotency_key": {
+      "type": "string"
+    },
+    "previous_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "event_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}
