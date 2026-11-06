@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/synergy_v7_production_plan.schema.json",
+  "title": "SYNERGY V7.1 Production Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "plan_id",
+    "period_unit",
+    "recipes",
+    "orders",
+    "inventory_receipts",
+    "demands",
+    "resource_capacities"
+  ],
+  "properties": {
+    "plan_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "period_unit": {
+      "type": "string",
+      "minLength": 1
+    },
+    "recipes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/recipe"
+      }
+    },
+    "orders": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/order"
+      }
+    },
+    "inventory_receipts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/receipt"
+      }
+    },
+    "demands": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/demand"
+      }
+    },
+    "resource_capacities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/capacity"
+      }
+    },
+    "include_nonfirm_receipts": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "$defs": {
+    "recipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recipe_id",
+        "output_product_id",
+        "output_quantity_per_batch",
+        "output_unit",
+        "input_requirements",
+        "resource_requirements",
+        "lead_time_periods"
+      ],
+      "properties": {
+        "recipe_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output_product_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output_quantity_per_batch": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "output_unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lead_time_periods": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "node_id": {
+          "type": "string"
+        },
+        "input_requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/material"
+          }
+        },
+        "resource_requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resource"
+          }
+        }
+      }
+    },
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product_id",
+        "quantity_per_batch",
+        "unit"
+      ],
+      "properties": {
+        "product_id": {
+          "type": "string"
+        },
+        "quantity_per_batch": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "unit": {
+          "type": "string"
+        }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource_id",
+        "quantity_per_batch",
+        "unit"
+      ],
+      "properties": {
+        "resource_id": {
+          "type": "string"
+        },
+        "quantity_per_batch": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "unit": {
+          "type": "string"
+        }
+      }
+    },
+    "order": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order_id",
+        "recipe_id",
+        "start_period",
+        "batch_count"
+      ],
+      "properties": {
+        "order_id": {
+          "type": "string"
+        },
+        "recipe_id": {
+          "type": "string"
+        },
+        "start_period": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "batch_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receipt_id",
+        "product_id",
+        "quantity",
+        "unit",
+        "available_period",
+        "status"
+      ],
+      "properties": {
+        "receipt_id": {
+          "type": "string"
+        },
+        "product_id": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "unit": {
+          "type": "string"
+        },
+        "available_period": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "enum": [
+            "OBSERVED",
+            "COMMITTED",
+            "UNDER_CONSTRUCTION",
+            "PLANNED",
+            "ANNOUNCED",
+            "SCENARIO"
+          ]
+        }
+      }
+    },
+    "demand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "demand_id",
+        "product_id",
+        "quantity",
+        "unit",
+        "due_period"
+      ],
+      "properties": {
+        "demand_id": {
+          "type": "string"
+        },
+        "product_id": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "unit": {
+          "type": "string"
+        },
+        "due_period": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "priority": {
+          "type": "integer",
+          "default": 100
+        }
+      }
+    },
+    "capacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource_id",
+        "period",
+        "available_quantity",
+        "unit",
+        "status",
+        "evidence_id"
+      ],
+      "properties": {
+        "resource_id": {
+          "type": "string"
+        },
+        "period": {
+          "type": "string"
+        },
+        "available_quantity": {
+          "type": "number",
+          "minimum": 0
+        },
+        "unit": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "OBSERVED",
+            "COMMITTED",
+            "UNDER_CONSTRUCTION",
+            "PLANNED",
+            "ANNOUNCED",
+            "SCENARIO"
+          ]
+        },
+        "evidence_id": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
