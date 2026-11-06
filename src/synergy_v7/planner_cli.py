@@ -29,6 +29,9 @@ def evaluate_document(document,schema_path=None):
     supplier_report=aggregate_supplier_payment_commitments(supplier_payments,document["horizon_periods"],
       document.get("objective_currency","USD"),document.get("include_scenario_supplier_payments",False))
     cash_outflows={int(k):v for k,v in document.get("cash_outflows_by_period",{}).items()}
+    credit_draws={int(k):v for k,v in document["credit_draw_limits_by_period"].items()} if "credit_draw_limits_by_period" in document else None
+    credit_repayments={int(k):v for k,v in document["credit_repayment_limits_by_period"].items()} if "credit_repayment_limits_by_period" in document else None
+    credit_rates={int(k):v for k,v in document["credit_interest_rates_by_period"].items()} if "credit_interest_rates_by_period" in document else None
     for period,amount in supplier_report["cash_outflows_by_period"].items():
         cash_outflows[period]=cash_outflows.get(period,0.0)+amount
     result=optimize_production_schedule(recipes,demands,receipts,capacities,
@@ -40,9 +43,7 @@ def evaluate_document(document,schema_path=None):
       cash_outflows if ("cash_outflows_by_period" in document or supplier_payments) else None,
       document.get("collection_lag_by_demand"),document.get("collection_fraction_by_demand"),
       document.get("credit_limit"),document.get("credit_opening_balance",0.0),
-      ({int(k):v for k,v in document["credit_draw_limits_by_period"].items()} if "credit_draw_limits_by_period" in document else None),
-      ({int(k):v for k,v in document["credit_repayment_limits_by_period"].items()} if "credit_repayment_limits_by_period" in document else None),
-      ({int(k):v for k,v in document["credit_interest_rates_by_period"].items()} if "credit_interest_rates_by_period" in document else None))
+      credit_draws,credit_repayments,credit_rates)
     result["supplier_payment_commitments"]=supplier_report
     return result
 
