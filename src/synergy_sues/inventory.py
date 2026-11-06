@@ -74,6 +74,11 @@ class InventoryMovement:
             object.__setattr__(self, "lot_allocations", tuple(self.lot_allocations))
         if self.movement_type == InventoryMovementType.RECEIPT and not self.lot_id:
             raise ValueError("Inventory receipt movement requires a lot_id")
+        if self.movement_type in {InventoryMovementType.TRANSFER_IN, InventoryMovementType.TRANSFER_OUT}:
+            if not self.destination_location_id:
+                raise ValueError("Inventory transfer movement requires the opposite location")
+        elif self.destination_location_id is not None:
+            raise ValueError("Only transfer movements may specify a destination location")
         if self.movement_type != InventoryMovementType.RECEIPT and not self.lot_allocations:
             raise ValueError("Inventory consumption/transfer movement requires lot allocations")
         if self.movement_type in {InventoryMovementType.TRANSFER_IN, InventoryMovementType.TRANSFER_OUT}:
