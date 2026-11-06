@@ -1,0 +1,26 @@
+{
+  "version": "V6.5.4",
+  "status": "synthetic crisis-resilience prototype",
+  "policy_paths": 3100,
+  "components": {
+    "main_grid": 1200,
+    "systemic_precision": 1200,
+    "capital_sensitivity": 700
+  },
+  "nodes": 80,
+  "sectors": 4,
+  "days": 100,
+  "policies": [
+    "isolated",
+    "liquidity_pool",
+    "firewall",
+    "adaptive_synergy"
+  ],
+  "test_methods": 6,
+  "raw_data_regenerated_from_preserved_kernel": true,
+  "limitations": [
+    "Synthetic uncalibrated assumptions",
+    "No external real-world calibration",
+    "Not a validated probability-of-collapse model"
+  ]
+}

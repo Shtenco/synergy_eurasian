@@ -1,0 +1,5 @@
+policy,runs,mean_defaults,ci95_low,ci95_high,collapse_rate_40plus,mean_sales,mean_operating_surplus,mean_production_lost,mean_transfers
+isolated,300,7.74,5.831,9.649,0.03,50389.12,25031.92,28.84,0.0
+liquidity_pool,300,6.963,5.236,8.691,0.03,50477.66,25011.06,19.98,44.88
+firewall,300,7.533,5.611,9.455,0.03,50418.77,25044.45,25.87,0.0
+adaptive_synergy,300,5.82,4.163,7.477,0.0133,50552.67,24998.31,12.48,78.13
