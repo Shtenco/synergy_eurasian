@@ -409,3 +409,11 @@ V7.3.1 estimates matched-pair difference-in-differences with a small-sample t in
 V7.4 chooses integer production batches across periods, balancing demand value against batch and inventory holding costs under material and firm resource constraints. Economic values are explicit scenario inputs, not observed cash.
 
 V7.4.1 extends the MILP with end-of-period safety-stock minimums and storage-capacity maximums, with infeasible policy combinations rejected rather than silently relaxed.
+
+- [V7.5 Monte Carlo Production Resilience Stress](docs/54_SYNERGY_V7_5_MONTE_CARLO_RESILIENCE.md)
+- [V7.5 stress engine](src/synergy_v7/stress.py)
+- [V7.5 input schema](interfaces/synergy_v7_stress_test.schema.json)
+- [V7.5 reproducible stress fixture](examples/synergy_v7_5_stress_test_demo.json)
+- [V7.5 command-line evaluator](src/synergy_v7/stress_cli.py)
+
+V7.5 stress-tests a fixed schedule under common resource shocks, resource-specific failures and supplier receipt delays. It reports service-level distributions and empirical tail shortfall, without claiming calibrated failure probabilities or optimizing recourse.
