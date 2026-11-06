@@ -6,19 +6,79 @@
     "authorizationRule": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["rule_id", "tenant_id", "effect", "action", "resource_type", "subject_ids", "approver_ids", "min_approvals", "resource_id", "valid_from", "valid_until"],
+      "required": [
+        "rule_id",
+        "tenant_id",
+        "effect",
+        "action",
+        "resource_type",
+        "subject_ids",
+        "approver_ids",
+        "min_approvals",
+        "resource_id",
+        "valid_from",
+        "valid_until"
+      ],
       "properties": {
-        "rule_id": {"type": "string", "minLength": 1},
-        "tenant_id": {"type": "string", "minLength": 1},
-        "effect": {"enum": ["ALLOW", "DENY"]},
-        "action": {"type": "string", "minLength": 1},
-        "resource_type": {"type": "string", "minLength": 1},
-        "subject_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-        "approver_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-        "min_approvals": {"type": "integer", "minimum": 0},
-        "resource_id": {"type": ["string", "null"]},
-        "valid_from": {"type": "string", "format": "date-time"},
-        "valid_until": {"type": ["string", "null"], "format": "date-time"}
+        "rule_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tenant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "effect": {
+          "enum": [
+            "ALLOW",
+            "DENY"
+          ]
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "approver_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "min_approvals": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "resource_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "valid_from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_until": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
       }
     },
     "policyChangePayload": {
@@ -26,25 +86,64 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["change_id", "tenant_id", "expected_version", "operation", "rule"],
+          "required": [
+            "change_id",
+            "tenant_id",
+            "expected_version",
+            "operation",
+            "rule"
+          ],
           "properties": {
-            "change_id": {"type": "string", "minLength": 1},
-            "tenant_id": {"type": "string", "minLength": 1},
-            "expected_version": {"type": "integer", "minimum": 0},
-            "operation": {"const": "UPSERT_RULE"},
-            "rule": {"$ref": "#/$defs/authorizationRule"}
+            "change_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tenant_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "expected_version": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "operation": {
+              "const": "UPSERT_RULE"
+            },
+            "rule": {
+              "$ref": "#/$defs/authorizationRule"
+            }
           }
         },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["change_id", "tenant_id", "expected_version", "operation", "rule_id"],
+          "required": [
+            "change_id",
+            "tenant_id",
+            "expected_version",
+            "operation",
+            "rule_id"
+          ],
           "properties": {
-            "change_id": {"type": "string", "minLength": 1},
-            "tenant_id": {"type": "string", "minLength": 1},
-            "expected_version": {"type": "integer", "minimum": 0},
-            "operation": {"const": "REVOKE_RULE"},
-            "rule_id": {"type": "string", "minLength": 1}
+            "change_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tenant_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "expected_version": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "operation": {
+              "const": "REVOKE_RULE"
+            },
+            "rule_id": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         }
       ]
@@ -52,31 +151,171 @@
     "policyApprovalPayload": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["change_id", "tenant_id", "expected_version", "policy_change_event_id", "policy_change_event_hash", "decision"],
+      "required": [
+        "change_id",
+        "tenant_id",
+        "expected_version",
+        "policy_change_event_id",
+        "policy_change_event_hash",
+        "decision"
+      ],
       "properties": {
-        "change_id": {"type": "string", "minLength": 1},
-        "tenant_id": {"type": "string", "minLength": 1},
-        "expected_version": {"type": "integer", "minimum": 0},
-        "policy_change_event_id": {"type": "string", "minLength": 1},
-        "policy_change_event_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-        "decision": {"enum": ["APPROVE", "REJECT"]}
+        "change_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tenant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "policy_change_event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_change_event_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "decision": {
+          "enum": [
+            "APPROVE",
+            "REJECT"
+          ]
+        }
       }
     },
     "policyChangeRecord": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tenant_id", "version", "change_id", "operation", "rule_id", "request_event_id", "request_event_hash", "policy_hash", "previous_hash", "event_hash"],
+      "required": [
+        "tenant_id",
+        "version",
+        "change_id",
+        "operation",
+        "rule_id",
+        "request_event_id",
+        "request_event_hash",
+        "policy_hash",
+        "previous_hash",
+        "event_hash"
+      ],
       "properties": {
-        "tenant_id": {"type": "string", "minLength": 1},
-        "version": {"type": "integer", "minimum": 1},
-        "change_id": {"type": "string", "minLength": 1},
-        "operation": {"enum": ["UPSERT_RULE", "REVOKE_RULE"]},
-        "rule_id": {"type": "string", "minLength": 1},
-        "request_event_id": {"type": "string", "minLength": 1},
-        "request_event_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-        "policy_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-        "previous_hash": {"type": "string"},
-        "event_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        "tenant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "change_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operation": {
+          "enum": [
+            "UPSERT_RULE",
+            "REVOKE_RULE"
+          ]
+        },
+        "rule_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_event_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "policy_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "previous_hash": {
+          "type": "string"
+        },
+        "event_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "policyAdminAttemptRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tenant_id",
+        "attempt_id",
+        "attempted_at",
+        "claimed_actor_id",
+        "change_id",
+        "request_event_id",
+        "request_event_hash",
+        "outcome",
+        "reason",
+        "previous_hash",
+        "event_hash"
+      ],
+      "properties": {
+        "tenant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "attempted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "claimed_actor_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "change_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request_event_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request_event_hash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "outcome": {
+          "const": "REJECTED"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "previous_hash": {
+          "type": "string"
+        },
+        "event_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
       }
     }
   }
