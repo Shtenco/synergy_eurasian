@@ -123,6 +123,19 @@ class Journal:
     def entries(self) -> tuple[JournalEntry, ...]:
         return tuple(self._entries.values())
 
+    def functional_value(self, amount: Money, fx_rate_ref: str | None = None) -> Money:
+        """Value transaction currency in the journal functional currency."""
+        if amount.currency == self.functional_currency:
+            if fx_rate_ref is not None:
+                raise ValueError("FX rate reference is not allowed for functional-currency amount")
+            return amount
+        rate = self._fx_rates.get(fx_rate_ref or "")
+        if rate is None:
+            raise ValueError(f"Unknown FX rate reference: {fx_rate_ref}")
+        if rate.base_currency != amount.currency or rate.quote_currency != self.functional_currency:
+            raise ValueError("FX rate direction must convert transaction currency to functional currency")
+        return rate.convert(amount)
+
     def add_fx_rate(self, rate: FXRate) -> None:
         if rate.rate_id in self._fx_rates:
             raise ValueError(f"Duplicate FX rate_id: {rate.rate_id}")
