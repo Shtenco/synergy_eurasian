@@ -308,12 +308,26 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
                     previous_hash TEXT NOT NULL,
                     event_hash TEXT NOT NULL UNIQUE
                 );
+                CREATE TRIGGER IF NOT EXISTS trust_identity_no_update
+                BEFORE UPDATE ON trust_identities BEGIN SELECT RAISE(ABORT, 'trust identities are immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS trust_identity_no_delete
+                BEFORE DELETE ON trust_identities BEGIN SELECT RAISE(ABORT, 'trust identities are immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS trust_keys_no_update
+                BEFORE UPDATE ON trust_keys BEGIN SELECT RAISE(ABORT, 'trusted keys are immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS trust_keys_no_delete
+                BEFORE DELETE ON trust_keys BEGIN SELECT RAISE(ABORT, 'trusted keys are immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS trust_revocations_no_update
+                BEFORE UPDATE ON trust_revocations BEGIN SELECT RAISE(ABORT, 'trust revocations are immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS trust_revocations_no_delete
+                BEFORE DELETE ON trust_revocations BEGIN SELECT RAISE(ABORT, 'trust revocations are immutable'); END;
                 CREATE TRIGGER IF NOT EXISTS trust_audit_no_update
                 BEFORE UPDATE ON trust_audit BEGIN SELECT RAISE(ABORT, 'trust audit is append-only'); END;
                 CREATE TRIGGER IF NOT EXISTS trust_audit_no_delete
                 BEFORE DELETE ON trust_audit BEGIN SELECT RAISE(ABORT, 'trust audit is append-only'); END;
             """)
         self._refresh()
+        if not self.verify_audit():
+            raise ValueError("trust registry administrative audit chain verification failed")
 
     @contextmanager
     def _session(self):
