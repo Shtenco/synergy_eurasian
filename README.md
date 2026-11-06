@@ -329,6 +329,7 @@ python src/eiiom_optimizer.py --config config/base_scenario.json --output output
 | Проектная фабрика, мониторинг | [`docs/29_PROJECT_FACTORY_1000.md`](docs/29_PROJECT_FACTORY_1000.md), [`docs/30_CONTROL_TOWER_AND_KPI.md`](docs/30_CONTROL_TOWER_AND_KPI.md) |
 | Реальная статистика, ограничения | [`docs/27_REALITY_BASELINE_2026.md`](docs/27_REALITY_BASELINE_2026.md), [`docs/35_DATASET_V4.md`](docs/35_DATASET_V4.md) |
 | Экономическая стратегия | [`docs/36_GRAND_STRATEGY_2045.md`](docs/36_GRAND_STRATEGY_2045.md), [`docs/37_COUNTRY_PORTFOLIOS.md`](docs/37_COUNTRY_PORTFOLIOS.md) |
+| **SYNERGY Economy 6.3 / семь отраслей** | [Консолидированная модель](docs/38_SYNERGY_ECONOMY_6_3_CONSOLIDATED.md), [исполняемый расчёт](src/synergy_economy_7sector.py), [допущения](data/synergy_economy_7sector_v1_assumptions.json), [тесты](tests/test_economy_7sector.py) |
 | Прежняя полная версия главного README | [`docs/README_FULL_PRE_REDESIGN_2026.md`](docs/README_FULL_PRE_REDESIGN_2026.md) |
 | Дизайн-ассеты | [`assets/readme/`](assets/readme/) |
 

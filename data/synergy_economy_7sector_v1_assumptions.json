@@ -1,0 +1,277 @@
+{
+  "model_id": "SYNERGY-ECONOMY-7S-V1",
+  "status": "RESEARCH_ASSUMPTIONS_NOT_CALIBRATED",
+  "currency": "USD_2026_REAL",
+  "population": 1000,
+  "sectors": [
+    "FOOD",
+    "HOUSING",
+    "ENERGY",
+    "HEALTH",
+    "EDUCATION",
+    "MOBILITY",
+    "COMPUTE"
+  ],
+  "capital_usd": [
+    1200000,
+    18000000,
+    5000000,
+    2500000,
+    1500000,
+    3500000,
+    1200000
+  ],
+  "gross_cash_yield": [
+    0.035,
+    0.025,
+    0.05,
+    0.03,
+    0.015,
+    0.02,
+    0.07
+  ],
+  "replacement_rate": [
+    0.04,
+    0.025,
+    0.035,
+    0.04,
+    0.05,
+    0.045,
+    0.07
+  ],
+  "public_ownership_share": [
+    0.35,
+    0.4,
+    0.7,
+    0.55,
+    0.8,
+    0.5,
+    0.3
+  ],
+  "input_output_matrix": [
+    [
+      0.02,
+      0.01,
+      0.01,
+      0.03,
+      0.02,
+      0.01,
+      0
+    ],
+    [
+      0.01,
+      0.03,
+      0.01,
+      0.02,
+      0.02,
+      0.01,
+      0.01
+    ],
+    [
+      0.08,
+      0.12,
+      0.1,
+      0.08,
+      0.06,
+      0.15,
+      0.12
+    ],
+    [
+      0.01,
+      0,
+      0,
+      0.02,
+      0,
+      0,
+      0
+    ],
+    [
+      0.01,
+      0.01,
+      0.01,
+      0.02,
+      0.02,
+      0.01,
+      0.02
+    ],
+    [
+      0.1,
+      0.08,
+      0.05,
+      0.08,
+      0.04,
+      0.1,
+      0.03
+    ],
+    [
+      0.02,
+      0.02,
+      0.03,
+      0.05,
+      0.05,
+      0.03,
+      0.1
+    ]
+  ],
+  "basket_share": [
+    0.2,
+    0.25,
+    0.1,
+    0.15,
+    0.075,
+    0.125,
+    0.1
+  ],
+  "labor_share": [
+    0.3,
+    0.25,
+    0.2,
+    0.35,
+    0.4,
+    0.3,
+    0.25
+  ],
+  "automation_adoption": [
+    0.8,
+    0.4,
+    0.6,
+    0.25,
+    0.2,
+    0.6,
+    0.8
+  ],
+  "automation_effectiveness": 0.7,
+  "technology_cost_share_of_gross_labor_saving": 0.35,
+  "rebound_share": 0.2,
+  "supply_chain_rebound_share": 0.15,
+  "employment_share": [
+    0.25,
+    0.15,
+    0.1,
+    0.15,
+    0.1,
+    0.1,
+    0.15
+  ],
+  "baseline_weekly_hours": 40,
+  "initial_financial_reserve_share": 0.05,
+  "target_gross_cash_yield": 0.05,
+  "surplus_allocation": {
+    "growth": 0.5,
+    "reserve": 0.2,
+    "dividends": 0.3
+  },
+  "crisis_events": {
+    "4": {
+      "physical_capital_loss_share": 0.02,
+      "gross_cashflow_multiplier": 1
+    },
+    "11": {
+      "physical_capital_loss_share": 0,
+      "gross_cashflow_multiplier": 0.75
+    },
+    "23": {
+      "physical_capital_loss_share": 0.05,
+      "gross_cashflow_multiplier": 0.7
+    }
+  },
+  "supply_stress_scenarios": {
+    "BASELINE": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "ENERGY_MINUS_20": [
+      1,
+      1,
+      0.8,
+      1,
+      1,
+      1,
+      1
+    ],
+    "ENERGY_MINUS_40": [
+      1,
+      1,
+      0.6,
+      1,
+      1,
+      1,
+      1
+    ],
+    "ENERGY_MINUS_60": [
+      1,
+      1,
+      0.4,
+      1,
+      1,
+      1,
+      1
+    ],
+    "ENERGY_MINUS_40_MOBILITY_MINUS_30": [
+      1,
+      1,
+      0.6,
+      1,
+      1,
+      0.7,
+      1
+    ],
+    "ENERGY_MOBILITY_COMPUTE_SHOCK": [
+      1,
+      1,
+      0.6,
+      1,
+      1,
+      0.7,
+      0.7
+    ],
+    "FOOD_MINUS_40_ENERGY_MINUS_30": [
+      0.6,
+      1,
+      0.7,
+      1,
+      1,
+      1,
+      1
+    ],
+    "HOUSING_MINUS_40_ENERGY_MINUS_40": [
+      1,
+      0.6,
+      0.6,
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "critical_sector_indices": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "critical_minimum_service_share": 0.7,
+  "fund_accumulation_legacy": {
+    "monthly_contribution_usd": 10007,
+    "nominal_annual_rate_assumption": 0.03,
+    "compounding": "monthly",
+    "contribution_timing": "end_of_month",
+    "horizons_years": [
+      10,
+      20,
+      30,
+      40
+    ]
+  },
+  "notes": [
+    "All values are illustrative assumptions, not observed enterprise data.",
+    "Gross cash yield is not free cash flow; replacement CAPEX is deducted separately.",
+    "The input-output matrix is a teaching/architecture matrix, not a calibrated national accounts table.",
+    "The 5% gross cash yield is a target sensitivity, not a forecast or guarantee."
+  ]
+}
