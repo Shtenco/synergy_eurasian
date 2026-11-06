@@ -13,6 +13,7 @@ from .event_transport import DurableEvent, DurableEventStore, OutboxMessage
 from .federation_identity import (FederationIdentity, SignedEventEnvelope, SQLiteTrustedKeyRegistry, TrustedKeyRegistry, TrustedSigningKey, generate_ed25519_keypair, sign_event)
 from .federation_authorization import (AuthorizationDecision, AuthorizationRule, FederationAuthorizationPolicy)
 from .federation_execution import AuthorizedActionExecutor, ExecutionResult
+from .federation_policy_store import PolicyChangeResult, PolicySnapshot, SQLiteAuthorizationPolicyStore
 from .reconciliation import BankAllocation, BankStatement, BankStatementLine, reconcile_bank_account
 from .translation import TranslationPolicy, TrialBalanceAccount, translate_trial_balance
 from .trade import TradeAccountMap, TradeDocument, TradeSettlement, TradeSide, TradeSubledger
@@ -23,6 +24,7 @@ __all__ = [
     "FlowBoundary", "FXRate", "InventoryLedger", "InventoryLotAllocation", "InventoryMovement", "InventoryMovementType", "IntercompanyRecord", "IntercompanyRecordType", "Journal", "JournalEntry", "JournalLine",
     "Money", "NormalBalance", "OutboxMessage", "PhysicalFlow", "ProjectorRegistry", "ProjectorSpec", "ProductionCostEvent", "ProductionCostType", "ProductionExecution", "ProductionOrder", "PurchaseOrderLine", "Quantity", "SUESProjection", "SUESRealizationBridge", "SUESRealizationLink", "SUESSourceEvent", "SupplierInvoiceLine", "TradeAccountMap", "TradeDocument",
     "AuthorizationDecision", "AuthorizationRule", "FederationAuthorizationPolicy", "AuthorizedActionExecutor", "ExecutionResult",
+    "PolicyChangeResult", "PolicySnapshot", "SQLiteAuthorizationPolicyStore",
     "FederationIdentity", "SignedEventEnvelope", "SQLiteTrustedKeyRegistry", "TrustedKeyRegistry", "TrustedSigningKey", "generate_ed25519_keypair", "sign_event",
     "TradeSettlement", "TradeSide", "TradeSubledger", "TranslationPolicy", "TrialBalanceAccount",
     "adapt_v7_event_store", "adapt_v7_realization_chain", "replay_event_projections", "execute_production_order", "post_grni_invoice", "post_grni_receipt", "post_intercompany_eliminations", "reconcile_bank_account", "translate_trial_balance", "reconcile_intercompany", "summarize_physical_flows",
