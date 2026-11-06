@@ -60,6 +60,7 @@ def optimize_production_schedule(
     credit_interest_rates_by_period: dict[int,float] | None = None,
     terminal_credit_balance_limit: float | None = None,
     credit_maturity_period: int | None = None,
+    credit_borrowing_base_by_period: dict[int,float] | None = None,
 ) -> dict:
     """Maximize demand value net of modeled costs under physical, cash and credit constraints.
 
@@ -95,6 +96,7 @@ def optimize_production_schedule(
     credit_draw_limits_by_period=credit_draw_limits_by_period or {}
     credit_repayment_limits_by_period=credit_repayment_limits_by_period or {}
     credit_interest_rates_by_period=credit_interest_rates_by_period or {}
+    credit_borrowing_base_by_period=credit_borrowing_base_by_period or {}
     if credit_enabled:
         if terminal_credit_balance_limit is not None and (not math.isfinite(terminal_credit_balance_limit)
             or terminal_credit_balance_limit<0 or terminal_credit_balance_limit>credit_limit):
@@ -102,6 +104,11 @@ def optimize_production_schedule(
         if credit_maturity_period is not None and (not isinstance(credit_maturity_period,int)
             or credit_maturity_period<0 or credit_maturity_period>=horizon_periods):
             raise ValueError("credit_maturity_period must be an integer inside the planning horizon")
+        if set(credit_borrowing_base_by_period)-set(range(horizon_periods)):
+            raise ValueError("credit_borrowing_base_by_period contains period outside horizon")
+        for period,amount in credit_borrowing_base_by_period.items():
+            if not math.isfinite(amount) or amount<0 or amount>credit_limit:
+                raise ValueError(f"Invalid borrowing base for period {period}")
         if not math.isfinite(credit_limit) or credit_limit<0: raise ValueError("credit_limit must be finite and non-negative")
         if not math.isfinite(credit_opening_balance) or credit_opening_balance<0 or credit_opening_balance>credit_limit:
             raise ValueError("credit_opening_balance must be between zero and credit_limit")
@@ -322,6 +329,10 @@ def optimize_production_schedule(
                 add_constraint(repay_cap,-math.inf,0.0,f"credit_repay_prior_balance::{period}")
             else:
                 add_constraint(repay_cap,-math.inf,credit_opening_balance,f"credit_repay_prior_balance::{period}")
+    if credit_enabled:
+        for period,borrowing_base in credit_borrowing_base_by_period.items():
+            add_constraint({credit_balance_index[period]:1.0},-math.inf,borrowing_base,
+                f"credit_borrowing_base::{period}")
     if credit_enabled and terminal_credit_balance_limit is not None:
         add_constraint({credit_balance_index[horizon_periods-1]:1.0},-math.inf,
             terminal_credit_balance_limit,"terminal_credit_balance_limit")
