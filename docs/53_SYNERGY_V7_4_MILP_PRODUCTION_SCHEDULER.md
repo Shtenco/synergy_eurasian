@@ -59,3 +59,9 @@ python -m synergy_v7.planner_cli examples/synergy_v7_4_milp_factory_plan.json
 - No multi-objective Pareto set; current objective is a weighted scalar.
 
 V7.4.1 should add safety stock, supplier lead times, storage limits and production availability. V7.5 should add scenario-based disruptions, chance constraints and a Pareto frontier across value, output, cost, resilience and essential demand fulfillment.
+
+## V7.4.1 — inventory policy constraints
+
+The optimizer now accepts optional `minimum_inventory` and `storage_limits` maps by product. These bounds apply to end-of-period inventory in every modeled period. A storage limit below the required safety stock is rejected; a safety-stock target that cannot be met makes the MILP infeasible. The integrated factory fixture reserves a minimum 10 kg of steel and caps steel storage at 30 kg.
+
+These are end-of-period constraints, not intra-period warehouse occupancy limits. Lot expiry, safety-stock uncertainty, replenishment policies and supplier reliability remain outside this version.
