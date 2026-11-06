@@ -25,6 +25,7 @@ from .federation_identity import (
     SignedEventEnvelope,
     TrustedKeyRegistry,
     _canonical,
+    _event_hash,
     _utc,
 )
 
@@ -449,6 +450,7 @@ class SQLiteAuthorizationPolicyStore:
                     return False
                 request_envelope = self._decode_envelope(request)
                 change_event = request_envelope.event
+                _event_hash(change_event)
                 change_payload = change_event.get("payload")
                 if (change_event.get("event_type") != "AUTHORIZATION_POLICY_CHANGE"
                         or change_event.get("event_id") != row["request_event_id"]
@@ -463,11 +465,16 @@ class SQLiteAuthorizationPolicyStore:
                     return False
                 if not approvals:
                     return False
+                approval_identities: set[str] = set()
+                approval_event_ids: set[str] = set()
                 for approval_document in approvals:
                     approval_envelope = self._decode_envelope(approval_document)
                     approval_event = approval_envelope.event
+                    _event_hash(approval_event)
                     approval_payload = approval_event.get("payload")
-                    if (approval_event.get("event_type") != "AUTHORIZATION_POLICY_APPROVAL"
+                    if (approval_event.get("event_id") in approval_event_ids
+                            or approval_envelope.identity_id in approval_identities
+                            or approval_event.get("event_type") != "AUTHORIZATION_POLICY_APPROVAL"
                             or approval_envelope.tenant_id != tenant
                             or approval_envelope.identity_id not in self.administrators.get(tenant, ())
                             or approval_envelope.identity_id == request_envelope.identity_id
@@ -479,6 +486,10 @@ class SQLiteAuthorizationPolicyStore:
                             or approval_payload.get("policy_change_event_hash") != row["request_event_hash"]
                             or approval_payload.get("decision") != "APPROVE"):
                         return False
+                    approval_event_ids.add(approval_event["event_id"])
+                    approval_identities.add(approval_envelope.identity_id)
+                if len(approval_identities) < self.min_admin_approvals:
+                    return False
                 rules = rules_by_tenant.setdefault(tenant, {})
                 operation = row["operation"]
                 if operation == "UPSERT_RULE":
