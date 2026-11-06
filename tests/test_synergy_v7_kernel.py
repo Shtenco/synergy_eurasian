@@ -880,3 +880,68 @@ def test_v76_cash_constraint_rejects_cash_floor_beyond_available_funding():
       collection_lag_by_demand={"sale":1})
     assert r["feasible"] and r["schedule"]==[]
     assert r["demand"][0]["fulfilled"]==0
+
+
+from synergy_v7 import SupplierPaymentCommitment, aggregate_supplier_payment_commitments
+
+
+def supplier_payment_fixture():
+    return [
+      SupplierPaymentCommitment("deposit","supplier1","po1","steel",0,10,"USD","DEPOSIT","COMMITTED","po:deposit"),
+      SupplierPaymentCommitment("receipt","supplier1","po1","steel",1,30,"USD","RECEIPT","OBSERVED","po:receipt"),
+      SupplierPaymentCommitment("planned","supplier2","po2","ore",0,50,"USD","FINAL","PLANNED","plan:po2"),
+      SupplierPaymentCommitment("scenario","supplier3","po3","power",2,20,"USD","MILESTONE","SCENARIO","scenario:po3"),
+    ]
+
+
+def test_v761_supplier_payment_calendar_aggregates_only_firm_obligations():
+    r=aggregate_supplier_payment_commitments(supplier_payment_fixture(),3,"USD")
+    assert r["cash_outflows_by_period"]=={0:10,1:30}
+    assert r["excluded_nonfirm_payment_ids"]==["planned","scenario"]
+    assert r["payment_commitments_are_not_bank_settlements"]
+
+
+def test_v761_supplier_payment_calendar_can_include_scenario_payments_explicitly():
+    r=aggregate_supplier_payment_commitments(supplier_payment_fixture(),3,"USD",include_scenarios=True)
+    assert r["cash_outflows_by_period"]=={0:10,1:30,2:20}
+    assert r["excluded_nonfirm_payment_ids"]==["planned"]
+
+
+def test_v761_supplier_payment_calendar_reports_out_of_horizon_and_rejects_duplicates():
+    payment=SupplierPaymentCommitment("late","supplier","po","raw",5,100,"USD","FINAL","COMMITTED","po:late")
+    r=aggregate_supplier_payment_commitments([payment],2,"USD")
+    assert r["out_of_horizon_payment_ids"]==["late"]
+    with pytest.raises(ValueError,match="Duplicate supplier payment_id"):
+        aggregate_supplier_payment_commitments([payment,payment],2,"USD")
+
+
+def test_v761_supplier_payment_calendar_rejects_wrong_currency():
+    payment=SupplierPaymentCommitment("p","supplier","po","raw",0,100,"EUR","FINAL","COMMITTED","po:p")
+    with pytest.raises(ValueError,match="currency mismatch"):
+        aggregate_supplier_payment_commitments([payment],2,"USD")
+
+
+def test_v761_supplier_payment_commitments_reduce_cash_available_for_production():
+    args=cash_planner_fixture()
+    payments=supplier_payment_fixture()
+    report=aggregate_supplier_payment_commitments(payments,3,"USD")
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_opening_balance=30,cash_outflows_by_period=report["cash_outflows_by_period"],
+      collection_lag_by_demand={"sale":1})
+    assert r["feasible"] and r["schedule"]==[]
+    assert r["demand"][0]["fulfilled"]==0
+
+
+def test_v761_supplier_payment_cli_aggregates_calendar_and_runs_cash_optimizer():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_cash_constrained_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    document["supplier_payment_commitments"]=[
+      {"payment_id":"supplier-deposit","supplier_id":"steelco","purchase_order_id":"po-1","input_product_id":"steel","period":0,
+       "amount":20,"currency":"USD","payment_stage":"DEPOSIT","status":"COMMITTED","evidence_id":"po:deposit"}
+    ]
+    result=evaluate_document(document)
+    assert result["supplier_payment_commitments"]["cash_outflows_by_period"]=={0:20}
+    assert result["ending_cash_by_period"]==pytest.approx([0,0,100])
