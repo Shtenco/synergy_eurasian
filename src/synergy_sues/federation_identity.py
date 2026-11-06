@@ -251,3 +251,238 @@ def sign_event(event: Any, identity_id: str, tenant_id: str, key_id: str,
     return SignedEventEnvelope(unsigned.schema_version, unsigned.algorithm, unsigned.identity_id,
         unsigned.tenant_id, unsigned.key_id, unsigned.signed_at, unsigned.event,
         base64.b64encode(signature).decode("ascii"))
+
+import sqlite3
+
+
+class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
+    """File-backed trust registry with atomic administration and hash-chained audit.
+
+    The database is a single-host reference implementation. Protect the file and
+    its backups with OS permissions; the local hash chain is tamper-evident, not
+    a remote/WORM trust anchor. Verification refreshes trust state on every call
+    so a revocation by another process is not hidden by a stale in-memory cache.
+    """
+
+    def __init__(self, database_path: str, busy_timeout_ms: int = 5000) -> None:
+        if not isinstance(database_path, str) or not database_path.strip() or database_path == ":memory:":
+            raise ValueError("SQLite trust registry requires a file-backed database")
+        if isinstance(busy_timeout_ms, bool) or not isinstance(busy_timeout_ms, int) or busy_timeout_ms < 0:
+            raise ValueError("busy_timeout_ms must be a non-negative integer")
+        self.database_path = database_path
+        self.busy_timeout_ms = busy_timeout_ms
+        super().__init__()
+        with self._connect() as db:
+            db.executescript("""
+                CREATE TABLE IF NOT EXISTS trust_identities (
+                    identity_id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    identity_type TEXT NOT NULL,
+                    display_name TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS trust_keys (
+                    identity_id TEXT NOT NULL,
+                    key_id TEXT NOT NULL,
+                    tenant_id TEXT NOT NULL,
+                    algorithm TEXT NOT NULL,
+                    public_key_b64 TEXT NOT NULL,
+                    valid_from TEXT NOT NULL,
+                    valid_until TEXT,
+                    PRIMARY KEY(identity_id, key_id),
+                    FOREIGN KEY(identity_id) REFERENCES trust_identities(identity_id)
+                );
+                CREATE TABLE IF NOT EXISTS trust_revocations (
+                    identity_id TEXT NOT NULL,
+                    key_id TEXT NOT NULL,
+                    revoked_at TEXT NOT NULL,
+                    PRIMARY KEY(identity_id, key_id),
+                    FOREIGN KEY(identity_id, key_id) REFERENCES trust_keys(identity_id, key_id)
+                );
+                CREATE TABLE IF NOT EXISTS trust_audit (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    action TEXT NOT NULL,
+                    subject_id TEXT NOT NULL,
+                    details_json TEXT NOT NULL,
+                    occurred_at TEXT NOT NULL,
+                    previous_hash TEXT NOT NULL,
+                    event_hash TEXT NOT NULL UNIQUE
+                );
+                CREATE TRIGGER IF NOT EXISTS trust_audit_no_update
+                BEFORE UPDATE ON trust_audit BEGIN SELECT RAISE(ABORT, 'trust audit is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS trust_audit_no_delete
+                BEFORE DELETE ON trust_audit BEGIN SELECT RAISE(ABORT, 'trust audit is append-only'); END;
+            """)
+        self._refresh()
+
+    def _connect(self) -> sqlite3.Connection:
+        db = sqlite3.connect(self.database_path, timeout=self.busy_timeout_ms / 1000)
+        db.row_factory = sqlite3.Row
+        db.execute("PRAGMA foreign_keys=ON")
+        db.execute(f"PRAGMA busy_timeout={self.busy_timeout_ms}")
+        db.execute("PRAGMA journal_mode=WAL")
+        return db
+
+    @staticmethod
+    def _audit_hash(sequence: int, action: str, subject_id: str, details_json: str,
+                    occurred_at: str, previous_hash: str) -> str:
+        document = {"sequence": sequence, "action": action, "subject_id": subject_id,
+                    "details_json": details_json, "occurred_at": occurred_at,
+                    "previous_hash": previous_hash}
+        return sha256(_canonical(document)).hexdigest()
+
+    def _append_audit(self, db: sqlite3.Connection, action: str, subject_id: str,
+                      details: Mapping[str, Any], occurred_at: str) -> None:
+        prior = db.execute("SELECT sequence,event_hash FROM trust_audit ORDER BY sequence DESC LIMIT 1").fetchone()
+        sequence = 1 if prior is None else int(prior["sequence"]) + 1
+        previous_hash = "" if prior is None else str(prior["event_hash"])
+        details_json = _canonical(dict(details)).decode("utf-8")
+        digest = self._audit_hash(sequence, action, subject_id, details_json, occurred_at, previous_hash)
+        db.execute("""INSERT INTO trust_audit
+            (sequence,action,subject_id,details_json,occurred_at,previous_hash,event_hash)
+            VALUES(?,?,?,?,?,?,?)""",
+            (sequence, action, subject_id, details_json, occurred_at, previous_hash, digest))
+
+    def _refresh(self) -> None:
+        with self._connect() as db:
+            identities = db.execute("SELECT * FROM trust_identities ORDER BY identity_id").fetchall()
+            keys = db.execute("""
+                SELECT k.*, r.revoked_at FROM trust_keys k
+                LEFT JOIN trust_revocations r USING(identity_id,key_id)
+                ORDER BY k.identity_id,k.key_id
+            """).fetchall()
+        self._identities = {
+            row["identity_id"]: FederationIdentity(row["identity_id"], row["tenant_id"],
+                row["identity_type"], row["display_name"])
+            for row in identities
+        }
+        self._keys = {
+            (row["identity_id"], row["key_id"]): TrustedSigningKey(
+                row["identity_id"], row["tenant_id"], row["key_id"], row["algorithm"],
+                row["public_key_b64"], row["valid_from"], row["valid_until"], row["revoked_at"])
+            for row in keys
+        }
+
+    def register_identity(self, identity: FederationIdentity) -> None:
+        # Validate through the base contract before touching durable state.
+        if not isinstance(identity, FederationIdentity):
+            raise ValueError("identity must be a FederationIdentity")
+        if not identity.identity_id.strip() or not identity.tenant_id.strip() or not identity.identity_type.strip():
+            raise ValueError("identity_id, tenant_id and identity_type are required")
+        stamp = datetime.now(timezone.utc).isoformat()
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                existing = db.execute("SELECT * FROM trust_identities WHERE identity_id=?",
+                    (identity.identity_id,)).fetchone()
+                if existing is not None:
+                    current = FederationIdentity(existing["identity_id"], existing["tenant_id"],
+                        existing["identity_type"], existing["display_name"])
+                    if current != identity:
+                        raise ValueError("identity ID is already registered with different attributes")
+                else:
+                    db.execute("INSERT INTO trust_identities VALUES(?,?,?,?)",
+                        (identity.identity_id, identity.tenant_id, identity.identity_type, identity.display_name))
+                    self._append_audit(db, "IDENTITY_REGISTERED", identity.identity_id,
+                        {"tenant_id": identity.tenant_id, "identity_type": identity.identity_type}, stamp)
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+        self._refresh()
+
+    def register_key(self, key: TrustedSigningKey) -> None:
+        if not isinstance(key, TrustedSigningKey):
+            raise ValueError("key must be a TrustedSigningKey")
+        _utc(key.valid_from, "valid_from")
+        if key.valid_until is not None and _utc(key.valid_until, "valid_until") <= _utc(key.valid_from, "valid_from"):
+            raise ValueError("valid_until must be after valid_from")
+        if key.algorithm != ALGORITHM or not key.key_id.strip():
+            raise ValueError("Ed25519 and a non-empty key_id are required")
+        try:
+            raw = base64.b64decode(key.public_key_b64, validate=True)
+        except Exception as exc:
+            raise ValueError("public_key_b64 must be valid base64") from exc
+        if len(raw) != 32:
+            raise ValueError("Ed25519 public key must be exactly 32 bytes")
+        stamp = datetime.now(timezone.utc).isoformat()
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                identity = db.execute("SELECT tenant_id FROM trust_identities WHERE identity_id=?",
+                    (key.identity_id,)).fetchone()
+                if identity is None:
+                    raise ValueError("key identity is not registered")
+                if identity["tenant_id"] != key.tenant_id:
+                    raise ValueError("key tenant does not match registered identity")
+                if db.execute("SELECT 1 FROM trust_keys WHERE identity_id=? AND key_id=?",
+                    (key.identity_id, key.key_id)).fetchone():
+                    raise ValueError("key ID already exists for this identity")
+                if key.revoked_at is not None:
+                    raise ValueError("new key cannot be registered as already revoked")
+                db.execute("INSERT INTO trust_keys VALUES(?,?,?,?,?,?,?)",
+                    (key.identity_id, key.key_id, key.tenant_id, key.algorithm,
+                     key.public_key_b64, key.valid_from, key.valid_until))
+                self._append_audit(db, "KEY_REGISTERED", f"{key.identity_id}/{key.key_id}",
+                    {"tenant_id": key.tenant_id, "algorithm": key.algorithm,
+                     "public_key_sha256": sha256(raw).hexdigest(),
+                     "valid_from": key.valid_from, "valid_until": key.valid_until}, stamp)
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+        self._refresh()
+
+    def revoke_key(self, identity_id: str, key_id: str, revoked_at: str) -> None:
+        _utc(revoked_at, "revoked_at")
+        stamp = datetime.now(timezone.utc).isoformat()
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                key = db.execute("SELECT * FROM trust_keys WHERE identity_id=? AND key_id=?",
+                    (identity_id, key_id)).fetchone()
+                if key is None:
+                    raise ValueError("unknown signing key")
+                if db.execute("SELECT 1 FROM trust_revocations WHERE identity_id=? AND key_id=?",
+                    (identity_id, key_id)).fetchone():
+                    raise ValueError("signing key is already revoked")
+                db.execute("INSERT INTO trust_revocations VALUES(?,?,?)",
+                    (identity_id, key_id, revoked_at))
+                self._append_audit(db, "KEY_REVOKED", f"{identity_id}/{key_id}",
+                    {"revoked_at": revoked_at}, stamp)
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+        self._refresh()
+
+    def verify(self, envelope: SignedEventEnvelope | Mapping[str, Any],
+               received_at: datetime | str | None = None) -> FederationIdentity:
+        self._refresh()
+        return super().verify(envelope, received_at)
+
+    def audit_events(self) -> tuple[dict[str, Any], ...]:
+        with self._connect() as db:
+            rows = db.execute("SELECT * FROM trust_audit ORDER BY sequence").fetchall()
+        return tuple(dict(row) for row in rows)
+
+    def verify_audit(self) -> bool:
+        rows = self.audit_events()
+        previous = ""
+        for expected_sequence, row in enumerate(rows, start=1):
+            if row["sequence"] != expected_sequence or row["previous_hash"] != previous:
+                return False
+            try:
+                details = json.loads(row["details_json"])
+                if not isinstance(details, dict):
+                    return False
+                canonical_details = _canonical(details).decode("utf-8")
+            except (TypeError, ValueError):
+                return False
+            if canonical_details != row["details_json"]:
+                return False
+            digest = self._audit_hash(row["sequence"], row["action"], row["subject_id"],
+                row["details_json"], row["occurred_at"], previous)
+            if digest != row["event_hash"]:
+                return False
+            previous = digest
+        return True
