@@ -578,7 +578,7 @@ def test_matched_pair_did_estimates_average_treatment_effect():
 
 
 def test_matched_pair_did_reverses_benefit_sign_for_lower_is_better():
-    r=matched_pair_difference_in_differences(did_fixture(),"0.95" if False else 0.95,"LOWER_IS_BETTER")
+    r=matched_pair_difference_in_differences(did_fixture(),0.95,"LOWER_IS_BETTER")
     assert r["effect_estimate"]==pytest.approx(5)
     assert r["beneficial_effect_estimate"]==pytest.approx(-5)
 
