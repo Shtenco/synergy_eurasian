@@ -29,7 +29,7 @@ This is not a distributed exactly-once guarantee. A database commit cannot atomi
 
 ## Execution receipts
 
-Each committed receipt records request ID, request event ID/hash, action, resource type/ID, requester identity, execution timestamp and canonical JSON handler result. Receipts are append-only at the SQLite application layer and form a SHA-256 hash chain. Startup verifies the chain and fails closed if inconsistent.
+Each committed receipt records request ID, request event ID/hash, action, resource type/ID, requester identity, execution timestamp, canonical JSON handler result and the full authorization decision evidence: matched policy rule IDs, distinct approver identities, and the exact signed approval event IDs/hashes. This preserves the evidence trail needed to reconstruct why the action was allowed. Receipts are append-only at the SQLite application layer and form a SHA-256 hash chain. Startup verifies the chain and fails closed if inconsistent.
 
 The chain and triggers detect ordinary application-level mutation; they do not protect against an administrator who can rewrite the database, drop triggers or replace backups. Production requires OS-level file protection, externally anchored checkpoints, backups/restore drills and a managed database service.
 
