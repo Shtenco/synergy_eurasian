@@ -239,8 +239,10 @@ def test_journal_rejects_missing_wrong_direction_or_wrong_value_fx_rate():
     wrong_direction.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
     wrong_direction.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
     wrong_direction.add_fx_rate(FXRate("USDEUR", "USD", "EUR", "0.9", now, "feed:2"))
+    wrong_direction_line = JournalLine("fx-debit-wrong-direction", "cash", "DEBIT",
+        Money("2", "EUR"), Money("2.2", "USD"), "co1", "bank:fx", fx_rate_ref="USDEUR")
     wrong = JournalEntry("fx-wrong-direction", date(2026, 11, 6), now, "USD",
-        (foreign_line, balancing_line), "event-direction", "idem-direction", "Wrong direction")
+        (wrong_direction_line, balancing_line), "event-direction", "idem-direction", "Wrong direction")
     with pytest.raises(ValueError, match="direction"):
         wrong_direction.post(wrong)
 
