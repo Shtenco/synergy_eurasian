@@ -582,3 +582,29 @@ def test_journal_post_many_is_atomic_when_later_entry_is_invalid():
     assert journal.entries == ()
     journal.post(good)
     assert len(journal.entries) == 1
+
+
+def test_trade_subledger_batch_is_atomic_when_later_fx_evidence_is_invalid():
+    journal = Journal("USD")
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
+    journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_fx_rate(FXRate("valid-invoice-rate", "EUR", "USD", "1.1",
+        datetime(2026, 11, 1, 12, tzinfo=timezone.utc), "fx:invoice"))
+    journal.add_fx_rate(FXRate("future-settlement-rate", "EUR", "USD", "1.2",
+        datetime(2026, 11, 7, 12, tzinfo=timezone.utc), "fx:future-settlement"))
+    subledger = TradeSubledger(
+        [TradeDocument("inv-atomic", TradeSide.RECEIVABLE, "co1", "customer",
+            date(2026, 11, 1), date(2026, 11, 30), Money("100", "EUR"), "invoice:atomic")],
+        [TradeSettlement("settle-atomic", "inv-atomic", date(2026, 11, 6),
+            Money("20", "EUR"), "cash", "bank:atomic")],
+    )
+    with pytest.raises(ValueError, match="post-date"):
+        subledger.post_to_journal(
+            journal, TradeAccountMap("ar", "revenue", "ap", "purchases"),
+            datetime(2026, 11, 7, 13, tzinfo=timezone.utc),
+            {"invoice:atomic": "valid-invoice-rate", "bank:atomic": "future-settlement-rate"},
+        )
+    assert journal.entries == ()
