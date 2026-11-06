@@ -185,7 +185,7 @@ class TradeSubledger:
         purchase = account_map.get(accounts.purchase_account_id)
         if purchase is None or purchase.normal_balance != NormalBalance.DEBIT or purchase.account_type not in {AccountType.ASSET, AccountType.EXPENSE}:
             raise ValueError("Purchase account must be a debit-normal asset or expense")
-        posted = []
+        pending_entries = []
         expected_ar_delta = Decimal("0")
         expected_ap_delta = Decimal("0")
 
@@ -221,8 +221,7 @@ class TradeSubledger:
                 f"trade-document:{document.document_id}", f"trade-document:{document.document_id}",
                 f"Post {document.side.value.lower()} document {document.document_id}",
             )
-            journal.post(entry)
-            posted.append(entry_id)
+            pending_entries.append(entry)
 
         for settlement in sorted(self.settlements, key=lambda row: (row.settlement_date, row.settlement_id)):
             if settlement.settlement_date > cutoff:
@@ -258,15 +257,17 @@ class TradeSubledger:
                         settlement.amount, functional_amount, document.enterprise_id, settlement.source_ref,
                         document.counterparty_id, fx_ref),
                 )
-            journal.post(JournalEntry(
+            pending_entries.append(JournalEntry(
                 entry_id, settlement.settlement_date, recorded_at, journal.functional_currency,
                 lines, f"trade-settlement:{settlement.settlement_id}",
                 f"trade-settlement:{settlement.settlement_id}",
                 f"Post settlement {settlement.settlement_id}",
             ))
-            posted.append(entry_id)
 
-        posted_entries = {entry.entry_id: entry for entry in journal.entries if entry.entry_id in set(posted)}
+        # Atomic batch: a bad later settlement cannot leave earlier invoices posted.
+        journal.post_many(pending_entries)
+        posted = [entry.entry_id for entry in pending_entries]
+        posted_entries = {entry.entry_id: entry for entry in pending_entries}
         actual_ar_delta = Decimal("0")
         actual_ap_delta = Decimal("0")
         for entry in posted_entries.values():
