@@ -134,12 +134,14 @@ class FederationAuthorizationPolicy:
         for approval in approvals:
             approver = registry.verify(approval, received_at)
             approval_payload = self._payload_fields(approval, "AUTHORIZATION_APPROVAL",
-                ("request_id", "action", "resource_type", "resource_id", "requester_identity_id", "decision"))
+                ("request_id", "request_event_id", "request_event_hash", "action", "resource_type", "resource_id", "requester_identity_id", "decision"))
             if approval.event["event_id"] in seen_events:
                 continue
             seen_events.add(approval.event["event_id"])
             scope_matches = (
                 approval_payload["request_id"] == request_id
+                and approval_payload["request_event_id"] == request.event["event_id"]
+                and approval_payload["request_event_hash"] == request.event["event_hash"]
                 and approval_payload["action"] == action
                 and approval_payload["resource_type"] == resource_type
                 and approval_payload["resource_id"] == resource_id
