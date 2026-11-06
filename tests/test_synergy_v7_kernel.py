@@ -953,12 +953,13 @@ def test_v762_revolving_credit_funds_pre_collection_production_and_charges_inter
     args=cash_planner_fixture()
     r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
       credit_limit=20,credit_draw_limits_by_period={0:20},
-      credit_interest_rates_by_period={2:0.1},collection_lag_by_demand={"sale":1})
+      credit_interest_rates_by_period={2:0.1},collection_lag_by_demand={"sale":1},
+      terminal_credit_balance_limit=0)
     assert r["feasible"] and r["schedule"]
     assert r["credit_facility"]["draws_by_period"]==pytest.approx([20,0,0])
-    assert r["credit_facility"]["ending_balance_by_period"]==pytest.approx([20,20,20])
+    assert r["credit_facility"]["ending_balance_by_period"]==pytest.approx([20,20,0])
     assert r["credit_facility"]["total_interest_cost"]==pytest.approx(2)
-    assert r["ending_cash_by_period"]==pytest.approx([0,0,98])
+    assert r["ending_cash_by_period"]==pytest.approx([0,0,78])
     assert r["objective_value"]==pytest.approx(78)
 
 
@@ -1000,4 +1001,4 @@ def test_v762_credit_cli_schema_and_period_maps():
     result=evaluate_document(document)
     assert result["feasible"] and result["schedule"]
     assert result["credit_facility"]["total_interest_cost"]==pytest.approx(2)
-    assert result["ending_cash_by_period"]==pytest.approx([0,0,98])
+    assert result["ending_cash_by_period"]==pytest.approx([0,0,78])
