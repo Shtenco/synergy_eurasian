@@ -124,3 +124,7 @@ The V7.4 MILP now supports end-of-period minimum inventory (safety stock) and ma
 ### V7.5 update — production resilience stress
 
 V7.5 replays a fixed production schedule under correlated common shocks, resource-specific capacity reductions and supplier receipt delays. It reports demand service distributions, complete-service frequency and empirical tail service shortfall. This is conditional Monte Carlo stress, not calibrated probability forecasting, recourse optimization or a formal CVaR-constrained solution. See [V7.5 specification](docs/54_SYNERGY_V7_5_MONTE_CARLO_RESILIENCE.md).
+
+## V7 research-branch validation checkpoint
+
+At head `82078ed244f1d8af928a0b6343894f860713f85a`, GitHub Actions completed successfully: **128 tests passed** in EIIOM CI run [42168437910](https://github.com/Shtenco/synergy_eurasian/actions/runs/42168437910); README integrity run [42168437895](https://github.com/Shtenco/synergy_eurasian/actions/runs/42168437895) also passed. PR #10 remains open and unmerged. These tests establish software invariants and reproducibility of the included synthetic fixtures, not calibration against real enterprise data or proof of economic impact.
