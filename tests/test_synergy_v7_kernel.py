@@ -109,3 +109,67 @@ def test_graph_projection_rebuilt_from_domain_events():
     s.append(event(3,event_type="EDGE_REGISTERED",payload={"edge_id":"e1","source_id":"p1","target_id":"a1","relation":"OWNS"}))
     g=graph_from_events(s.events)
     assert set(g.nodes)=={"p1","a1"} and g.edges[0].relation=="OWNS"
+
+
+from synergy_v7 import (MaterialRequirement, ResourceRequirement, ProductionRecipe,
+    ProductionOrder, InventoryReceipt, ProductDemand, evaluate_production_plan)
+
+
+def test_production_plan_completes_after_lead_time_and_serves_demand():
+    recipe=ProductionRecipe("r1","finished",10,"unit",(MaterialRequirement("raw",5,"kg"),),
+      (ResourceRequirement("power",2,"MWh"),),1)
+    orders=[ProductionOrder("o1","r1",0,2)]
+    receipts=[InventoryReceipt("i1","raw",10,"kg",0,"OBSERVED")]
+    demands=[ProductDemand("d1","finished",20,"unit",1)]
+    caps=[ResourceCapacity("power","0",4,"MWh","OBSERVED","meter")]
+    r=evaluate_production_plan([recipe],orders,receipts,demands,caps)
+    assert r["feasible"] and r["demand"]["finished"]["fulfilled"]==20
+    assert r["orders"]["o1"]["finish_period"]==1
+
+
+def test_production_blocks_order_when_input_material_is_missing():
+    recipe=ProductionRecipe("r1","finished",10,"unit",(MaterialRequirement("raw",5,"kg"),),(),1)
+    r=evaluate_production_plan([recipe],[ProductionOrder("o1","r1",0,1)],[],[],[])
+    assert not r["feasible"] and r["orders"]["o1"]["status"]=="BLOCKED"
+    assert r["violations"][0]["type"]=="MATERIAL_SHORTAGE"
+
+
+def test_production_detects_competing_orders_for_same_resource():
+    recipes=[ProductionRecipe("r1","a",1,"unit",(),(ResourceRequirement("power",6,"MWh"),),1),
+      ProductionRecipe("r2","b",1,"unit",(),(ResourceRequirement("power",6,"MWh"),),1)]
+    orders=[ProductionOrder("o1","r1",0,1),ProductionOrder("o2","r2",0,1)]
+    caps=[ResourceCapacity("power","0",10,"MWh","OBSERVED","meter")]
+    r=evaluate_production_plan(recipes,orders,[],[],caps)
+    assert not r["feasible"] and r["orders"]["o2"]["status"]=="BLOCKED"
+
+
+def test_production_excludes_planned_material_supply_by_default():
+    recipe=ProductionRecipe("r1","finished",1,"unit",(MaterialRequirement("raw",1,"kg"),),(),1)
+    receipt=InventoryReceipt("i1","raw",1,"kg",0,"PLANNED")
+    r=evaluate_production_plan([recipe],[ProductionOrder("o1","r1",0,1)],[receipt],[],[])
+    assert not r["feasible"] and r["excluded_nonfirm_receipts"]==["i1"]
+
+
+def test_production_tracks_inventory_across_periods_and_priorities():
+    recipe=ProductionRecipe("r1","finished",10,"unit",(MaterialRequirement("raw",5,"kg"),),(),1)
+    orders=[ProductionOrder("o1","r1",0,1),ProductionOrder("o2","r1",1,1)]
+    receipts=[InventoryReceipt("i1","raw",10,"kg",0)]
+    demands=[ProductDemand("d1","finished",5,"unit",1,priority=1),
+      ProductDemand("d2","finished",5,"unit",1,priority=2),
+      ProductDemand("d3","finished",10,"unit",2)]
+    r=evaluate_production_plan([recipe],orders,receipts,demands,[])
+    assert r["feasible"] and r["demand"]["finished"]["fulfilled"]==20
+    assert r["inventory_trace"][-1]["inventory"]["raw"]==0
+
+
+def test_recipe_rejects_zero_lead_time_and_duplicate_inputs():
+    with pytest.raises(ValueError,match="lead_time"): ProductionRecipe("r","x",1,"u",(),(),0)
+    with pytest.raises(ValueError,match="Duplicate"): ProductionRecipe("r","x",1,"u",
+      (MaterialRequirement("raw",1,"kg"),MaterialRequirement("raw",2,"kg")),(),1)
+
+
+def test_production_rejects_product_unit_mismatch():
+    recipe=ProductionRecipe("r1","finished",1,"unit",(MaterialRequirement("raw",1,"kg"),),(),1)
+    receipt=InventoryReceipt("i1","raw",1,"tonne",0)
+    with pytest.raises(ValueError,match="Unit mismatch"):
+        evaluate_production_plan([recipe],[],[receipt],[],[])
