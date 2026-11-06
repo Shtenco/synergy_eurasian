@@ -80,6 +80,7 @@ def optimize_production_schedule(
         if not isinstance(limit,int) or limit<0: raise ValueError(f"batch limit for {rid} must be a non-negative integer")
     batch_costs=batch_costs or {}; holding_costs=holding_costs or {}
     minimum_inventory=minimum_inventory or {}; storage_limits=storage_limits or {}
+    credit_enabled=credit_limit is not None
     cash_enabled=any(x is not None for x in (cash_opening_balance,cash_minimum_balance,cash_inflows_by_period,cash_outflows_by_period,collection_lag_by_demand,collection_fraction_by_demand,credit_limit)) or credit_enabled
     cash_opening_balance=0.0 if cash_opening_balance is None else cash_opening_balance
     cash_inflows_by_period=cash_inflows_by_period or {}
@@ -89,7 +90,6 @@ def optimize_production_schedule(
     credit_draw_limits_by_period=credit_draw_limits_by_period or {}
     credit_repayment_limits_by_period=credit_repayment_limits_by_period or {}
     credit_interest_rates_by_period=credit_interest_rates_by_period or {}
-    credit_enabled=credit_limit is not None
     if credit_enabled:
         if not math.isfinite(credit_limit) or credit_limit<0: raise ValueError("credit_limit must be finite and non-negative")
         if not math.isfinite(credit_opening_balance) or credit_opening_balance<0 or credit_opening_balance>credit_limit:
