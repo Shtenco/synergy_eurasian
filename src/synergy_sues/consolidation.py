@@ -206,7 +206,7 @@ def post_intercompany_eliminations(
     for row in rows:
         by_transaction_period.setdefault((row.transaction_id, row.period_id), []).append(row)
 
-    posted = []
+    pending_entries = []
     cash_eliminations: dict[str, Decimal] = {}
     for tx in result["transactions"]:
         for period in tx["periods"]:
@@ -284,13 +284,15 @@ def post_intercompany_eliminations(
                     idempotency_key=f"{idempotency_prefix}:{suffix}",
                     description=f"Intercompany {category} elimination for {tx['transaction_id']}",
                 )
-                journal.post(entry)
-                posted.append(entry_id)
+                pending_entries.append(entry)
 
             cash_amount = Decimal(period["eliminations"]["CASH_TRANSFER"])
             if cash_amount:
                 cash_eliminations[currency] = cash_eliminations.get(currency, Decimal("0")) + cash_amount
 
+    # Do not leave a partial consolidation if any elimination entry is invalid.
+    journal.post_many(pending_entries)
+    posted = [entry.entry_id for entry in pending_entries]
     return {
         "posted_elimination_entry_ids": posted,
         "posted_entry_count": len(posted),
