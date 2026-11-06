@@ -1296,3 +1296,13 @@ def test_v78_two_stage_milp_rejects_invalid_probabilities_and_policy_parameters(
         optimize_two_stage_recourse(10,1,1,2,5,scenarios)
     with pytest.raises(ValueError,match="risk_weight"):
         optimize_two_stage_recourse(10,1,1,2,5,[{"scenario_id":"a","probability":1,"demand_quantity":10,"available_capacity":10}],risk_weight=1.2)
+
+
+def test_v78_two_stage_cli_validates_and_solves_reference_example(capsys):
+    from synergy_v7.two_stage_optimizer_cli import main
+    fixture=ROOT/"examples"/"synergy_v7_8_two_stage_milp.json"
+    code=main([str(fixture)])
+    captured=capsys.readouterr()
+    assert code==0
+    assert '"non_anticipativity_enforced": true' in captured.out
+    assert '"common_commitment_quantity": 40' in captured.out
