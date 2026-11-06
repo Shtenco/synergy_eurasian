@@ -263,6 +263,20 @@
         "type": "number",
         "minimum": 0
       }
+    },
+    "minimum_inventory": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "storage_limits": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      }
     }
   }
 }
