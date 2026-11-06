@@ -173,3 +173,16 @@ def test_production_rejects_product_unit_mismatch():
     receipt=InventoryReceipt("i1","raw",1,"tonne",0)
     with pytest.raises(ValueError,match="Unit mismatch"):
         evaluate_production_plan([recipe],[],[receipt],[],[])
+
+
+def test_integrated_factory_fixture_is_schema_valid_and_feasible():
+    import json
+    from synergy_v7.cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_1_integrated_factory_demo.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    result=evaluate_document(document)
+    assert result["feasible"]
+    assert result["demand"]["machine_part"]["fulfilled"]==12
+    assert result["completed_output"]["steel"]==80
+    assert result["completed_output"]["machine_part"]==12
