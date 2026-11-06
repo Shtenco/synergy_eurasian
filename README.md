@@ -460,3 +460,11 @@ V7.6.6 adds asset-level receivable and inventory aging haircuts, receivable dilu
 - [V7.7 runnable example](examples/synergy_v7_7_scenario_recourse.json)
 
 V7.7 independently re-optimizes the cash/credit/collateral-aware production plan after each declared shock scenario, then reports expected loss and discrete CVaR. It is explicitly a wait-and-see benchmark, not a formal non-anticipative two-stage stochastic MILP.
+
+- [V7.8 Two-Stage Non-Anticipative Mean-CVaR MILP](docs/63_SYNERGY_V7_8_TWO_STAGE_NONANTICIPATIVE_MILP.md)
+- [V7.8 two-stage optimizer](src/synergy_v7/two_stage_optimizer.py)
+- [V7.8 optimizer CLI](src/synergy_v7/two_stage_optimizer_cli.py)
+- [V7.8 input schema](interfaces/synergy_v7_8_two_stage_optimizer.schema.json)
+- [V7.8 reference experiment](examples/synergy_v7_8_two_stage_milp.json)
+
+V7.8 is the first joint non-anticipative two-stage MILP prototype: it chooses one shared first-stage commitment before scenario revelation and scenario-specific production/emergency procurement/lost-sales recourse afterward. Scope is currently one product and one planning epoch; it is not yet the full V7.6 recipe/cash/credit/collateral network.
