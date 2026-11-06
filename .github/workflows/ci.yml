@@ -27,7 +27,7 @@ jobs:
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
 
       - name: Run invariant and schema tests
-        run: pytest -q
+        run: python -m pytest -q
 
       - name: Audit federation authority boundaries
         run: python src/federation_audit.py --config config/federation_v4.json
@@ -37,3 +37,22 @@ jobs:
 
       - name: Print BASE summary
         run: cat outputs/base/summary.json
+
+      - name: Run seven-sector SYNERGY Economy reference model
+        run: python src/synergy_economy_7sector.py --output outputs/synergy_economy_7sector_v1.json
+
+      - name: Print seven-sector economy summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path("outputs/synergy_economy_7sector_v1.json").read_text(encoding="utf-8"))
+          print(json.dumps({
+              "model_id": p["model_id"],
+              "whole_system_residual_usd": p["accounting"]["total_net_after_replacement_usd"],
+              "public_portfolio_residual_usd": p["accounting"]["public_net_after_replacement_usd"],
+              "basket_cost_reduction_pct": 100 * p["productivity"]["net_basket_cost_reduction_share"],
+              "labor_release_pct": 100 * p["productivity"]["net_labor_hours_released_share"],
+              "capital_30y_with_crises_usd": p["portfolio_30y_target_with_crises"]["final_productive_capital_usd"]
+          }, indent=2))
+          PY
