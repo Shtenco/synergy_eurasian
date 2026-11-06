@@ -87,11 +87,7 @@ def stress_test_fixed_schedule(
                 shock.capacity_factor if hit else 1.0)
         scenario_caps=[ResourceCapacity(c.resource_id,c.period,
             c.available_quantity*factors.get(c.resource_id,common_capacity_factor if common else 1.0),
-            c.unit,c.status,c.evidence_id,c.confidence,cost if False else None) if False else
-            ResourceCapacity(c.resource_id,c.period,
-                c.available_quantity*factors.get(c.resource_id,common_capacity_factor if common else 1.0),
-                c.unit,c.status,c.evidence_id,c.confidence,c.security_class,c.notes)
-            for c in capacities]
+            c.unit,c.status,c.evidence_id) for c in capacities]
         delayed_receipts=[]
         delay_map={x.receipt_id:x for x in delays}
         for receipt in receipts:
