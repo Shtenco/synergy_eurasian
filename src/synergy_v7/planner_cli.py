@@ -26,7 +26,7 @@ def evaluate_document(document,schema_path=None):
       document.get("holding_costs",{}),document.get("objective_currency","USD"),
       document.get("mip_rel_gap",0.0),document.get("time_limit_seconds",30.0),document.get("minimum_inventory",{}),document.get("storage_limits",{}),
       document.get("cash_opening_balance"),document.get("cash_minimum_balance"),
-      {int(k):v for k,v in document.get("cash_inflows_by_period",{}).items()},
+      ({int(k):v for k,v in document["cash_inflows_by_period"].items()} if "cash_inflows_by_period" in document else None),
       document.get("collection_lag_by_demand"),document.get("collection_fraction_by_demand"))
 
 
