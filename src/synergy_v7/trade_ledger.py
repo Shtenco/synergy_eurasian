@@ -136,37 +136,42 @@ def build_trade_ledger(
     balances={d.document_id:d.original_amount for d in docs}
     disputes_open={d.document_id:0.0 for d in docs}
     movements=[]
-    for row in sorted([x for x in pays if _day(x.settlement_date)<=cutoff],key=lambda x:(x.settlement_date,x.settlement_id)):
+    timeline=[]
+    for row in pays:
+        timeline.append((_day(row.settlement_date),row.settlement_date,row.settlement_id,"SETTLEMENT",row))
+    for row in adjs:
+        timeline.append((_day(row.adjustment_date),row.adjustment_date,row.adjustment_id,"ADJUSTMENT",row))
+    for row in ds:
+        timeline.append((_day(row.event_date),row.event_date,row.dispute_id,"DISPUTE",row))
+    for event_day,event_date,event_id,event_type,row in sorted(timeline,key=lambda x:(x[0],x[2])):
+        if event_day>cutoff: continue
         doc=dmap[row.document_id]
-        if row.currency!=doc.currency: raise ValueError(f"Settlement currency mismatch: {row.settlement_id}")
-        if _day(row.settlement_date)<_day(doc.issue_date): raise ValueError(f"Settlement predates document: {row.settlement_id}")
-        if row.amount>balances[row.document_id]+1e-9: raise ValueError(f"Settlement exceeds open balance: {row.settlement_id}")
-        balances[row.document_id]-=row.amount
-        movements.append((row.settlement_date,row.settlement_id,"SETTLEMENT",row.document_id,row.amount))
-    for row in sorted([x for x in adjs if _day(x.adjustment_date)<=cutoff],key=lambda x:(x.adjustment_date,x.adjustment_id)):
-        doc=dmap[row.document_id]
-        if row.currency!=doc.currency: raise ValueError(f"Adjustment currency mismatch: {row.adjustment_id}")
-        if _day(row.adjustment_date)<_day(doc.issue_date): raise ValueError(f"Adjustment predates document: {row.adjustment_id}")
-        if row.amount>balances[row.document_id]+1e-9: raise ValueError(f"Adjustment exceeds open balance: {row.adjustment_id}")
-        balances[row.document_id]-=row.amount
-        movements.append((row.adjustment_date,row.adjustment_id,"ADJUSTMENT",row.document_id,row.amount))
-    for row in sorted([x for x in ds if _day(x.event_date)<=cutoff],key=lambda x:(x.event_date,x.dispute_id)):
-        doc=dmap[row.document_id]
-        if row.currency!=doc.currency: raise ValueError(f"Dispute currency mismatch: {row.dispute_id}")
-        if _day(row.event_date)<_day(doc.issue_date): raise ValueError(f"Dispute predates document: {row.dispute_id}")
-        current=disputes_open[row.document_id]
-        if row.action=="OPEN":
-            if current+row.amount>balances[row.document_id]+1e-9: raise ValueError(f"Disputed amount exceeds open balance: {row.dispute_id}")
-            disputes_open[row.document_id]=current+row.amount
+        if event_day<_day(doc.issue_date): raise ValueError(f"{event_type} predates document: {event_id}")
+        if row.currency!=doc.currency: raise ValueError(f"{event_type} currency mismatch: {event_id}")
+        if event_type in {"SETTLEMENT","ADJUSTMENT"}:
+            if row.amount>balances[row.document_id]+1e-9:
+                raise ValueError(f"{event_type} exceeds open balance: {event_id}")
+            balances[row.document_id]-=row.amount
+            movements.append((event_date,event_id,event_type,row.document_id,row.amount))
+        elif row.action=="OPEN":
+            if disputes_open[row.document_id]+row.amount>balances[row.document_id]+1e-9:
+                raise ValueError(f"Disputed amount exceeds open balance: {event_id}")
+            disputes_open[row.document_id]+=row.amount
         else:
-            if row.amount>current+1e-9: raise ValueError(f"Dispute resolution exceeds disputed amount: {row.dispute_id}")
-            disputes_open[row.document_id]=current-row.amount
+            if row.amount>disputes_open[row.document_id]+1e-9:
+                raise ValueError(f"Dispute resolution exceeds disputed amount: {event_id}")
+            disputes_open[row.document_id]-=row.amount
 
     assessments={}
+    risk_days={}
     for risk in risks:
+        risk_day=_day(risk.assessment_date)
+        if risk_day>cutoff: continue
         key=(risk.counterparty_id,risk.currency)
         old=assessments.get(key)
-        if old is None or _day(risk.assessment_date)>_day(old.assessment_date): assessments[key]=risk
+        if old is not None and risk_day==_day(old.assessment_date):
+            raise ValueError(f"Conflicting credit assessments on same date: {key}")
+        if old is None or risk_day>_day(old.assessment_date): assessments[key]=risk
 
     buckets=("NOT_DUE","DUE_1_30","DUE_31_60","DUE_61_90","DUE_90_PLUS")
     aggregate={}
