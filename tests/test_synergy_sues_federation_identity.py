@@ -87,3 +87,11 @@ def test_algorithm_downgrade_duplicate_keys_and_canonicalization(tmp_path):
         registry.register_key(key)
     from synergy_sues.federation_identity import _canonical
     assert _canonical({"b":1,"a":2}) == _canonical({"a":2,"b":1})
+
+def test_future_signature_timestamp_and_unsigned_extension_fields_rejected(tmp_path):
+    signed, registry = envelope(tmp_path)
+    with pytest.raises(ValueError, match="future"):
+        registry.verify(signed, "2026-11-06T09:59:00+00:00")
+    extended = replace(signed, event={**signed.event, "unhashed_extension": "not-allowed"})
+    with pytest.raises(ValueError, match="unsupported fields"):
+        registry.verify(extended, "2026-11-06T10:01:00+00:00")
