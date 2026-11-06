@@ -11,6 +11,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from synergy_sues import (
     Account, AccountType, EconomicPeriod, EvidenceRecord, EvidenceStatus,
     FXRate, Journal, JournalEntry, JournalLine, Money, NormalBalance, Quantity,
+    BenefitAttribution, BenefitAttributionRegistry, BenefitEvent, FlowBoundary,
+    PhysicalFlow, summarize_physical_flows,
 )
 
 
@@ -168,3 +170,52 @@ def test_sues_contracts_json_schema_accepts_all_five_contract_shapes():
     ]
     for example in examples:
         jsonschema.validate(example, schema, format_checker=checker)
+
+
+def test_physical_flow_summary_never_mixes_units_resources_or_periods():
+    flows = [
+        PhysicalFlow("f1", "supplier", "factory", "steel", Quantity("10", "tonne"), "2026-Q4", FlowBoundary.INTERNAL),
+        PhysicalFlow("f2", "grid", "factory", "electricity", Quantity("5", "MWh"), "2026-Q4", FlowBoundary.IMPORT),
+        PhysicalFlow("f3", "factory", "customer", "steel", Quantity("4", "tonne"), "2027-Q1", FlowBoundary.EXPORT),
+    ]
+    result = summarize_physical_flows(flows)
+    assert len(result["flows"]) == 3
+    assert {row["unit"] for row in result["flows"]} == {"tonne", "MWh"}
+    assert result["internal_transfers_are_not_new_output"]
+
+
+def test_physical_flow_rejects_duplicate_ids_and_negative_quantity():
+    flow = PhysicalFlow("f1", "a", "b", "water", Quantity("1", "m3"), "2026-Q4")
+    with pytest.raises(ValueError, match="Duplicate"):
+        summarize_physical_flows([flow, flow])
+    with pytest.raises(ValueError, match="non-negative"):
+        PhysicalFlow("f2", "a", "b", "water", Quantity("-1", "m3"), "2026-Q4")
+
+
+def test_benefit_registry_caps_attribution_across_projects():
+    registry = BenefitAttributionRegistry()
+    event = BenefitEvent("be1", "meter-reading-1", "enterprise-1", "2026-Q4",
+        "ENERGY_SAVING", Money("100", "USD"), "baseline-vs-control-1",
+        ("meter:evidence-1",), EvidenceStatus.VERIFIED)
+    registry.add_event(event)
+    registry.add_claim(BenefitAttribution("claim-a", "be1", "project-a", "0.4"))
+    registry.add_claim(BenefitAttribution("claim-b", "be1", "project-b", "0.6"))
+    summary = registry.summary()
+    assert {x["amount"] for x in summary["attributed_amount_by_project_currency"]} == {"40.0", "60.0"}
+    assert summary["events"][0]["attributed_weight"] == "1.0"
+    with pytest.raises(ValueError, match="exceed 1.0"):
+        registry.add_claim(BenefitAttribution("claim-c", "be1", "project-c", "0.01"))
+
+
+def test_benefit_registry_rejects_duplicate_measurement_and_preserves_scenario_status():
+    registry = BenefitAttributionRegistry()
+    event = BenefitEvent("be1", "measurement-1", "enterprise-1", "2026-Q4",
+        "OUTPUT_GAIN", Money("20", "KZT"), "counterfactual-1",
+        ("scenario:fixture-1",), EvidenceStatus.SCENARIO)
+    registry.add_event(event)
+    with pytest.raises(ValueError, match="Measurement already registered"):
+        registry.add_event(BenefitEvent("be2", "measurement-1", "enterprise-1", "2026-Q4",
+            "OUTPUT_GAIN", Money("20", "KZT"), "counterfactual-2",
+            ("scenario:fixture-2",), EvidenceStatus.SCENARIO))
+    registry.add_claim(BenefitAttribution("claim-1", "be1", "project-a", "1"))
+    assert registry.summary()["events"][0]["scenario_is_not_observed_cash"]
