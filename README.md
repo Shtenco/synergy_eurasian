@@ -434,4 +434,4 @@ V7.6.1 adds evidence-qualified supplier deposits, dispatch, receipt, milestone a
 - [V7.6.2 Revolving Credit Facility in Production Planning](docs/57_SYNERGY_V7_6_2_REVOLVING_CREDIT_FACILITY.md)
 - [V7.6.2 credit-aware factory fixture](examples/synergy_v7_6_2_credit_factory_plan.json)
 
-V7.6.2 adds period-level credit draws, prior-balance-only repayments, facility limits and interest on beginning-period debt. Debt principal is distinguished from operating expense; outstanding debt is reported and no terminal repayment is silently assumed.
+V7.6.2 adds period-level credit draws, prior-balance-only repayments, facility limits and interest on beginning-period debt. Debt principal is distinguished from operating expense; outstanding debt is reported; an optional terminal debt ceiling can require repayment by horizon end.
