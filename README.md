@@ -36,8 +36,10 @@
 - [SUES V7 Event & Realization Bridge V1 — hash-verified event envelopes and output-to-cash evidence links](docs/69_SYNERGY_SUES_V7_EVENT_AND_REALIZATION_BRIDGE_V1.md)
 - [SUES V7 Bridge JSON Schema — event envelope and realization-link interchange](interfaces/synergy_sues_v7_bridge.schema.json)
 - [SUES V7 Projector Contracts — versioned graph-event payloads and projection records](interfaces/synergy_sues_v7_projector.schema.json)
+- [SUES Durable Event Transport — durable event log, transactional outbox/inbox contracts](interfaces/synergy_sues_event_transport.schema.json)
+- [SUES Durable Event Store & Transactional Inbox/Outbox V1](docs/70_SYNERGY_SUES_DURABLE_EVENT_STORE_AND_TRANSACTIONAL_INBOX_OUTBOX_V1.md)
 
-**Статус:** исследовательская ветка `research/sues-audit-v1`, PR #11. Новые SUES-модули — reference implementation. V7 adapter сохраняет и проверяет исходные события/доказательства; версионированные projectors пока формируют только graph read models для двух реализованных типов событий и не выполняют автоматические бухгалтерские проводки. Производственный контур ограничен полными партиями; автоматический расчёт ставок и durable transactional storage ещё не реализованы. Это не промышленная бухгалтерская система, платёжная инфраструктура или лицензированный финансовый продукт. PR #9 и PR #10 сохраняются отдельно до завершения аудита и интеграционных тестов.
+**Статус:** исследовательская ветка `research/sues-audit-v1`, PR #11. Новые SUES-модули — reference implementation. V7 adapter сохраняет и проверяет исходные события/доказательства; версионированные projectors пока формируют только graph read models для двух реализованных типов событий; Durable Event Store и transactional inbox/outbox добавляют постоянный журнал и повторяемую доставку. Ни один из этих слоёв не выполняет автоматические бухгалтерские проводки. Производственный контур ограничен полными партиями; автоматический расчёт ставок и durable transactional storage ещё не реализованы. Это не промышленная бухгалтерская система, платёжная инфраструктура или лицензированный финансовый продукт. PR #9 и PR #10 сохраняются отдельно до завершения аудита и интеграционных тестов.
 
 ---
 
