@@ -45,6 +45,8 @@ def optimize_production_schedule(
     objective_currency: str="USD",
     mip_rel_gap: float=0.0,
     time_limit_seconds: float=30.0,
+    minimum_inventory: dict[str,float] | None = None,
+    storage_limits: dict[str,float] | None = None,
 ) -> dict:
     """Maximize demand value less production/holding costs under physical constraints.
 
@@ -66,6 +68,7 @@ def optimize_production_schedule(
     for rid,limit in batch_limits.items():
         if not isinstance(limit,int) or limit<0: raise ValueError(f"batch limit for {rid} must be a non-negative integer")
     batch_costs=batch_costs or {}; holding_costs=holding_costs or {}
+    minimum_inventory=minimum_inventory or {}; storage_limits=storage_limits or {}
     if set(batch_costs)-set(rmap): raise ValueError("batch_costs contains unknown recipe_id")
     for k,v in batch_costs.items():
         if not math.isfinite(v) or v<0: raise ValueError(f"Invalid batch cost for {k}")
@@ -86,6 +89,13 @@ def optimize_production_schedule(
     for x in receipts: register(x.product_id,x.unit)
     for d in demand_rows: register(d.product_id,d.unit)
     products=sorted(product_units)
+    if set(minimum_inventory)-set(products): raise ValueError("minimum_inventory contains unknown product_id")
+    if set(storage_limits)-set(products): raise ValueError("storage_limits contains unknown product_id")
+    for p,v in minimum_inventory.items():
+        if not math.isfinite(v) or v<0: raise ValueError(f"Invalid minimum inventory for {p}")
+    for p,v in storage_limits.items():
+        if not math.isfinite(v) or v<0: raise ValueError(f"Invalid storage limit for {p}")
+        if v<minimum_inventory.get(p,0.0): raise ValueError(f"Storage limit below safety stock for {p}")
     for cap in caps:
         try: cap_period=int(cap.period)
         except (TypeError,ValueError) as exc: raise ValueError(f"Resource capacity period must be an integer bucket: {cap.period}") from exc
@@ -126,9 +136,12 @@ def optimize_production_schedule(
     inv_index={}
     for p in products:
         for period in range(horizon_periods):
-            inv_index[(p,period)]=len(upper); upper.append(math.inf); integrality.append(0)
+            inv_index[(p,period)]=len(upper); upper.append(storage_limits.get(p,math.inf)); integrality.append(0)
             objective.append(holding_costs.get(p,0.0))
     nvars=len(upper); lower=np.zeros(nvars); upper=np.asarray(upper,dtype=float)
+    for p in products:
+        for period in range(horizon_periods):
+            lower[inv_index[(p,period)]]=minimum_inventory.get(p,0.0)
     rows=[]; cols=[]; vals=[]; row_lb=[]; row_ub=[]; row_names=[]
     def add_constraint(coeffs,lb,ub,name):
         row=len(row_lb); row_names.append(name); row_lb.append(lb); row_ub.append(ub)
@@ -199,7 +212,8 @@ def optimize_production_schedule(
         for period in range(horizon_periods):
             qty=max(0.0,float(sol[inv_index[(p,period)]]))
             cost=qty*holding_costs.get(p,0.0); holding_cost_total+=cost
-            inventory_report.append({"product_id":p,"period":period,"ending_quantity":qty,"unit":product_units[p],"holding_cost":cost})
+            inventory_report.append({"product_id":p,"period":period,"ending_quantity":qty,"unit":product_units[p],"holding_cost":cost,
+                "minimum_inventory":minimum_inventory.get(p,0.0),"storage_limit":storage_limits.get(p)})
     production_cost_total=sum(x["batch_count"]*batch_costs.get(x["recipe_id"],0.0) for x in schedule)
     resource_usage=[]
     for resource,period in resource_keys:
@@ -224,4 +238,7 @@ def optimize_production_schedule(
         "mip_gap":float(result.mip_gap) if getattr(result,"mip_gap",None) is not None else None,
         "assumptions":{"integer_batches":True,"discrete_periods":True,"firm_capacity_only":True,
             "nonfirm_receipts_excluded":True,"no_backorders":True,"no_inventory_expiry":True,
-            "no_transport_or_storage_constraints":True,"economic_values_are_scenario_inputs_not_observed_cash":True}}
+            "no_transport_constraints":True,"storage_limits_enforced_at_period_end":True,
+            "minimum_inventory_enforced_at_period_end":True,
+            "economic_values_are_scenario_inputs_not_observed_cash":True},
+        "inventory_policy":{"minimum_inventory":minimum_inventory,"storage_limits":storage_limits}}
