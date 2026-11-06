@@ -153,3 +153,7 @@ V7.6.2 now covers facility limits, drawdowns, prior-balance repayments, interest
 V7.6.2 adds a revolving facility with per-period draw and repayment limits, a hard outstanding-balance ceiling, and interest charged on beginning-period debt. The cash equation includes drawdowns, repayments and interest; the objective penalizes financing interest, while principal remains a balance-sheet liability rather than operating expense. An optional terminal debt ceiling can require repayment by the horizon end; otherwise no maturity is inferred. See [V7.6.2 specification](docs/57_SYNERGY_V7_6_2_REVOLVING_CREDIT_FACILITY.md).
 
 The financing model remains a planning abstraction: no covenant, collateral, fees, FX, default, legal approval or lender commitment is inferred. Actual draws and repayments must be reconciled to bank evidence.
+
+### V7.6.3 update — explicit credit maturity
+
+A declared `credit_maturity_period` now forces the facility balance to zero by the end of that period and in all later periods. This is distinct from a terminal horizon debt ceiling: the model no longer assumes that debt can remain outstanding past a known maturity date merely because the planning horizon is longer. If repayment cannot be funded, production is curtailed. See [V7.6.3 specification](docs/58_SYNERGY_V7_6_3_CREDIT_MATURITY.md).
