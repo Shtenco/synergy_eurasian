@@ -492,6 +492,57 @@
         },
         "include_scenarios": {
           "type": "boolean"
+        },
+        "receivable_aging_haircuts": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "inventory_aging_haircuts": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "receivable_dilution_reserve_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "receivable_reserve_amount": {
+          "type": "number",
+          "minimum": 0
+        },
+        "inventory_reserve_amount": {
+          "type": "number",
+          "minimum": 0
         }
       }
     },
@@ -619,6 +670,11 @@
           "evidence_id": {
             "type": "string",
             "minLength": 1
+          },
+          "age_days": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
           }
         }
       }
