@@ -20,14 +20,14 @@ def config():
 
 def test_whole_system_and_public_portfolio_are_not_conflated():
     report = portfolio_accounting(config())
-    assert report["total_productive_capital_usd"] == 32_900_000
-    assert report["total_gross_cashflow_usd"] == 993_500
-    assert report["total_replacement_capex_usd"] == 1_089_500
-    assert report["total_net_after_replacement_usd"] == -96_000
-    assert report["public_productive_capital_usd"] == 15_805_000
-    assert report["public_gross_cashflow_usd"] == 489_150
-    assert report["public_replacement_capex_usd"] == 538_250
-    assert report["public_net_after_replacement_usd"] == -49_100
+    assert abs(report["total_productive_capital_usd"] - 32_900_000) < 1e-6
+    assert abs(report["total_gross_cashflow_usd"] - 993_500) < 1e-6
+    assert abs(report["total_replacement_capex_usd"] - 1_089_500) < 1e-6
+    assert abs(report["total_net_after_replacement_usd"] + 96_000) < 1e-6
+    assert abs(report["public_productive_capital_usd"] - 15_805_000) < 1e-6
+    assert abs(report["public_gross_cashflow_usd"] - 489_150) < 1e-6
+    assert abs(report["public_replacement_capex_usd"] - 538_250) < 1e-6
+    assert abs(report["public_net_after_replacement_usd"] + 49_100) < 1e-6
 
 
 def test_leontief_matrix_is_productive_and_baseline_is_feasible():
