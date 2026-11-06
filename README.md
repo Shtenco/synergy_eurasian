@@ -407,3 +407,5 @@ V7.3.1 estimates matched-pair difference-in-differences with a small-sample t in
 - [V7.4 command-line optimizer](src/synergy_v7/planner_cli.py)
 
 V7.4 chooses integer production batches across periods, balancing demand value against batch and inventory holding costs under material and firm resource constraints. Economic values are explicit scenario inputs, not observed cash.
+
+V7.4.1 extends the MILP with end-of-period safety-stock minimums and storage-capacity maximums, with infeasible policy combinations rejected rather than silently relaxed.
