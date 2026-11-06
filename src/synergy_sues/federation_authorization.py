@@ -152,7 +152,7 @@ class FederationAuthorizationPolicy:
             authorized_approver = any(
                 approver.identity_id in rule.approver_ids for rule in allows
             )
-            if not scope_matches or not authorized_approver or approver.identity_id == requester.identity_id:
+            if not authorized_approver or approver.identity_id == requester.identity_id:
                 continue
             if approval_payload["decision"] not in {"APPROVE", "REJECT"}:
                 raise ValueError("approval decision must be APPROVE or REJECT")
