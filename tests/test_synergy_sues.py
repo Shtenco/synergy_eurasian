@@ -477,3 +477,45 @@ def test_trial_balance_translation_rejects_missing_historical_rate_and_future_ra
     )
     with pytest.raises(ValueError, match="post-date"):
         translate_trial_balance(equity, future_policy, "USD")
+
+
+def test_trade_subledger_posts_invoices_and_settlements_to_balanced_gl():
+    journal = Journal("USD")
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
+    journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    docs = [
+        TradeDocument("inv-ar", TradeSide.RECEIVABLE, "co1", "customer1",
+            date(2026, 11, 1), date(2026, 11, 30), Money("100", "USD"), "invoice:ar"),
+        TradeDocument("inv-ap", TradeSide.PAYABLE, "co1", "supplier1",
+            date(2026, 11, 2), date(2026, 11, 20), Money("80", "USD"), "invoice:ap"),
+    ]
+    settlements = [
+        TradeSettlement("settle-ar", "inv-ar", date(2026, 11, 6), Money("30", "USD"), "cash", "bank:ar"),
+        TradeSettlement("settle-ap", "inv-ap", date(2026, 11, 6), Money("20", "USD"), "cash", "bank:ap"),
+    ]
+    subledger = TradeSubledger(docs, settlements)
+    projection = subledger.project(date(2026, 11, 6))
+    assert projection["totals_by_side_currency"] == {
+        "PAYABLE::USD": "60", "RECEIVABLE::USD": "70"
+    }
+    result = subledger.post_to_journal(
+        journal,
+        TradeAccountMap("ar", "revenue", "ap", "purchases"),
+        datetime(2026, 11, 6, 12, tzinfo=timezone.utc),
+    )
+    assert result["trade_subledger_delta_matches_journal_control_accounts"]
+    assert result["expected_ar_control_delta"] == result["actual_ar_control_delta"] == "70"
+    assert result["expected_ap_credit_control_delta"] == result["actual_ap_credit_control_delta"] == "60"
+    assert journal.trial_balance()["balanced"]
+
+
+def test_trade_subledger_rejects_over_settlement_and_wrong_cash_account():
+    docs = [TradeDocument("inv", TradeSide.RECEIVABLE, "co1", "customer",
+        date(2026, 11, 1), date(2026, 11, 30), Money("10", "USD"), "invoice:1")]
+    settlements = [TradeSettlement("s1", "inv", date(2026, 11, 2), Money("11", "USD"), "cash", "bank:1")]
+    subledger = TradeSubledger(docs, settlements)
+    with pytest.raises(ValueError, match="exceeds open balance"):
+        subledger.project(date(2026, 11, 3))
