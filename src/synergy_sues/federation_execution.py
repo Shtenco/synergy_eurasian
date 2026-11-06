@@ -54,6 +54,7 @@ class AuthorizedActionExecutor:
                     requester_identity_id TEXT NOT NULL,
                     executed_at TEXT NOT NULL,
                     result_json TEXT NOT NULL,
+                    decision_json TEXT NOT NULL,
                     previous_hash TEXT NOT NULL,
                     receipt_hash TEXT NOT NULL UNIQUE
                 );
@@ -83,7 +84,7 @@ class AuthorizedActionExecutor:
     def _receipt_hash(row: Mapping[str, Any]) -> str:
         fields = ("sequence", "request_id", "request_event_id", "request_event_hash",
                   "action", "resource_type", "resource_id", "requester_identity_id",
-                  "executed_at", "result_json", "previous_hash")
+                  "executed_at", "result_json", "decision_json", "previous_hash")
         return sha256(_canonical({field: row[field] for field in fields})).hexdigest()
 
     def execute(
@@ -136,6 +137,16 @@ class AuthorizedActionExecutor:
 
                 result = handler(db, request, decision)
                 result_json = _canonical(result).decode("utf-8")
+                decision_document = {
+                    "allowed": decision.allowed,
+                    "reason": decision.reason,
+                    "request_id": decision.request_id,
+                    "requester_identity_id": decision.requester_identity_id,
+                    "matched_rule_ids": list(decision.matched_rule_ids),
+                    "approval_identity_ids": list(decision.approval_identity_ids),
+                    "approval_event_refs": [list(item) for item in decision.approval_event_refs],
+                }
+                decision_json = _canonical(decision_document).decode("utf-8")
                 prior = db.execute(
                     "SELECT sequence, receipt_hash FROM execution_receipts ORDER BY sequence DESC LIMIT 1"
                 ).fetchone()
@@ -152,17 +163,18 @@ class AuthorizedActionExecutor:
                     "requester_identity_id": requester,
                     "executed_at": executed_at,
                     "result_json": result_json,
+                    "decision_json": decision_json,
                     "previous_hash": previous_hash,
                 }
                 receipt_hash = self._receipt_hash(row)
                 db.execute("""INSERT INTO execution_receipts
                     (sequence,request_id,request_event_id,request_event_hash,action,
                      resource_type,resource_id,requester_identity_id,executed_at,
-                     result_json,previous_hash,receipt_hash)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     result_json,decision_json,previous_hash,receipt_hash)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (sequence, request_id, request_event_id, request_event_hash, action,
                      resource_type, resource_id, requester, executed_at, result_json,
-                     previous_hash, receipt_hash))
+                     decision_json, previous_hash, receipt_hash))
                 db.commit()
                 return ExecutionResult(True, "EXECUTED", decision, result)
             except Exception:
@@ -182,7 +194,9 @@ class AuthorizedActionExecutor:
                 return False
             try:
                 result = json.loads(row["result_json"])
-                if _canonical(result).decode("utf-8") != row["result_json"]:
+                decision = json.loads(row["decision_json"])
+                if (_canonical(result).decode("utf-8") != row["result_json"]
+                        or _canonical(decision).decode("utf-8") != row["decision_json"]):
                     return False
             except (TypeError, ValueError):
                 return False
