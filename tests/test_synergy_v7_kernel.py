@@ -550,3 +550,57 @@ def test_realization_chain_cli_fixture_is_schema_valid_and_reproducible():
     assert report["invoiced_amount_by_currency"]["USD"]==8000
     assert report["collected_cash_by_currency"]["USD"]==5000
     assert report["costs_by_currency"]["USD"]["REPLACEMENT_OBLIGATION"]==300
+
+
+from synergy_v7 import CausalObservation, matched_pair_difference_in_differences
+
+
+def did_fixture():
+    rows=[]
+    effects=[5,4,6,5]
+    for idx,effect in enumerate(effects):
+        pair=f"pair{idx}"
+        rows.extend([
+          CausalObservation(f"{pair}-tp",pair,f"treated-{idx}","TREATED","PRE",100,"meter:t0"),
+          CausalObservation(f"{pair}-tq",pair,f"treated-{idx}","TREATED","POST",110+effect,"meter:t1"),
+          CausalObservation(f"{pair}-cp",pair,f"control-{idx}","CONTROL","PRE",90,"meter:c0"),
+          CausalObservation(f"{pair}-cq",pair,f"control-{idx}","CONTROL","POST",100,"meter:c1")])
+    return rows
+
+
+def test_matched_pair_did_estimates_average_treatment_effect():
+    r=matched_pair_difference_in_differences(did_fixture())
+    assert r["matched_pair_count"]==4
+    assert r["effect_estimate"]==pytest.approx(5)
+    assert r["beneficial_effect_estimate"]==pytest.approx(5)
+    assert r["confidence_interval"][0]<=5<=r["confidence_interval"][1]
+    assert r["parallel_trends_testable_with_one_pre_period"] is False
+
+
+def test_matched_pair_did_reverses_benefit_sign_for_lower_is_better():
+    r=matched_pair_difference_in_differences(did_fixture(),"0.95" if False else 0.95,"LOWER_IS_BETTER")
+    assert r["effect_estimate"]==pytest.approx(5)
+    assert r["beneficial_effect_estimate"]==pytest.approx(-5)
+
+
+def test_matched_pair_did_rejects_incomplete_and_duplicate_observations():
+    rows=did_fixture()
+    with pytest.raises(ValueError,match="Incomplete"):
+        matched_pair_difference_in_differences(rows[:-1])
+    with pytest.raises(ValueError,match="Duplicate observation"):
+        matched_pair_difference_in_differences(rows+[rows[0]])
+
+
+def test_matched_pair_did_rejects_changed_unit_identity():
+    rows=did_fixture()
+    rows[1]=CausalObservation("pair0-tq","pair0","different-treated","TREATED","POST",115,"meter:t1")
+    with pytest.raises(ValueError,match="identity"):
+        matched_pair_difference_in_differences(rows)
+
+
+def test_matched_pair_did_requires_multiple_pairs_and_valid_confidence():
+    rows=did_fixture()[:4]
+    with pytest.raises(ValueError,match="At least two"):
+        matched_pair_difference_in_differences(rows)
+    with pytest.raises(ValueError,match="confidence_level"):
+        matched_pair_difference_in_differences(did_fixture(),1.0)
