@@ -157,3 +157,7 @@ The financing model remains a planning abstraction: no covenant, collateral, fee
 ### V7.6.3 update — explicit credit maturity
 
 A declared `credit_maturity_period` now forces the facility balance to zero by the end of that period and in all later periods. This is distinct from a terminal horizon debt ceiling: the model no longer assumes that debt can remain outstanding past a known maturity date merely because the planning horizon is longer. If repayment cannot be funded, production is curtailed. See [V7.6.3 specification](docs/58_SYNERGY_V7_6_3_CREDIT_MATURITY.md).
+
+### V7.6.4 update — borrowing-base covenant
+
+V7.6.4 adds period-specific maximum drawn-debt limits on top of the contractual facility cap and reports borrowing-base headroom. This makes collateral availability a first-class planning constraint, while keeping collateral eligibility, aging, concentration and advance-rate certification outside the optimizer until those inputs are evidence-backed. See [V7.6.4 specification](docs/59_SYNERGY_V7_6_4_BORROWING_BASE_COVENANT.md).
