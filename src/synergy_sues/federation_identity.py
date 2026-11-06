@@ -253,6 +253,7 @@ def sign_event(event: Any, identity_id: str, tenant_id: str, key_id: str,
         base64.b64encode(signature).decode("ascii"))
 
 import sqlite3
+from contextlib import contextmanager
 
 
 class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
@@ -272,7 +273,7 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
         self.database_path = database_path
         self.busy_timeout_ms = busy_timeout_ms
         super().__init__()
-        with self._connect() as db:
+        with self._session() as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS trust_identities (
                     identity_id TEXT PRIMARY KEY,
@@ -314,13 +315,17 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
             """)
         self._refresh()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _session(self):
         db = sqlite3.connect(self.database_path, timeout=self.busy_timeout_ms / 1000)
         db.row_factory = sqlite3.Row
-        db.execute("PRAGMA foreign_keys=ON")
-        db.execute(f"PRAGMA busy_timeout={self.busy_timeout_ms}")
-        db.execute("PRAGMA journal_mode=WAL")
-        return db
+        try:
+            db.execute("PRAGMA foreign_keys=ON")
+            db.execute(f"PRAGMA busy_timeout={self.busy_timeout_ms}")
+            db.execute("PRAGMA journal_mode=WAL")
+            yield db
+        finally:
+            db.close()
 
     @staticmethod
     def _audit_hash(sequence: int, action: str, subject_id: str, details_json: str,
