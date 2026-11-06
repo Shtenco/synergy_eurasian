@@ -105,3 +105,49 @@ Before using this model to approve investments:
 7. add a reserve target based on essential-service months and replacement risk, not a fixed 5% assumption.
 
 Implementation: `src/synergy_productivity_flywheel_dynamic_v2.py`; assumptions: `data/synergy_productivity_flywheel_dynamic_v2.json`; tests: `tests/test_productivity_flywheel_dynamic_v2.py`.
+
+
+## 5A. Sector-level reality check: aggregate surplus can hide essential-sector deficits
+
+The portfolio-level dynamic engine is not sufficient for service guarantees. The starting repair scenario has these sector cashflow / replacement pairs after the first repair targets:
+
+| Sector | Cashflow before replacement | Replacement CAPEX |
+|---|---:|---:|
+| FOOD | $45,150 | $46,080 |
+| HOUSING | $483,750 | $432,000 |
+| ENERGY | $268,750 | $168,000 |
+| HEALTH | $80,625 | $96,000 |
+| EDUCATION | $24,187.50 | $72,000 |
+| MOBILITY | $75,250 | $151,200 |
+| COMPUTE | $90,300 | $80,640 |
+
+At year 10, before adding portfolio-level automation / R&D project returns:
+
+| Sector | 2.5% cashflow growth / 2% replacement inflation | 5% cashflow growth / 5% replacement inflation |
+|---|---:|---:|
+| FOOD | +$1,625 | −$1,515 |
+| HOUSING | +$92,635 | +$84,295 |
+| ENERGY | +$139,232 | +$164,111 |
+| HEALTH | −$13,817 | −$25,044 |
+| EDUCATION | −$56,806 | −$77,882 |
+| MOBILITY | −$87,986 | −$123,715 |
+| COMPUTE | +$17,292 | +$15,735 |
+| **Net** | **+$92,176** | **+$35,986** |
+
+The 2.5% / 2% case has a positive consolidated balance, but Health, Education and Mobility still need $158,608 of cross-subsidy in year 10. The 5% / 5% case has a positive consolidated balance, but Food, Health, Education and Mobility still need $228,155. The positive sector pools are $250,783 and $264,142 respectively. Cross-subsidies can cover these gaps in the illustrative arithmetic, but they remain internal transfers, not new system-wide value.
+
+### Required annual cashflow growth for each sector to cover its own replacement in year 10
+
+| Sector | Replacement inflation 2% | Replacement inflation 5% | Replacement inflation 10% |
+|---|---:|---:|---:|
+| FOOD | 2.21% | 5.21% | 10.22% |
+| HOUSING | 0.85% | 3.82% | 8.76% |
+| ENERGY | −2.68% | 0.18% | 4.95% |
+| HEALTH | 3.80% | 6.85% | 11.94% |
+| EDUCATION | 13.76% | 17.10% | 22.68% |
+| MOBILITY | 9.37% | 12.59% | 17.95% |
+| COMPUTE | 0.85% | 3.82% | 8.76% |
+
+Negative required growth means the sector begins with enough margin to absorb some cashflow decline while still covering replacement by year 10. Education and Mobility are the structurally hardest sectors in this illustrative portfolio. They require explicit public-service contracts, productivity programs, or durable cross-subsidy commitments; they must not be assumed to become self-financing merely because the whole portfolio is positive.
+
+The V2 engine now emits sector-level year-10 cashflow, replacement, residual and required growth thresholds in `sector_reconciliation_before_project_returns`. Project returns are still reported at portfolio level until investment cohorts can be assigned to actual sectors and enterprises. This prevents portfolio-level returns from being falsely attributed to sectors that did not receive the investment.
