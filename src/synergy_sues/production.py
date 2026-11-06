@@ -315,3 +315,75 @@ def execute_production_order(
         order.order_id, output_movement, input_movements, total_cost,
         order.output_quantity, tuple(x.entry_id for x in entries),
     )
+
+
+
+def post_grni_receipt(
+    receipt: GoodsReceipt,
+    matcher: GRNIMatcher,
+    journal: Journal,
+    inventory_account_id: str,
+    grni_account_id: str,
+    entity_id: str,
+    recorded_at: datetime,
+) -> JournalEntry:
+    """Accrue received-but-not-invoiced goods: Dr inventory / Cr GRNI."""
+    _aware(recorded_at, "recorded_at")
+    po = matcher._orders.get(receipt.po_line_id)
+    if po is None or matcher._receipts.get(receipt.receipt_id) != receipt:
+        raise ValueError("Receipt must first be accepted by this GRNI matcher")
+    if po.entity_id != entity_id or journal.entity_id not in (None, entity_id):
+        raise ValueError("GRNI receipt entity mismatch")
+    if po.unit_price.currency != journal.functional_currency:
+        raise ValueError("GRNI reference posting requires PO currency equal to journal functional currency")
+    _account_map(journal, inventory_account_id, AccountType.ASSET, NormalBalance.DEBIT, "Inventory account")
+    _account_map(journal, grni_account_id, AccountType.LIABILITY, NormalBalance.CREDIT, "GRNI account")
+    amount = Money(receipt.received_quantity.amount * po.unit_price.amount, journal.functional_currency)
+    if amount.amount <= 0:
+        raise ValueError("Zero-value GRNI receipt cannot be posted")
+    entry_id = f"grni:receipt:{receipt.receipt_id}"
+    return journal.post(JournalEntry(
+        entry_id, receipt.received_date, recorded_at, journal.functional_currency,
+        (
+            JournalLine(f"{entry_id}:dr", inventory_account_id, PostingSide.DEBIT,
+                amount, amount, entity_id, receipt.evidence_ref),
+            JournalLine(f"{entry_id}:cr", grni_account_id, PostingSide.CREDIT,
+                amount, amount, entity_id, receipt.evidence_ref),
+        ),
+        f"grni-receipt:{receipt.receipt_id}", f"grni-receipt:{receipt.receipt_id}",
+        f"Accrue received goods {receipt.receipt_id}",
+    ))
+
+
+def post_grni_invoice(
+    invoice: SupplierInvoiceLine,
+    matcher: GRNIMatcher,
+    journal: Journal,
+    grni_account_id: str,
+    accounts_payable_account_id: str,
+    entity_id: str,
+    recorded_at: datetime,
+) -> JournalEntry:
+    """Clear matched GRNI into supplier AP: Dr GRNI / Cr accounts payable."""
+    _aware(recorded_at, "recorded_at")
+    po = matcher._orders.get(invoice.po_line_id)
+    if po is None or matcher._invoices.get(invoice.invoice_line_id) != invoice:
+        raise ValueError("Invoice must first be accepted by this GRNI matcher")
+    if po.entity_id != entity_id or journal.entity_id not in (None, entity_id):
+        raise ValueError("GRNI invoice entity mismatch")
+    if invoice.amount.currency != journal.functional_currency:
+        raise ValueError("GRNI reference posting requires invoice currency equal to journal functional currency")
+    _account_map(journal, grni_account_id, AccountType.LIABILITY, NormalBalance.CREDIT, "GRNI account")
+    _account_map(journal, accounts_payable_account_id, AccountType.LIABILITY, NormalBalance.CREDIT, "AP account")
+    entry_id = f"grni:invoice:{invoice.invoice_line_id}"
+    return journal.post(JournalEntry(
+        entry_id, invoice.invoice_date, recorded_at, journal.functional_currency,
+        (
+            JournalLine(f"{entry_id}:dr", grni_account_id, PostingSide.DEBIT,
+                invoice.amount, invoice.amount, entity_id, invoice.source_ref),
+            JournalLine(f"{entry_id}:cr", accounts_payable_account_id, PostingSide.CREDIT,
+                invoice.amount, invoice.amount, entity_id, invoice.source_ref),
+        ),
+        f"grni-invoice:{invoice.invoice_line_id}", f"grni-invoice:{invoice.invoice_line_id}",
+        f"Reclassify matched GRNI to AP {invoice.invoice_line_id}",
+    ))
