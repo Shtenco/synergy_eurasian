@@ -106,9 +106,12 @@ class JournalEntry:
 class Journal:
     """In-memory reference journal; durable storage is a separate infrastructure task."""
 
-    def __init__(self, functional_currency: str) -> None:
+    def __init__(self, functional_currency: str, entity_id: str | None = None) -> None:
         # Reuse Money's canonical currency validation.
         self.functional_currency = Money(Decimal("0"), functional_currency).currency
+        if entity_id is not None and not entity_id:
+            raise ValueError("entity_id cannot be empty")
+        self.entity_id = entity_id
         self._accounts: dict[str, Account] = {}
         self._entries: dict[str, JournalEntry] = {}
         self._idempotency_keys: set[str] = set()
@@ -163,6 +166,8 @@ class Journal:
         for line in entry.lines:
             if line.account_id not in self._accounts:
                 raise ValueError(f"Unknown account_id: {line.account_id}")
+            if self.entity_id is not None and line.entity_id != self.entity_id:
+                raise ValueError("Journal line entity_id does not match journal owner")
             if line.functional_amount.currency != self.functional_currency:
                 raise ValueError("Journal line functional currency mismatch")
             if line.amount.currency != self.functional_currency:
