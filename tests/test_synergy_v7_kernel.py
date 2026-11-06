@@ -942,6 +942,7 @@ def test_v761_supplier_payment_cli_aggregates_calendar_and_runs_cash_optimizer()
       {"payment_id":"supplier-deposit","supplier_id":"steelco","purchase_order_id":"po-1","input_product_id":"steel","period":0,
        "amount":20,"currency":"USD","payment_stage":"DEPOSIT","status":"COMMITTED","evidence_id":"po:deposit"}
     ]
+    document["cash_opening_balance"]=40
     result=evaluate_document(document)
     assert result["supplier_payment_commitments"]["cash_outflows_by_period"]=={0:20}
     assert result["ending_cash_by_period"]==pytest.approx([0,0,100])
