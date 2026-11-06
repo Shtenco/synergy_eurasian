@@ -122,3 +122,21 @@ def test_production_preflight_prevents_partial_material_consumption():
         execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW)
     assert inventory.summary() == before
     assert journal.entries == ()
+
+
+
+def test_zero_cost_bom_is_rejected_before_inventory_mutation():
+    journal = production_journal()
+    inventory = InventoryLedger("USD")
+    inventory.receive("free-input", "free-lot", "sample", "factory",
+        Quantity("2", "kg"), Money("0", "USD"), date(2026, 11, 1), "receipt:free")
+    before = inventory.summary()
+    order = ProductionOrder(
+        "batch-free", "co1", "sample-product", Quantity("1", "unit"), "factory",
+        (BOMComponent("sample", Quantity("1", "kg")),),
+        date(2026, 11, 6), "production-order:free",
+    )
+    with pytest.raises(ValueError, match="Zero-cost production batch"):
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW)
+    assert inventory.summary() == before
+    assert journal.entries == ()
