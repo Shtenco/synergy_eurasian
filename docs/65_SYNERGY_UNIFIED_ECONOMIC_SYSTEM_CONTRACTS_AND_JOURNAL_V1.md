@@ -24,7 +24,7 @@ Each journal entry has a functional currency and at least two lines. Each line s
 - FX-rate reference for foreign-currency lines;
 - evidence IDs.
 
-The journal rejects unbalanced functional-currency entries, duplicate entry IDs, duplicate idempotency keys, unknown accounts, duplicate line IDs and invalid FX references. A posted entry is immutable. Corrections use a new reversing entry linked to the original; a source entry can be reversed only once.
+The journal rejects unbalanced functional-currency entries, duplicate entry IDs, duplicate idempotency keys, unknown accounts, duplicate line IDs, unknown or reverse-direction FX references, post-dated FX observations and functional valuations that do not match the referenced rate. A posted entry is immutable. Corrections use a new reversing entry linked to the original; a source entry can be reversed only once.
 
 The trial balance reports functional-currency debits and credits by account.
 
