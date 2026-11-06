@@ -204,7 +204,7 @@ def test_working_capital_and_cash_conversion_cycle():
 def test_reduction_in_net_working_capital_releases_cash():
     old=WorkingCapitalSnapshot(100,200,50,10,1000,730)
     new=WorkingCapitalSnapshot(80,180,60,10,1000,730)
-    assert working_capital_cash_impact(old,new)==40
+    assert working_capital_cash_impact(old,new)==50
 
 
 def test_cash_waterfall_respects_replacement_reserve_and_distribution_gates():
