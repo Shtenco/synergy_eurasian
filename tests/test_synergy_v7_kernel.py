@@ -735,8 +735,7 @@ def test_v741_milp_optimizer_rejects_unknown_holding_cost_product():
 
 def test_matched_pair_did_rejects_reusing_same_unit_in_multiple_pairs():
     rows=did_fixture()
-    repeated=list(rows[:4])
-    for x in rows[4:]:
-        repeated.append(CausalObservation(x.observation_id,"pair0",x.unit_id,x.group,x.period,x.outcome,x.evidence_id,x.source_class))
+    rows[4]=CausalObservation(rows[4].observation_id,rows[4].matched_pair_id,"treated-0","TREATED","PRE",rows[4].outcome,rows[4].evidence_id)
+    rows[5]=CausalObservation(rows[5].observation_id,rows[5].matched_pair_id,"treated-0","TREATED","POST",rows[5].outcome,rows[5].evidence_id)
     with pytest.raises(ValueError,match="exactly one matched pair"):
-        matched_pair_difference_in_differences(repeated)
+        matched_pair_difference_in_differences(rows)
