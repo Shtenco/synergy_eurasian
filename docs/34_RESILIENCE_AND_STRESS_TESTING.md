@@ -278,3 +278,19 @@ At least quarterly in mature system:
 ## Ultimate criterion
 
 > **The best Eurasian portfolio is not the one that looks richest in the base case; it is the one that continues producing essential value and remains solvent when several assumptions fail together.**
+
+
+## Seven-sector reference stress model
+
+The repository includes a reproducible illustrative reference model for the seven essential sectors:
+
+- Leontief input-output dependencies and baseline-capacity normalization;
+- energy, mobility, compute, food and housing capacity shocks;
+- minimum-service floors for food, housing, energy and health;
+- replacement-first cashflow accounting;
+- a separate financial reserve and productive-capital ledger;
+- 30-year deterministic scenario with physical losses and temporary cashflow shocks.
+
+Reference: [SYNERGY Economy 6.3](38_SYNERGY_ECONOMY_6_3_CONSOLIDATED.md), implementation: `src/synergy_economy_7sector.py`.
+
+The coefficients and crisis calendar are MODEL_ASSUMPTION, not calibrated probabilities or forecasts. Equal sector weights in the simple LP are not an ethical rationing policy. Operational use requires distributional constraints, geography, service quality, import substitution limits, recovery lead times and empirically grounded shock distributions.

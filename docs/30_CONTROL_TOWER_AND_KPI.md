@@ -196,6 +196,24 @@ EVS = external/export/reconciled value / total recognized productive value
 
 Не максимизировать EVS до 100%: внутренние услуги и инфраструктура тоже имеют ценность. KPI нужен, чтобы видеть источник внешней покупательной способности.
 
+## Дополнительные метрики SYNERGY Economy
+
+Для производительной сети семь отраслей должны отдельно показывать:
+
+```text
+ReplacementCoverage = GrossCashflow / RequiredReplacementCAPEX
+PublicPortfolioReplacementGap = PublicGrossCashflow - PublicReplacementCAPEX
+EssentialAccessRatio = DeliveredEssentialServices / EssentialDemand
+ProductiveCapitalCoverage = VerifiedProductiveAssets / RequiredProductiveAssetBase
+LaborTimeReleased = BaselineHours - RequiredHoursAtSameQualityAndOutput
+CrisisSurvivalHorizon = MonthsOfEssentialServiceUnderDefinedStress
+RecoveryTime = TimeToRestorePreShockCriticalService
+```
+
+`ReplacementCoverage < 1` означает, что денежного потока недостаточно для воспроизводства активов при заданных допущениях. Он не должен маркироваться как зелёный только из-за положительной бухгалтерской прибыли.
+
+Для примера расчёта и ограничений см. [SYNERGY Economy 6.3](38_SYNERGY_ECONOMY_6_3_CONSOLIDATED.md). Показатели должны быть заполнены OBSERVED/CONTRACTED evidence; сценарные значения остаются MODEL_OUTPUT.
+
 ## Risk dashboard
 
 ### Red flags

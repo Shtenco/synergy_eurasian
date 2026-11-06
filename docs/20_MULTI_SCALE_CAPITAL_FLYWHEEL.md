@@ -30,6 +30,21 @@
 Δ_business → reserve + working capital + productivity CAPEX + dividends
 ```
 
+### Accounting gate: gross cashflow is not distributable Delta
+
+For productive assets, calculate lifecycle replacement before declaring a distributable surplus:
+
+```text
+GrossOperatingCashflow
+- CashOPEX / taxes / debt service not already deducted
+- RequiredReplacementCAPEX
+- WorkingCapitalIncrease
+- ExpectedRealizedLosses
+= ResidualDelta
+```
+
+Do not deduct an item twice if it is already included in the source cashflow definition. The seven-sector reference model demonstrates the distinction and shows a negative replacement residual under its illustrative assumptions: [SYNERGY Economy 6.3](38_SYNERGY_ECONOMY_6_3_CONSOLIDATED.md).
+
 ## L2 — Project Delta
 
 ```text
