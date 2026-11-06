@@ -28,18 +28,29 @@ The journal rejects unbalanced functional-currency entries, duplicate entry IDs,
 
 The trial balance reports functional-currency debits and credits by account.
 
-## 3. Deliberate limitations
+## 3. Physical-flow dimensional integrity
+
+The `PhysicalFlow` contract carries source, target, resource, typed quantity, period, boundary and optional evidence. Aggregation is keyed by resource × unit × period × boundary. Internal transfer volume is never collapsed into one scalar across unlike units or time buckets.
+
+## 4. Cross-project benefit attribution
+
+A `BenefitEvent` identifies the underlying measurement, enterprise, period, metric and counterfactual. Multiple projects may receive a documented share of one measured benefit, but the sum of attribution weights cannot exceed 1.0. A measurement ID can be registered only once. Evidence status is preserved; scenario benefits are never silently relabelled as observed cash.
+
+## 5. Deliberate limitations
 
 This is an in-memory reference kernel, not yet a production ledger. It does not yet implement persistence, concurrent posting locks, account-period close, tax rules, accrual automation, subledger reconciliation, FX revaluation, consolidation, intercompany elimination, authorization/signatures or statutory reporting. It does not hold customer funds or initiate payments.
 
 The journal balances one entity's functional currency. Multi-entity consolidation must translate subsidiary trial balances under a documented FX policy and eliminate matched intercompany balances and transactions.
 
-## 4. Acceptance tests
+## 6. Acceptance tests
 
 The tests cover:
 - rejection of mixed-currency and mixed-unit arithmetic;
 - explicit FX conversion and dated evidence;
 - balanced and unbalanced journal entries;
+- exact mirrored reversals and forged-reversal rejection;
+- physical-flow dimensional separation;
+- cross-project benefit attribution capped at 100%;
 - foreign-currency functional valuation;
 - idempotency and duplicate prevention;
 - single reversal and trial-balance conservation.
@@ -50,7 +61,7 @@ Run:
 python -m pytest -q tests/test_synergy_sues.py
 ```
 
-## 5. Next increments
+## 7. Next increments
 
 1. Add chart-of-accounts hierarchy and normal-balance reporting.
 2. Add journal-to-AR/AP and bank-statement reconciliation.
