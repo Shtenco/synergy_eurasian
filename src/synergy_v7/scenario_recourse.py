@@ -63,8 +63,13 @@ def _scale_period_map(document:dict, field_name:str, multipliers:dict[str,float]
 
 def apply_scenario(base_document:dict, scenario:EconomicShockScenario)->dict:
     doc=deepcopy(base_document)
-    _scale_rows(doc.get("resource_capacities",[]),"resource_id",{}, "available_quantity")
     resource_multipliers=scenario.resource_capacity_multipliers
+    valid_resource_keys=set()
+    for row in doc.get("resource_capacities",[]):
+        valid_resource_keys.add(row["resource_id"])
+        valid_resource_keys.add(f"{row['resource_id']}@{row.get('period','')}")
+    unknown_resources=set(resource_multipliers)-valid_resource_keys
+    if unknown_resources: raise ValueError(f"Unknown resource capacity multiplier keys: {sorted(unknown_resources)}")
     for row in doc.get("resource_capacities",[]):
         period=str(row.get("period",""))
         factor=resource_multipliers.get(f"{row['resource_id']}@{period}",
