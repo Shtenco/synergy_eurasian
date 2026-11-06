@@ -13,6 +13,7 @@ __all__ = [
     "Account", "AccountType", "BankAllocation", "BankStatement", "BankStatementLine", "BenefitAttribution", "BenefitAttributionRegistry",
     "BenefitEvent", "EconomicPeriod", "EvidenceRecord", "EvidenceStatus",
     "FlowBoundary", "FXRate", "IntercompanyRecord", "IntercompanyRecordType", "Journal", "JournalEntry", "JournalLine",
-    "Money", "NormalBalance", "PhysicalFlow", "Quantity",
+    "Money", "NormalBalance", "PhysicalFlow", "Quantity", "TradeAccountMap", "TradeDocument",
+    "TradeSettlement", "TradeSide", "TradeSubledger", "TranslationPolicy", "TrialBalanceAccount",
     "post_intercompany_eliminations", "reconcile_bank_account", "translate_trial_balance", "reconcile_intercompany", "summarize_physical_flows",
 ]
