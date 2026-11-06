@@ -64,7 +64,11 @@ The kernel includes empirical upper-tail CVaR as the mean of the worst loss obse
 
 No single weighted score should erase trade-offs between NPV, essential output, unit cost, continuity, resilience, labor time and innovation capacity. The Pareto set is retained for governance review.
 
-## 8. V7 roadmap
+## 8. V7.2 implementation status
+
+V7.2 adds operating working-capital metrics (NWC, DSO, DIO, DPO and CCC) plus a prioritized cash waterfall: OPEX → replacement → debt service → reserve top-up → growth CAPEX → distributions. Financing proceeds and internal transfers are kept separate from consolidated external operating cash generation. This is a period-level control calculator, not double-entry accounting. See [V7.2 design](48_SYNERGY_V7_2_WORKING_CAPITAL_AND_CASH_WATERFALL.md).
+
+## 9. V7 roadmap
 
 ### V7.1 — temporal resource network
 - time-expanded graph; multi-period reservations and commissioning;
