@@ -143,12 +143,18 @@ def test_change_requires_two_distinct_independent_admin_approvals(tmp_path):
         store.apply_change(request, one_approval, registry, "2026-11-06T10:02:00+00:00")
     self_approval = make_signed(tmp_path, keys, "admin:proposer",
         "AUTHORIZATION_POLICY_APPROVAL", {
-            "change_id": "change:self", "tenant_id": "tenant:one", "expected_version": 0,
+            "change_id": "change:one", "tenant_id": "tenant:one", "expected_version": 0,
             "policy_change_event_id": request.event["event_id"],
             "policy_change_event_hash": request.event["event_hash"], "decision": "APPROVE",
         }, "self-approval", "2026-11-06T10:01:00+00:00")
     with pytest.raises(ValueError, match="quorum"):
         store.apply_change(request, [one_approval[0], self_approval],
+            registry, "2026-11-06T10:02:00+00:00")
+    duplicate_identity_request, duplicate_identity_approvals = make_change(
+        tmp_path, keys, change_id="change:duplicate-identity", suffix="duplicate-identity",
+        approver_ids=("admin:one", "admin:one"))
+    with pytest.raises(ValueError, match="quorum"):
+        store.apply_change(duplicate_identity_request, duplicate_identity_approvals,
             registry, "2026-11-06T10:02:00+00:00")
 
 
