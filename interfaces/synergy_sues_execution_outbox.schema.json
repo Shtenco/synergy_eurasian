@@ -1,0 +1,19 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://synergy.example/schemas/synergy_sues_execution_outbox.schema.json",
+  "title":"SYNERGY SUES Authorized Execution Outbox V1",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["message_id","idempotency_key","destination","topic","payload_json","created_at","status","attempts"],
+  "properties":{
+    "message_id":{"type":"string","pattern":"^[a-f0-9]{64}$"},
+    "idempotency_key":{"type":"string","minLength":1},
+    "destination":{"type":"string","minLength":1},
+    "topic":{"type":"string","minLength":1},
+    "payload_json":{"type":"string","contentMediaType":"application/json"},
+    "created_at":{"type":"string","format":"date-time"},
+    "status":{"enum":["PENDING","DELIVERED","DEAD"]},
+    "attempts":{"type":"integer","minimum":0},
+    "last_error":{"type":["string","null"]}
+  }
+}
