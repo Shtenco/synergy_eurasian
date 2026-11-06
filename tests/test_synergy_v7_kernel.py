@@ -1267,3 +1267,32 @@ def test_v77_credit_borrowing_base_shock_uses_facility_limit_as_explicit_base():
     assert changed["credit_borrowing_base_by_period"]=={"0":50}
     with pytest.raises(ValueError,match="require credit_limit"):
         apply_scenario({},scenario)
+
+
+from synergy_v7.two_stage_optimizer import TwoStageScenario, optimize_two_stage_recourse
+
+
+def test_v78_two_stage_milp_uses_one_shared_commitment_and_scenario_recourse():
+    scenarios=[
+      TwoStageScenario("normal",0.8,100,100),
+      TwoStageScenario("capacity_shock",0.2,100,40),
+    ]
+    result=optimize_two_stage_recourse(100,2,1,5,20,scenarios,
+      risk_alpha=0.95,risk_weight=0.5)
+    assert result["complete"] and result["non_anticipativity_enforced"]
+    assert result["risk_aware_solution"]["common_commitment_quantity"]==40
+    assert result["risk_neutral_solution"]["common_commitment_quantity"]==100
+    assert result["risk_aware_solution"]["cvar_recourse_cost"]==pytest.approx(340)
+    assert result["risk_aware_solution"]["total_mean_cvar_objective"]==pytest.approx(420)
+    assert result["risk_neutral_solution"]["total_mean_cvar_objective"]==pytest.approx(348)
+    assert result["wait_and_see_expected_cost"]==pytest.approx(324)
+    assert result["expected_value_of_perfect_information"]==pytest.approx(24)
+    assert len({x["common_commitment"] for x in result["risk_aware_solution"]["scenario_recourse"]})==1
+
+
+def test_v78_two_stage_milp_rejects_invalid_probabilities_and_policy_parameters():
+    scenarios=[{"scenario_id":"a","probability":0.7,"demand_quantity":10,"available_capacity":10}]
+    with pytest.raises(ValueError,match="sum to 1.0"):
+        optimize_two_stage_recourse(10,1,1,2,5,scenarios)
+    with pytest.raises(ValueError,match="risk_weight"):
+        optimize_two_stage_recourse(10,1,1,2,5,[{"scenario_id":"a","probability":1,"demand_quantity":10,"available_capacity":10}],risk_weight=1.2)
