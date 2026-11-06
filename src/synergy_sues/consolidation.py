@@ -96,46 +96,63 @@ def reconcile_intercompany(records: Iterable[IntercompanyRecord]) -> dict:
             if row.counterparty_id != expected_counterparty:
                 raise ValueError(f"Counterparty mismatch in transaction {transaction_id}: {row.record_id}")
 
-        amounts = {
-            record_type: sum(
-                (row.amount.amount for row in tx_rows if row.record_type == record_type),
-                Decimal("0"),
-            )
-            for record_type in IntercompanyRecordType
+        period_results = []
+        transaction_eliminations = {
+            "P_AND_L": Decimal("0"),
+            "BALANCE_SHEET": Decimal("0"),
+            "CASH_TRANSFER": Decimal("0"),
         }
-        eliminations = {}
         discrepancies = []
-        for seller_type, buyer_type, category in _MATCHES:
-            seller_amount = amounts[seller_type]
-            buyer_amount = amounts[buyer_type]
-            matched = min(seller_amount, buyer_amount)
-            seller_unmatched = seller_amount - matched
-            buyer_unmatched = buyer_amount - matched
-            eliminations[category] = str(matched)
-            if seller_unmatched or buyer_unmatched:
-                discrepancy = {
-                    "category": category,
-                    "seller_record_type": seller_type.value,
-                    "buyer_record_type": buyer_type.value,
-                    "seller_amount": str(seller_amount),
-                    "buyer_amount": str(buyer_amount),
-                    "eliminated_amount": str(matched),
-                    "seller_unmatched": str(seller_unmatched),
-                    "buyer_unmatched": str(buyer_unmatched),
-                }
-                discrepancies.append(discrepancy)
-                exceptions.append({"transaction_id": transaction_id, **discrepancy})
-
-        currency_totals = total_eliminations.setdefault(currency, {})
-        for category, amount in eliminations.items():
-            currency_totals[category] = currency_totals.get(category, Decimal("0")) + Decimal(amount)
+        for period_id in sorted({row.period_id for row in tx_rows}):
+            period_rows = [row for row in tx_rows if row.period_id == period_id]
+            amounts = {
+                record_type: sum(
+                    (row.amount.amount for row in period_rows if row.record_type == record_type),
+                    Decimal("0"),
+                )
+                for record_type in IntercompanyRecordType
+            }
+            period_eliminations = {}
+            period_discrepancies = []
+            for seller_type, buyer_type, category in _MATCHES:
+                seller_amount = amounts[seller_type]
+                buyer_amount = amounts[buyer_type]
+                matched = min(seller_amount, buyer_amount)
+                seller_unmatched = seller_amount - matched
+                buyer_unmatched = buyer_amount - matched
+                period_eliminations[category] = matched
+                transaction_eliminations[category] += matched
+                if seller_unmatched or buyer_unmatched:
+                    discrepancy = {
+                        "period_id": period_id,
+                        "category": category,
+                        "seller_record_type": seller_type.value,
+                        "buyer_record_type": buyer_type.value,
+                        "seller_amount": str(seller_amount),
+                        "buyer_amount": str(buyer_amount),
+                        "eliminated_amount": str(matched),
+                        "seller_unmatched": str(seller_unmatched),
+                        "buyer_unmatched": str(buyer_unmatched),
+                    }
+                    period_discrepancies.append(discrepancy)
+                    discrepancies.append(discrepancy)
+                    exceptions.append({"transaction_id": transaction_id, **discrepancy})
+            currency_totals = total_eliminations.setdefault(currency, {})
+            for category, amount in period_eliminations.items():
+                currency_totals[category] = currency_totals.get(category, Decimal("0")) + amount
+            period_results.append({
+                "period_id": period_id,
+                "eliminations": {category: str(amount) for category, amount in period_eliminations.items()},
+                "discrepancies": period_discrepancies,
+            })
 
         transaction_results.append({
             "transaction_id": transaction_id,
             "seller_id": seller,
             "buyer_id": buyer,
             "currency": currency,
-            "eliminations": eliminations,
+            "eliminations": {category: str(amount) for category, amount in transaction_eliminations.items()},
+            "periods": period_results,
             "discrepancies": discrepancies,
             "fully_matched": not discrepancies,
         })
