@@ -1,4 +1,4 @@
-"""MILP production scheduler for SYNERGY V7.4 (SciPy HiGHS backend)."""
+"""MILP production, cash and credit scheduler for SYNERGY V7.6.2 (SciPy HiGHS)."""
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
@@ -60,12 +60,15 @@ def optimize_production_schedule(
     credit_interest_rates_by_period: dict[int,float] | None = None,
     terminal_credit_balance_limit: float | None = None,
 ) -> dict:
-    """Maximize demand value less production/holding costs under physical constraints.
+    """Maximize demand value net of modeled costs under physical, cash and credit constraints.
 
     Integer recipe batches are scheduled over discrete periods. Inventory balance
     couples periods; outputs become available after recipe lead time. Only firm
-    (OBSERVED/COMMITTED) resource capacities and inventory receipts count.
+    (OBSERVED/COMMITTED) resource capacities and inventory receipts count. Optional
+    cash equations model dated collections/outflows; an optional revolving facility
+    adds draws, prior-balance repayments, interest and a terminal debt ceiling.
     """
+
     recipe_rows=list(recipes); demand_rows=list(demands); receipts=list(inventory_receipts); caps=list(resource_capacities)
     if not isinstance(horizon_periods,int) or horizon_periods<1: raise ValueError("horizon_periods must be a positive integer")
     if not objective_currency: raise ValueError("objective_currency is required")
