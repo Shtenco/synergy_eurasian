@@ -451,7 +451,7 @@ def test_trial_balance_translation_uses_closing_average_and_historical_rates():
     result = translate_trial_balance(rows, policy, "USD")
     assert result["balanced"]
     assert result["total_debits"] == result["total_credits"] == "131.00"
-    assert result["translation_adjustment"]["credit"] == "5.5"
+    assert result["translation_adjustment"]["credit"] == "5.50"
     assert result["translation_is_not_operating_profit"]
 
 
