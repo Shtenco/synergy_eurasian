@@ -63,3 +63,18 @@ def test_sector_reconciliation_exposes_hidden_sector_gaps():
     assert sectors["MOBILITY"]["year_n_residual_usd"] < -87000
     assert abs(strong_cost_pressure["net_residual_usd"] - 35986.35454208049) < 1e-5
     assert abs(strong_cost_pressure["reconciliation_error_usd"]) < 1e-7
+
+
+
+def test_deterministic_flywheel_accepts_recession_and_replacement_deflation():
+    cfg = load_config()
+    recession = simulate_case(cfg, -0.05, 0.02)
+    deflation = simulate_case(cfg, 0.02, -0.01)
+    assert recession["cumulative_unfunded_gap_usd"] > 0
+    assert deflation["year_10_residual_usd"] > recession["year_10_residual_usd"]
+    try:
+        simulate_case(cfg, -1.01, 0.02)
+    except ValueError as exc:
+        assert "at least -100%" in str(exc)
+    else:
+        raise AssertionError("Cashflow decline below -100% must be rejected")
