@@ -547,3 +547,20 @@ def test_trade_subledger_foreign_currency_posting_uses_dated_fx_for_each_event()
     assert result["expected_ar_control_delta"] == "86.0"
     assert result["actual_ar_control_delta"] == "86.0"
     assert journal.trial_balance()["balanced"]
+
+
+def test_journal_can_enforce_single_entity_ownership():
+    journal = Journal("USD", entity_id="co1")
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.post(entry("entity-ok", "entity-idem"))
+    cross_entity = JournalEntry(
+        "entity-cross", date(2026, 11, 6), datetime(2026, 11, 6, tzinfo=timezone.utc), "USD",
+        (
+            JournalLine("x1", "cash", "DEBIT", Money("1", "USD"), Money("1", "USD"), "co2", "bank:x"),
+            JournalLine("x2", "revenue", "CREDIT", Money("1", "USD"), Money("1", "USD"), "co2", "sale:x"),
+        ),
+        "event-cross", "idem-cross", "Cross-entity posting",
+    )
+    with pytest.raises(ValueError, match="entity_id"):
+        journal.post(cross_entity)
