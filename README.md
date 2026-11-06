@@ -362,3 +362,8 @@ V7.1 adds discrete-period recipes, integer batch orders, material inventory, del
 - [V7.1 production plan schema](interfaces/synergy_v7_production_plan.schema.json)
 - [V7.1 integrated factory example](examples/synergy_v7_1_integrated_factory_demo.json)
 - [V7.1 command-line evaluator](src/synergy_v7/cli.py)
+
+- [V7.2 Working Capital and Cash Waterfall](docs/48_SYNERGY_V7_2_WORKING_CAPITAL_AND_CASH_WATERFALL.md)
+- [V7.2 finance primitives](src/synergy_v7/finance.py)
+
+V7.2 adds working-capital/CCC metrics and an explicit cash waterfall. Financing proceeds and internal transfers are reported separately from consolidated external operating cash generation.
