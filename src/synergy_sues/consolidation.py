@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal
+from hashlib import sha256
 from enum import Enum
 from typing import Iterable
 
-from .contracts import Money
+from .contracts import Money, _aware
+from .journal import Journal, JournalEntry, JournalLine, PostingSide
 
 
 class IntercompanyRecordType(str, Enum):
@@ -28,6 +31,7 @@ class IntercompanyRecord:
     amount: Money
     period_id: str
     source_ref: str
+    account_id: str = ""
 
     def __post_init__(self) -> None:
         if not all((self.record_id, self.transaction_id, self.entity_id,
@@ -173,4 +177,104 @@ def reconcile_intercompany(records: Iterable[IntercompanyRecord]) -> dict:
         "complete": not exceptions,
         "unmatched_amounts_are_not_silently_eliminated": True,
         "cross_currency_netting_performed": False,
+    }
+
+
+
+def post_intercompany_eliminations(
+    journal: Journal,
+    records: Iterable[IntercompanyRecord],
+    effective_dates_by_period: dict[str, date],
+    recorded_at: datetime,
+    source_event_id_prefix: str,
+    idempotency_prefix: str,
+) -> dict:
+    """Post balanced consolidation entries for matched P&L and AR/AP amounts.
+
+    Cash transfer eliminations are reported for consolidated cash-flow reporting;
+    they do not create a journal entry because cash remains in member bank accounts.
+    V1 requires transaction currency to equal the consolidation journal's
+    functional currency. Translation and CTA belong to the next consolidation layer.
+    """
+    _aware(recorded_at, "recorded_at")
+    rows = list(records)
+    result = reconcile_intercompany(rows)
+    by_transaction_period: dict[tuple[str, str], list[IntercompanyRecord]] = {}
+    for row in rows:
+        by_transaction_period.setdefault((row.transaction_id, row.period_id), []).append(row)
+
+    posted = []
+    cash_eliminations: dict[str, Decimal] = {}
+    for tx in result["transactions"]:
+        for period in tx["periods"]:
+            period_id = period["period_id"]
+            period_rows = by_transaction_period[(tx["transaction_id"], period_id)]
+            currency = tx["currency"]
+            if currency != journal.functional_currency:
+                raise ValueError("Intercompany elimination currency must match journal functional currency")
+            for category, debit_type, credit_type in (
+                ("P_AND_L", IntercompanyRecordType.SELLER_REVENUE, IntercompanyRecordType.BUYER_EXPENSE),
+                ("BALANCE_SHEET", IntercompanyRecordType.BUYER_PAYABLE, IntercompanyRecordType.SELLER_RECEIVABLE),
+            ):
+                amount = Decimal(period["eliminations"][category])
+                if amount == 0:
+                    continue
+                debit_rows = [row for row in period_rows if row.record_type == debit_type]
+                credit_rows = [row for row in period_rows if row.record_type == credit_type]
+                debit_accounts = {row.account_id for row in debit_rows}
+                credit_accounts = {row.account_id for row in credit_rows}
+                if len(debit_accounts) != 1 or "" in debit_accounts:
+                    raise ValueError(f"One explicit debit account_id is required for {category}")
+                if len(credit_accounts) != 1 or "" in credit_accounts:
+                    raise ValueError(f"One explicit credit account_id is required for {category}")
+                identity = f"{tx['transaction_id']}|{period_id}|{category}"
+                suffix = sha256(identity.encode("utf-8")).hexdigest()[:20]
+                entry_id = f"elim-{suffix}"
+                source_ref = f"intercompany:{tx['transaction_id']}:{period_id}:{category}"
+                money = Money(amount, currency)
+                entry = JournalEntry(
+                    entry_id=entry_id,
+                    effective_date=effective_dates_by_period[period_id],
+                    recorded_at=recorded_at,
+                    functional_currency=journal.functional_currency,
+                    lines=(
+                        JournalLine(
+                            line_id=f"{entry_id}:debit",
+                            account_id=next(iter(debit_accounts)),
+                            side=PostingSide.DEBIT,
+                            amount=money,
+                            functional_amount=money,
+                            entity_id="CONSOLIDATED",
+                            source_ref=source_ref,
+                            counterparty_id=tx["buyer_id"],
+                        ),
+                        JournalLine(
+                            line_id=f"{entry_id}:credit",
+                            account_id=next(iter(credit_accounts)),
+                            side=PostingSide.CREDIT,
+                            amount=money,
+                            functional_amount=money,
+                            entity_id="CONSOLIDATED",
+                            source_ref=source_ref,
+                            counterparty_id=tx["seller_id"],
+                        ),
+                    ),
+                    source_event_id=f"{source_event_id_prefix}:{suffix}",
+                    idempotency_key=f"{idempotency_prefix}:{suffix}",
+                    description=f"Intercompany {category} elimination for {tx['transaction_id']}",
+                )
+                journal.post(entry)
+                posted.append(entry_id)
+
+            cash_amount = Decimal(period["eliminations"]["CASH_TRANSFER"])
+            if cash_amount:
+                cash_eliminations[currency] = cash_eliminations.get(currency, Decimal("0")) + cash_amount
+
+    return {
+        "posted_elimination_entry_ids": posted,
+        "posted_entry_count": len(posted),
+        "cash_flow_eliminations_by_currency": {k: str(v) for k, v in cash_eliminations.items()},
+        "cash_transfers_posted_to_general_ledger": False,
+        "currency_translation_supported": False,
+        "source_reconciliation_complete": result["complete"],
     }
