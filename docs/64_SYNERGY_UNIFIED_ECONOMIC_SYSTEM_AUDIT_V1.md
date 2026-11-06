@@ -256,7 +256,7 @@ This document does not merge PR #9 or PR #10, does not claim the whole economy h
 
 `simulate_case` rejects negative annual cashflow growth and negative replacement inflation. This prevents the deterministic scenario engine from expressing declining operating cashflow or falling replacement prices. V3 has a wider stochastic growth domain, but V2 should accept explicit negative scenarios with bounded validation.
 
-### F-22 — V4 input validation is incomplete (HIGH)
+### F-22 — V4 input validation is incomplete (HIGH) — FIX IMPLEMENTED, CI PENDING
 
 The optimizer checks budget positivity, non-negative objective weights, weight sum, unique project IDs, non-negative maximum investment and direct yield. It does not fully validate finite values, strictly positive normalization denominators, criticality weights, spillover/operational metrics, sector caps/floors or integer deployment fields. NaN values can bypass ordinary comparison checks and reach the solver.
 
@@ -271,3 +271,12 @@ The current input-output fixture is stable, but `leontief_results` and `solve_su
 ### F-25 — EIIOM output needs a full objective/metric bridge (HIGH)
 
 EIIOM reports both a weighted LP objective and an unweighted 2045 annual GVA-equivalent total. The distinction is explainable by stage weights, but the output does not publish a clear reconciliation between these values or a full project commissioning/capital-stock bridge. Future reports must publish both measures, stage contribution and assumptions side by side.
+
+
+## 14. Remediation commits in the research branch
+
+Two findings have now been addressed in executable code:
+- F-13: seven-sector Leontief matrix now checks rectangular/square shape, finite non-negative coefficients, sector dimensions, spectral radius below 1, and conditioning before solving. Capacity multipliers and critical-service constraints are validated.
+- F-22: V4 optimizer now validates finite budgets/weights/project metrics, positive normalization denominators, project criticality, integer lag/diffusion fields, sector caps/floors and project capacity before calling the LP solver.
+
+The new adversarial tests for these controls are committed in `research/sues-audit-v1`. They are not considered accepted until the exact branch-head CI run completes successfully.
