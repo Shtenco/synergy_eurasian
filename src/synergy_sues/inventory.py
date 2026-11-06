@@ -99,6 +99,8 @@ class InventoryLedger:
     ) -> InventoryMovement:
         if not all((receipt_id, lot_id, item_id, location_id, source_ref)):
             raise ValueError("Inventory receipt identity and source are required")
+        if receipt_id in self._movements:
+            raise ValueError(f"Duplicate inventory movement_id: {receipt_id}")
         if lot_id in self._lot_ids:
             raise ValueError(f"Duplicate inventory lot_id: {lot_id}")
         if quantity.amount <= 0:
@@ -107,15 +109,16 @@ class InventoryLedger:
             raise ValueError("Inventory receipt cost must be non-negative and in functional currency")
         if not isinstance(received_date, date):
             raise ValueError("received_date must be a date")
+        movement = InventoryMovement(
+            receipt_id, InventoryMovementType.RECEIPT, item_id, location_id,
+            quantity, functional_cost, received_date, source_ref, lot_id=lot_id,
+        )
         key = self._check_pool(item_id, location_id, quantity.unit)
         lot = _InventoryLot(lot_id, item_id, location_id, quantity, functional_cost, received_date, source_ref)
         self._lots.setdefault(key, []).append(lot)
         self._lots[key].sort(key=lambda x: (x.received_date, x.lot_id))
         self._lot_ids.add(lot_id)
-        return self._add_movement(InventoryMovement(
-            receipt_id, InventoryMovementType.RECEIPT, item_id, location_id,
-            quantity, functional_cost, received_date, source_ref, lot_id=lot_id,
-        ))
+        return self._add_movement(movement)
 
     def available(self, item_id: str, location_id: str, unit: str) -> Quantity:
         key = self._check_pool(item_id, location_id, unit)
@@ -160,6 +163,8 @@ class InventoryLedger:
     ) -> InventoryMovement:
         if not all((issue_id, item_id, location_id, source_ref)):
             raise ValueError("Inventory issue identity and source are required")
+        if not isinstance(issue_date, date) or quantity.amount <= 0:
+            raise ValueError("Inventory issue date and positive quantity are required")
         if issue_id in self._movements:
             raise ValueError(f"Duplicate inventory movement_id: {issue_id}")
         consumed = self._consume_fifo(item_id, location_id, quantity)
@@ -180,6 +185,8 @@ class InventoryLedger:
     ) -> InventoryMovement:
         if not all((writeoff_id, item_id, location_id, source_ref)):
             raise ValueError("Inventory writeoff identity and source are required")
+        if not isinstance(writeoff_date, date) or quantity.amount <= 0:
+            raise ValueError("Inventory writeoff date and positive quantity are required")
         if writeoff_id in self._movements:
             raise ValueError(f"Duplicate inventory movement_id: {writeoff_id}")
         consumed = self._consume_fifo(item_id, location_id, quantity)
@@ -203,11 +210,30 @@ class InventoryLedger:
             raise ValueError("Inventory transfer identity and endpoints are required")
         if source_location_id == destination_location_id:
             raise ValueError("Inventory transfer locations must differ")
+        if not isinstance(transfer_date, date) or quantity.amount <= 0:
+            raise ValueError("Inventory transfer date and positive quantity are required")
         out_id, in_id = f"{transfer_id}:OUT", f"{transfer_id}:IN"
         if out_id in self._movements or in_id in self._movements:
             raise ValueError(f"Duplicate inventory transfer_id: {transfer_id}")
-        # Validate destination unit before consuming source stock.
+        # Preflight all source lots and destination lot IDs before mutating stock.
         destination_key = self._check_pool(item_id, destination_location_id, quantity.unit)
+        source_key = self._check_pool(item_id, source_location_id, quantity.unit)
+        source_lots = self._lots.get(source_key, [])
+        available = sum((lot.remaining_quantity.amount for lot in source_lots), Decimal("0"))
+        if available < quantity.amount:
+            raise ValueError(f"Insufficient inventory: requested {quantity.amount}, available {available}")
+        remaining_to_transfer = quantity.amount
+        lots_needed = 0
+        for lot in source_lots:
+            if remaining_to_transfer <= 0:
+                break
+            if lot.remaining_quantity.amount <= 0:
+                continue
+            lots_needed += 1
+            remaining_to_transfer -= min(remaining_to_transfer, lot.remaining_quantity.amount)
+        candidate_lot_ids = [f"{transfer_id}:LOT:{index}" for index in range(1, lots_needed + 1)]
+        if any(lot_id in self._lot_ids for lot_id in candidate_lot_ids):
+            raise ValueError(f"Duplicate destination lot ID for transfer: {transfer_id}")
         source_consumed = self._consume_fifo(item_id, source_location_id, quantity)
         total_cost = sum((money.amount for _, money, _ in source_consumed), Decimal("0"))
         for index, (taken_quantity, taken_cost, source_lot) in enumerate(source_consumed, start=1):
