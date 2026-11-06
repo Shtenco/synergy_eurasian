@@ -360,3 +360,10 @@ python src/eiiom_optimizer.py --config config/base_scenario.json --output output
 **Copyright © 2026 Evgeniy Koshtenko. All rights reserved.** Проект распространяется под собственной лицензией [`LICENSE`](LICENSE). Публичная доступность GitHub **не означает открытую лицензию** или разрешение на коммерческое использование. Права сторонних компонентов и уже выданные лицензии сохраняются в применимых пределах.
 
 <p align="center"><strong>SYNERGY EURASIAN — капитал имеет смысл тогда, когда превращается в проверяемую реальную производительность, устойчивость и благосостояние.</strong></p>
+
+### SUES federation security V1
+
+- [Federation Identity and Signed Event Envelope V1](docs/71_SYNERGY_SUES_FEDERATION_IDENTITY_AND_SIGNED_EVENT_ENVELOPE_V1.md)
+- [Signed Event JSON Schema](interfaces/synergy_sues_signed_event.schema.json)
+
+Ed25519 signatures authenticate events from keys provisioned in an explicit trust registry. Signature validity is not business or financial authorization.
