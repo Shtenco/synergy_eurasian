@@ -35,6 +35,8 @@ class AuthorizationDecision:
     matched_rule_ids: tuple[str, ...] = ()
     approval_identity_ids: tuple[str, ...] = ()
     approval_event_refs: tuple[tuple[str, str], ...] = ()
+    policy_version: int | None = None
+    policy_hash: str | None = None
 
 
 class FederationAuthorizationPolicy:
