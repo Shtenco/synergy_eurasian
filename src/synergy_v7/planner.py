@@ -91,6 +91,7 @@ def optimize_production_schedule(
     products=sorted(product_units)
     if set(minimum_inventory)-set(products): raise ValueError("minimum_inventory contains unknown product_id")
     if set(storage_limits)-set(products): raise ValueError("storage_limits contains unknown product_id")
+    if set(holding_costs)-set(products): raise ValueError("holding_costs contains unknown product_id")
     for p,v in minimum_inventory.items():
         if not math.isfinite(v) or v<0: raise ValueError(f"Invalid minimum inventory for {p}")
     for p,v in storage_limits.items():
