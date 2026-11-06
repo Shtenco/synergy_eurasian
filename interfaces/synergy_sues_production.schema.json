@@ -25,7 +25,20 @@
       "type": "string",
       "pattern": "^[A-Za-z][A-Za-z0-9_./*-]{0,31}$"
     },
+    "nonnegative_decimal": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$"
+    },
     "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "currency"],
+      "properties": {
+        "amount": { "$ref": "#/$defs/nonnegative_decimal" },
+        "currency": { "$ref": "#/$defs/currency" }
+      }
+    },
+    "positive_money": {
       "type": "object",
       "additionalProperties": false,
       "required": ["amount", "currency"],
@@ -78,7 +91,7 @@
         "invoice_line_id": { "type": "string", "minLength": 1 },
         "po_line_id": { "type": "string", "minLength": 1 },
         "invoiced_quantity": { "$ref": "#/$defs/quantity" },
-        "amount": { "$ref": "#/$defs/money" },
+        "amount": { "$ref": "#/$defs/positive_money" },
         "invoice_date": { "type": "string", "format": "date" },
         "source_ref": { "type": "string", "minLength": 1 }
       }
@@ -122,7 +135,7 @@
         "cost_type": {
           "enum": ["LABOR", "ENERGY", "MACHINE", "MAINTENANCE", "DEPRECIATION", "SUBCONTRACT", "OTHER_OVERHEAD"]
         },
-        "amount": { "$ref": "#/$defs/money" },
+        "amount": { "$ref": "#/$defs/positive_money" },
         "effective_date": { "type": "string", "format": "date" },
         "source_ref": { "type": "string", "minLength": 1 },
         "evidence_ref": { "type": "string", "minLength": 1 }
@@ -134,9 +147,9 @@
       "required": ["order_id", "direct_material_cost", "conversion_cost", "capitalized_cost", "output_quantity", "journal_entry_ids"],
       "properties": {
         "order_id": { "type": "string", "minLength": 1 },
-        "direct_material_cost": { "$ref": "#/$defs/money" },
+        "direct_material_cost": { "$ref": "#/$defs/positive_money" },
         "conversion_cost": { "$ref": "#/$defs/money" },
-        "capitalized_cost": { "$ref": "#/$defs/money" },
+        "capitalized_cost": { "$ref": "#/$defs/positive_money" },
         "output_quantity": { "$ref": "#/$defs/quantity" },
         "journal_entry_ids": { "type": "array", "items": { "type": "string", "minLength": 1 } }
       }
