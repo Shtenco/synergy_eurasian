@@ -340,3 +340,17 @@ python src/eiiom_optimizer.py --config config/base_scenario.json --output output
 **Copyright © 2026 Evgeniy Koshtenko. All rights reserved.** Проект распространяется под собственной лицензией [`LICENSE`](LICENSE). Публичная доступность GitHub **не означает открытую лицензию** или разрешение на коммерческое использование. Права сторонних компонентов и уже выданные лицензии сохраняются в применимых пределах.
 
 <p align="center"><strong>SYNERGY EURASIAN — капитал имеет смысл тогда, когда превращается в проверяемую реальную производительность, устойчивость и благосостояние.</strong></p>
+
+---
+
+## Productivity, resilience and V7 economic graph
+
+SYNERGY develops a connected family of research models for productive-capacity reproduction, technology diffusion, innovation capability and network resilience. The model families are related but are **not yet one calibrated end-to-end simulator**.
+
+- [Master map: EIIOM + Productivity Flywheel V1–V6 + Network Economics & Resilience](docs/45_SYNERGY_PRODUCTIVITY_RESILIENCE_SYSTEM_MASTER.md)
+- [V7 Event-Sourced Productive Economy Graph](docs/46_SYNERGY_V7_EVENT_SOURCED_ECONOMIC_GRAPH.md)
+- [V7 event envelope schema](interfaces/synergy_v7_event.schema.json)
+- [V7 reference kernel](src/synergy_v7/)
+- [V7 invariant tests](tests/test_synergy_v7_kernel.py)
+
+V7 establishes append-only domain events, stable graph identities, evidence-qualified resource capacity, physical-flow consolidation, non-duplicative benefit attribution, empirical CVaR and Pareto-frontier primitives. It is a research kernel, not an operational ledger or validated digital twin. Scenario outputs must remain distinct from observed enterprise performance.
