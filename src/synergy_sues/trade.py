@@ -35,6 +35,8 @@ class TradeDocument:
             raise ValueError("Trade document enterprise and counterparty must differ")
         if not isinstance(self.side, TradeSide):
             object.__setattr__(self, "side", TradeSide(self.side))
+        if not isinstance(self.issue_date, date) or not isinstance(self.due_date, date):
+            raise ValueError("Trade document dates must be date values")
         if self.due_date < self.issue_date:
             raise ValueError("Trade document due date cannot precede issue date")
         if self.original_amount.amount <= 0:
@@ -53,6 +55,8 @@ class TradeSettlement:
     def __post_init__(self) -> None:
         if not all((self.settlement_id, self.document_id, self.cash_account_id, self.source_ref)):
             raise ValueError("Trade settlement identity, cash account and source are required")
+        if not isinstance(self.settlement_date, date):
+            raise ValueError("Trade settlement date must be a date")
         if self.amount.amount <= 0:
             raise ValueError("Trade settlement amount must be positive")
 
@@ -93,6 +97,8 @@ class TradeSubledger:
                 raise ValueError(f"Settlement currency mismatch: {settlement.settlement_id}")
 
     def project(self, as_of: date) -> dict:
+        if not isinstance(as_of, date):
+            raise ValueError("as_of must be a date")
         balances = {row.document_id: row.original_amount.amount for row in self.documents}
         timeline = sorted(self.settlements, key=lambda row: (row.settlement_date, row.settlement_id))
         applied = []
@@ -173,10 +179,15 @@ class TradeSubledger:
         require_account(accounts.receivable_account_id, AccountType.ASSET, NormalBalance.DEBIT)
         require_account(accounts.revenue_account_id, AccountType.REVENUE, NormalBalance.CREDIT)
         require_account(accounts.payable_account_id, AccountType.LIABILITY, NormalBalance.CREDIT)
+        if len({accounts.receivable_account_id, accounts.revenue_account_id,
+                accounts.payable_account_id, accounts.purchase_account_id}) != 4:
+            raise ValueError("Trade control and P&L accounts must be distinct")
         purchase = account_map.get(accounts.purchase_account_id)
         if purchase is None or purchase.normal_balance != NormalBalance.DEBIT or purchase.account_type not in {AccountType.ASSET, AccountType.EXPENSE}:
             raise ValueError("Purchase account must be a debit-normal asset or expense")
         posted = []
+        expected_ar_delta = Decimal("0")
+        expected_ap_delta = Decimal("0")
 
         def functional(amount: Money, source_ref: str):
             rate_ref = fx_refs.get(source_ref)
@@ -192,6 +203,10 @@ class TradeSubledger:
                 debit_account, credit_account = accounts.purchase_account_id, accounts.payable_account_id
                 debit_side, credit_side = PostingSide.DEBIT, PostingSide.CREDIT
             functional_amount, fx_ref = functional(document.original_amount, document.source_ref)
+            if document.side == TradeSide.RECEIVABLE:
+                expected_ar_delta += functional_amount.amount
+            else:
+                expected_ap_delta += functional_amount.amount
             entry_id = f"trade-doc:{document.document_id}"
             entry = JournalEntry(
                 entry_id, document.issue_date, recorded_at, journal.functional_currency,
@@ -215,6 +230,10 @@ class TradeSubledger:
             document = self._documents[settlement.document_id]
             require_account(settlement.cash_account_id, AccountType.ASSET, NormalBalance.DEBIT)
             functional_amount, fx_ref = functional(settlement.amount, settlement.source_ref)
+            if document.side == TradeSide.RECEIVABLE:
+                expected_ar_delta -= functional_amount.amount
+            else:
+                expected_ap_delta -= functional_amount.amount
             entry_id = f"trade-settlement:{settlement.settlement_id}"
             if document.side == TradeSide.RECEIVABLE:
                 lines = (
@@ -242,10 +261,26 @@ class TradeSubledger:
             ))
             posted.append(entry_id)
 
+        posted_entries = {entry.entry_id: entry for entry in journal.entries if entry.entry_id in set(posted)}
+        actual_ar_delta = Decimal("0")
+        actual_ap_delta = Decimal("0")
+        for entry in posted_entries.values():
+            for line in entry.lines:
+                signed_debit = line.functional_amount.amount if line.side == PostingSide.DEBIT else -line.functional_amount.amount
+                if line.account_id == accounts.receivable_account_id:
+                    actual_ar_delta += signed_debit
+                if line.account_id == accounts.payable_account_id:
+                    actual_ap_delta -= signed_debit
+        ar_matches = actual_ar_delta == expected_ar_delta
+        ap_matches = actual_ap_delta == expected_ap_delta
         return {
             "posted_entry_ids": posted,
             "posted_entry_count": len(posted),
             "as_of": cutoff.isoformat(),
-            "trade_subledger_reconciles_to_journal_control_accounts": True,
+            "expected_ar_control_delta": str(expected_ar_delta),
+            "actual_ar_control_delta": str(actual_ar_delta),
+            "expected_ap_credit_control_delta": str(expected_ap_delta),
+            "actual_ap_credit_control_delta": str(actual_ap_delta),
+            "trade_subledger_delta_matches_journal_control_accounts": ar_matches and ap_matches,
             "adjustments_and_disputes_require_separate_explicit_workflows": True,
         }
