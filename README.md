@@ -33,8 +33,9 @@
 - [SUES Mathematical Specification V1 — физические, денежные, кредитные и децентрализованные балансы](docs/67_SYNERGY_UNIFIED_ECONOMIC_MODEL_MATHEMATICAL_SPEC_V1.md)
 - [SUES Production / GRNI / WIP Bridge V1 — трёхсторонняя сверка закупок, BOM, FIFO и капитализация выпуска](docs/68_SYNERGY_SUES_PRODUCTION_GRNI_WIP_BRIDGE_V1.md)
 - [SUES Procurement & Production JSON Schema — PO, receipt, invoice, BOM, production and cost events](interfaces/synergy_sues_production.schema.json)
+- [SUES V7 Event & Realization Bridge V1 — hash-verified event envelopes and output-to-cash evidence links](docs/69_SYNERGY_SUES_V7_EVENT_AND_REALIZATION_BRIDGE_V1.md)
 
-**Статус:** исследовательская ветка `research/sues-audit-v1`, PR #11. Новые SUES-модули — reference implementation; не являются промышленной бухгалтерской системой, платёжной инфраструктурой или лицензированным финансовым продуктом. PR #9 и PR #10 сохраняются отдельно до завершения аудита и интеграционных тестов.
+**Статус:** исследовательская ветка `research/sues-audit-v1`, PR #11. Новые SUES-модули — reference implementation. V7 adapter сохраняет и проверяет исходные события/доказательства, но не выполняет автоматические бухгалтерские проводки. Производственный контур ограничен полными партиями; автоматический расчёт ставок и durable transactional storage ещё не реализованы. Это не промышленная бухгалтерская система, платёжная инфраструктура или лицензированный финансовый продукт. PR #9 и PR #10 сохраняются отдельно до завершения аудита и интеграционных тестов.
 
 ---
 
