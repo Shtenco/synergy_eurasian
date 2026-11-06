@@ -141,3 +141,9 @@ The V7.4 time-expanded MILP now optionally carries an explicit period-by-period 
 - **V7.8 evidence-calibrated operating model:** replace scenario collection fractions and batch cash costs with reconciled invoice, bank, payroll, energy and asset-maintenance evidence, retaining provenance and confidence tiers.
 
 All V7.6 values are planning inputs. A feasible MILP schedule is not a solvency opinion, financing commitment, or authorization to pay.
+
+### V7.6.1 update — supplier payment calendar
+
+V7.6.1 adds dated supplier payment commitments for deposits, dispatch, receipt, milestones and final payments. Firm observed/committed obligations are aggregated into cash outflows before the MILP chooses a feasible production schedule. Scenario commitments require explicit inclusion; planned payments remain excluded. These commitments are not treated as bank settlements and must not be duplicated in the generic cash-outflow input. See [V7.6.1 specification](docs/56_SYNERGY_V7_6_1_SUPPLIER_PAYMENT_CALENDAR.md).
+
+The next financial constraint layer is V7.6.2: financing facilities, drawdown limits, debt service, interest and covenant headroom. This must remain separate from verified bank cash and from legal authority to borrow.
