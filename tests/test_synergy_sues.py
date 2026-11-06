@@ -294,3 +294,14 @@ def test_intercompany_reconciliation_rejects_duplicate_record_ids():
     row = IntercompanyRecord("r1", "tx1", "seller", "buyer", "SELLER_REVENUE", Money("10", "USD"), "2026-Q4", "sale")
     with pytest.raises(ValueError, match="Duplicate"):
         reconcile_intercompany([row, row])
+
+
+def test_intercompany_reconciliation_does_not_net_across_periods():
+    rows = [
+        IntercompanyRecord("r1", "tx-period", "seller", "buyer", "SELLER_REVENUE", Money("100", "USD"), "2026-Q4", "sale"),
+        IntercompanyRecord("e1", "tx-period", "buyer", "seller", "BUYER_EXPENSE", Money("100", "USD"), "2027-Q1", "purchase"),
+    ]
+    result = reconcile_intercompany(rows)
+    assert not result["complete"]
+    assert len(result["exceptions"]) == 2
+    assert result["transactions"][0]["eliminations"]["P_AND_L"] == "0"
