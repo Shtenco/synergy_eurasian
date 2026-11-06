@@ -620,6 +620,10 @@ def test_fifo_inventory_issues_oldest_lots_and_preserves_quantity_value():
     issue = ledger.issue("issue-1", "steel", "warehouse-a", Quantity("12", "tonne"),
         date(2026, 11, 3), "production:1")
     assert issue.cost == Money("130", "USD")
+    assert [(x.lot_id, x.quantity.amount, x.cost.amount) for x in issue.lot_allocations] == [
+        ("lot-1", Decimal("10"), Decimal("100")),
+        ("lot-2", Decimal("2"), Decimal("30")),
+    ]
     pool = ledger.summary()["pools"][0]
     assert pool["quantity"] == "8"
     assert pool["inventory_cost"] == "120"
@@ -640,6 +644,9 @@ def test_fifo_inventory_transfer_preserves_cost_and_rejects_mutating_failures():
     out_move, in_move = ledger.transfer("transfer-2", "copper", "warehouse-a", "warehouse-b",
         Quantity("4", "kg"), date(2026, 11, 3), "transfer:2")
     assert out_move.cost == in_move.cost == Money("40", "USD")
+    assert out_move.lot_allocations == in_move.lot_allocations
+    assert out_move.lot_allocations[0].lot_id == "lot-1"
+    assert out_move.lot_allocations[0].destination_lot_id == "transfer-2:LOT:1"
     pools = {row["location_id"]: row for row in ledger.summary()["pools"]}
     assert pools["warehouse-a"]["quantity"] == "6"
     assert pools["warehouse-a"]["inventory_cost"] == "60"
