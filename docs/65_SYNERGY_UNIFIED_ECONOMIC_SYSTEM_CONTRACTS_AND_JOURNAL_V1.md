@@ -42,13 +42,19 @@ The intercompany engine pairs seller and buyer records by a stable transaction I
 
 This is an elimination control, not yet a full multi-entity consolidation engine. It does not translate subsidiary trial balances, calculate CTA, consolidate ownership/non-controlling interests, or post elimination journals automatically.
 
-## 6. Deliberate limitations
+## 6. Bank-to-journal reconciliation
+
+A bank statement carries its account, currency, period, opening and closing balances, and signed statement lines. The reconciliation engine verifies the statement's opening + movements = closing identity, then accepts only explicit allocations between statement lines and posted cash journal lines. It checks account type, currency, direction, over-allocation and period membership. Unmatched statement or journal amounts remain exceptions, and the bank-versus-ledger closing difference is reported.
+
+The engine never guesses matches. It is not yet a complete bank-feed ingestion, payment initiation or multi-bank settlement service.
+
+## 7. Deliberate limitations
 
 This is an in-memory reference kernel, not yet a production ledger. It does not yet implement persistence, concurrent posting locks, account-period close, tax rules, accrual automation, subledger reconciliation, FX revaluation, consolidation, intercompany elimination, authorization/signatures or statutory reporting. It does not hold customer funds or initiate payments.
 
 The journal balances one entity's functional currency. Multi-entity consolidation must translate subsidiary trial balances under a documented FX policy and eliminate matched intercompany balances and transactions.
 
-## 7. Acceptance tests
+## 8. Acceptance tests
 
 The tests cover:
 - rejection of mixed-currency and mixed-unit arithmetic;
@@ -58,6 +64,7 @@ The tests cover:
 - physical-flow dimensional separation;
 - cross-project benefit attribution capped at 100%;
 - reciprocal intercompany P&L, balance-sheet and cash matching;
+- bank statement opening/movement/closing and journal cash reconciliation;
 - foreign-currency functional valuation;
 - idempotency and duplicate prevention;
 - single reversal and trial-balance conservation.
@@ -68,7 +75,7 @@ Run:
 python -m pytest -q tests/test_synergy_sues.py
 ```
 
-## 8. Next increments
+## 9. Next increments
 
 1. Add chart-of-accounts hierarchy and normal-balance reporting.
 2. Add journal-to-AR/AP and bank-statement reconciliation.
