@@ -452,6 +452,176 @@
         "minimum": 0
       },
       "description": "Maximum permitted ending drawn balance by period, in objective currency. Must not exceed credit_limit."
+    },
+    "collateral_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receivable_advance_rate",
+        "inventory_advance_rate",
+        "max_days_past_due",
+        "counterparty_concentration_limit",
+        "reserve_amount"
+      ],
+      "properties": {
+        "receivable_advance_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "inventory_advance_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "max_days_past_due": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "counterparty_concentration_limit": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reserve_amount": {
+          "type": "number",
+          "minimum": 0
+        },
+        "include_underwritten": {
+          "type": "boolean"
+        },
+        "include_scenarios": {
+          "type": "boolean"
+        }
+      }
+    },
+    "receivable_collateral": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "receivable_id",
+          "counterparty_id",
+          "period",
+          "outstanding_amount",
+          "currency",
+          "days_past_due",
+          "status",
+          "disputed",
+          "related_party",
+          "evidence_id"
+        ],
+        "properties": {
+          "receivable_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "counterparty_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "period": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "outstanding_amount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1
+          },
+          "days_past_due": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "enum": [
+              "OBSERVED",
+              "VERIFIED",
+              "UNDERWRITTEN",
+              "SCENARIO"
+            ]
+          },
+          "disputed": {
+            "type": "boolean"
+          },
+          "related_party": {
+            "type": "boolean"
+          },
+          "evidence_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "inventory_collateral": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "lot_id",
+          "product_id",
+          "period",
+          "carrying_value",
+          "currency",
+          "status",
+          "quality_approved",
+          "location_controlled",
+          "consigned",
+          "evidence_id"
+        ],
+        "properties": {
+          "lot_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "product_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "period": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "carrying_value": {
+            "type": "number",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "OBSERVED",
+              "VERIFIED",
+              "UNDERWRITTEN",
+              "SCENARIO",
+              "OBSOLETE",
+              "WIP",
+              "DAMAGED"
+            ]
+          },
+          "quality_approved": {
+            "type": "boolean"
+          },
+          "location_controlled": {
+            "type": "boolean"
+          },
+          "consigned": {
+            "type": "boolean"
+          },
+          "evidence_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
     }
   }
 }
