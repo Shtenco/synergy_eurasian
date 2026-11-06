@@ -108,6 +108,78 @@ At 3.3116%, there is no surplus for growth, reserves or distributions. A positiv
 
 Energy's positive residual cannot be treated as a free system-wide dividend while the other sectors' replacement requirements remain unfunded. Transfers from one sector to another must be explicit, governed and limited by the source sector's own renewal and resilience needs.
 
+## 4.1 Reproduction-gap repair plan: balanced operating scenario
+
+The baseline deficit is not repaired by token issuance, accounting revaluation or debt proceeds. The model now includes a separate target scenario that combines two operational levers:
+
+1. **Increase net operating cashflow by 7.5%** through higher asset utilization and uptime, reduced waste and leakage, better receivables collection and service-contract coverage. The uplift must be net of incremental OPEX and must not rely solely on price increases.
+2. **Reduce required replacement CAPEX by 4.0%** through predictive maintenance, lifecycle procurement, standardization and safe component refurbishment. The reduction is valid only if safety, output, service quality and resilience are maintained.
+
+Both are explicit **TARGET** assumptions, not observed improvements or guaranteed results.
+
+| Measure | Baseline | Repair target |
+|---|---:|---:|
+| Gross cashflow | $993,500 | $1,068,012.50 |
+| Required replacement CAPEX | $1,089,500 | $1,045,920 |
+| Residual after replacement | **−$96,000** | **+$22,092.50** |
+| Replacement coverage | 91.19% | 102.11% |
+| Residual / replacement CAPEX | −8.81% | +2.11% |
+
+Reconciliation:
+
+```text
+Operating cashflow uplift = $993,500 * 7.5% = $74,512.50
+Replacement savings       = $1,089,500 * 4.0% = $43,580.00
+Total improvement         = $118,092.50
+Baseline deficit          =                 -$96,000.00
+Target residual           =                  $22,092.50
+```
+
+### Public / private reconciliation
+
+| Portfolio | Baseline residual | Operating uplift + replacement savings | Target residual |
+|---|---:|---:|---:|
+| Public portfolio | −$49,100 | +$58,216.25 | **+$9,116.25** |
+| Private portfolio | −$46,900 | +$59,876.25 | **+$12,976.25** |
+| **Whole system** | **−$96,000** | **+$118,092.50** | **+$22,092.50** |
+
+No external subsidy is needed in this target arithmetic. The public and private portfolios each cover their own replacement obligations. This does not prove that the operating targets can be achieved in practice; each requires enterprise-level evidence.
+
+### Sector cross-subsidy waterfall
+
+After the target improvements, some essential sectors remain negative-cashflow while others generate surplus:
+
+| Sector | Target residual after replacement |
+|---|---:|
+| FOOD | −$930 |
+| HOUSING | +$51,750 |
+| ENERGY & WATER | +$100,750 |
+| HEALTH | −$15,375 |
+| EDUCATION | −$47,812.50 |
+| MOBILITY | −$75,950 |
+| COMPUTE | +$9,660 |
+| **Net system residual** | **+$22,092.50** |
+
+Profitable sector pool: $162,160. Deficit-sector funding requirement: $140,067.50. The first pool can cover the second through transparent, capped internal service transfers. Those transfers do not create additional consolidated value. The remaining $22,092.50 is the system's genuine residual after the stated replacement and sector-service balances.
+
+The same reconciliation holds separately:
+- Public portfolio positive-sector pool: $94,123; negative-sector gap: $85,006.75; residual: +$9,116.25.
+- Private portfolio positive-sector pool: $68,037; negative-sector gap: $55,060.75; residual: +$12,976.25.
+
+### Allocation rule after the repair
+
+Until replacement coverage is at least 100% in every critical asset class and the reserve policy is met:
+
+1. pay essential maintenance and replacement;
+2. fund transparent cross-subsidies for FOOD, HEALTH, EDUCATION and MOBILITY service obligations;
+3. direct the remaining $22,092.50 target residual to the financial/crisis reserve;
+4. do not distribute dividends from the repair scenario;
+5. authorize growth CAPEX only when its risk-adjusted incremental output and cashflow are independently supported.
+
+This is a break-even-plus-buffer scenario, not a full resilience guarantee. A 2.11% residual margin is thin. The next calibration should test 5–10% cashflow shocks, cost inflation, correlated outages and delayed replacement procurement. The 7.5% cashflow uplift and 4% replacement savings must be validated against operating data before being used in budgets or investor materials.
+
+The executable calculation is exposed as `reproduction_repair` in the model report and regression-tested in `tests/test_economy_7sector.py`.
+
 ## 5. Public ownership portfolio
 
 The initial illustrative public ownership shares are:
