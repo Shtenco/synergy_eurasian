@@ -116,3 +116,7 @@ V7.3.1 adds a matched-pair difference-in-differences estimator with pair-level e
 ### V7.4 update — MILP production scheduling
 
 V7.4 adds a SciPy/HiGHS mixed-integer scheduler over recipe batches, inventory balances, lead times, customer demand and shared firm resource capacity. It maximizes explicit demand value less batch and inventory holding costs. It reports solver optimality and MIP gap separately; scenario values are not treated as observed cash. See [V7.4 specification](docs/53_SYNERGY_V7_4_MILP_PRODUCTION_SCHEDULER.md) and the reproducible factory example.
+
+### V7.4.1 update — inventory policy
+
+The V7.4 MILP now supports end-of-period minimum inventory (safety stock) and maximum storage bounds by product. Infeasible combinations are reported as infeasible, not silently relaxed. The factory fixture demonstrates a 10 kg steel safety stock and 30 kg storage ceiling.
