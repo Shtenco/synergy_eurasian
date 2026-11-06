@@ -23,7 +23,7 @@ If the handler raises or its result cannot be encoded as canonical JSON, the tra
 
 ## Atomicity and external effects
 
-The handler must perform only local SQL work through the supplied connection. It must not perform network calls, send payments, write files, or trigger other external side effects. For an external operation, insert an outbox message in the same database transaction and dispatch it after commit. Delivery is at-least-once; the downstream receiver must have its own idempotency key and inbox.
+The handler must perform only local SQL work through the supplied connection. It must not perform network calls, send payments, write files, or trigger other external side effects. For an external operation, call `AuthorizedActionExecutor.enqueue_outbox(connection, idempotency_key, destination, topic, payload)` from the handler. This inserts a deterministic message ID and PENDING outbox row in the same database transaction as the local effect and execution receipt. Repeating the same idempotency key/scope with the same payload is idempotent; reusing it with a different payload fails and rolls back the protected action. A separate dispatcher must claim and deliver pending rows after commit. Delivery is at-least-once; the downstream receiver must have its own idempotency key and inbox.
 
 This is not a distributed exactly-once guarantee. A database commit cannot atomically include a remote bank, blockchain, broker, or unrelated service. The action executor is a local idempotency boundary.
 
@@ -48,4 +48,4 @@ V1 is single-host SQLite. It does not provide distributed locking, cross-databas
 
 ## Tests
 
-Tests cover one-time consumption, request-ID conflict, event-ID reuse prevention, denied request non-execution, handler rollback and retry, concurrent executor instances, append-only receipts, hash-chain tamper detection and canonical JSON result validation.
+Tests cover one-time consumption, request-ID conflict, event-ID reuse prevention, denied request non-execution, handler rollback and retry, concurrent executor instances, append-only receipts, hash-chain tamper detection, canonical JSON result validation and transactional outbox idempotency/rollback.
