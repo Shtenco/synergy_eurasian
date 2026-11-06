@@ -1073,3 +1073,75 @@ def test_v764_borrowing_base_cli_schema_and_report():
     document["credit_borrowing_base_by_period"]={"0":20,"1":20,"2":20}
     result=evaluate_document(document)
     assert result["feasible"] and result["credit_facility"]["borrowing_base_by_period"]=={0:20,1:20,2:20}
+
+
+from synergy_v7 import (ReceivableCollateral,InventoryCollateral,BorrowingBasePolicy,
+    calculate_borrowing_base)
+
+
+def collateral_fixture():
+    ar=[
+      ReceivableCollateral("ar-a","buyer-a",0,100,"USD",0,"VERIFIED",False,False,"erp:ar-a"),
+      ReceivableCollateral("ar-b","buyer-b",0,50,"USD",5,"OBSERVED",False,False,"erp:ar-b"),
+      ReceivableCollateral("ar-disputed","buyer-c",0,40,"USD",0,"VERIFIED",True,False,"erp:ar-disputed"),
+      ReceivableCollateral("ar-related","owner-co",0,30,"USD",0,"VERIFIED",False,True,"erp:ar-related"),
+      ReceivableCollateral("ar-old","buyer-d",0,20,"USD",91,"VERIFIED",False,False,"erp:ar-old"),
+    ]
+    stock=[
+      InventoryCollateral("lot-1","steel",0,200,"USD","VERIFIED",True,True,False,"wms:lot-1"),
+      InventoryCollateral("lot-consigned","ore",0,100,"USD","VERIFIED",True,True,True,"wms:consigned"),
+      InventoryCollateral("lot-wip","part",0,80,"USD","WIP",True,True,False,"wms:wip"),
+    ]
+    policy=BorrowingBasePolicy(0.8,0.5,60,0.5,10)
+    return ar,stock,policy
+
+
+def test_v765_borrowing_base_calculates_advance_rates_concentration_and_reserves():
+    ar,stock,policy=collateral_fixture()
+    r=calculate_borrowing_base(ar,stock,policy,"USD")
+    row=r["periods"][0]
+    assert row["eligible_receivables_gross"]==150
+    assert row["receivables_after_concentration_caps"]==125
+    assert row["receivable_advance_amount"]==pytest.approx(100)
+    assert row["eligible_inventory_gross"]==200
+    assert row["inventory_advance_amount"]==pytest.approx(100)
+    assert row["gross_borrowing_base"]==pytest.approx(200)
+    assert row["net_borrowing_base"]==pytest.approx(190)
+    assert set(row["excluded_receivable_ids"])=={"ar-disputed","ar-related","ar-old"}
+    assert set(row["excluded_inventory_lot_ids"])=={"lot-consigned","lot-wip"}
+
+
+def test_v765_borrowing_base_excludes_scenario_and_underwritten_unless_enabled():
+    ar,stock,policy=collateral_fixture()
+    ar.append(ReceivableCollateral("ar-scenario","buyer-x",0,100,"USD",0,"SCENARIO",False,False,"model:ar"))
+    default=calculate_borrowing_base(ar,stock,policy,"USD")
+    inclusive=calculate_borrowing_base(ar,stock,BorrowingBasePolicy(0.8,0.5,60,0.5,10,include_scenarios=True),"USD")
+    assert default["periods"][0]["eligible_receivables_gross"]==150
+    assert inclusive["periods"][0]["eligible_receivables_gross"]==250
+
+
+def test_v765_borrowing_base_rejects_duplicate_ids_currency_mismatch_and_invalid_policy():
+    ar,stock,policy=collateral_fixture()
+    with pytest.raises(ValueError,match="Duplicate receivable_id"):
+        calculate_borrowing_base(ar+[ar[0]],stock,policy,"USD")
+    with pytest.raises(ValueError,match="currency mismatch"):
+        calculate_borrowing_base(ar,stock,policy,"EUR")
+    with pytest.raises(ValueError,match="in \[0,1\]"):
+        BorrowingBasePolicy(1.2,0.5,60,0.5,0)
+
+
+def test_v765_collateral_cli_uses_calculated_base_to_constrain_credit():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_2_credit_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    document["collateral_policy"]={"receivable_advance_rate":0.5,"inventory_advance_rate":0.5,
+      "max_days_past_due":60,"counterparty_concentration_limit":1.0,"reserve_amount":0}
+    document["receivable_collateral"]=[{"receivable_id":"ar-1","counterparty_id":"buyer","period":0,
+      "outstanding_amount":20,"currency":"USD","days_past_due":0,"status":"VERIFIED",
+      "disputed":False,"related_party":False,"evidence_id":"erp:ar-1"}]
+    result=evaluate_document(document)
+    assert result["collateral_borrowing_base"]["periods"][0]["net_borrowing_base"]==pytest.approx(10)
+    assert result["credit_facility"]["borrowing_base_by_period"]=={0:10}
+    assert result["schedule"]==[]
