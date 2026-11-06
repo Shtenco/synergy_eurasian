@@ -277,6 +277,48 @@
         "type": "number",
         "minimum": 0
       }
+    },
+    "cash_opening_balance": {
+      "type": "number",
+      "minimum": 0
+    },
+    "cash_minimum_balance": {
+      "oneOf": [
+        {
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      ]
+    },
+    "cash_inflows_by_period": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Keys are zero-based period numbers encoded as strings."
+    },
+    "collection_lag_by_demand": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "collection_fraction_by_demand": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
     }
   }
 }
