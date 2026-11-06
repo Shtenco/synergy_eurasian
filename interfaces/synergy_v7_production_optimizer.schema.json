@@ -444,6 +444,14 @@
       "type": "integer",
       "minimum": 0,
       "description": "Zero-based period in which the facility must be fully repaid; debt remains zero thereafter."
+    },
+    "credit_borrowing_base_by_period": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Maximum permitted ending drawn balance by period, in objective currency. Must not exceed credit_limit."
     }
   }
 }
