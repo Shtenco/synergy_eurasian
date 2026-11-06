@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import json
 from datetime import datetime, timezone
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
@@ -91,6 +92,9 @@ def test_executor_consumes_request_once_and_commits_receipt_with_effect(tmp_path
     with sqlite3.connect(tmp_path / "executor.db") as db:
         assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 1
     assert len(executor.receipts()) == 1
+    decision_record = json.loads(executor.receipts()[0]["decision_json"])
+    assert decision_record["approval_identity_ids"] == ["org:approver"]
+    assert decision_record["approval_event_refs"] == [[approval.event["event_id"], approval.event["event_hash"]]]
     assert executor.verify()
 
 
