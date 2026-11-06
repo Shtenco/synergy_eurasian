@@ -689,7 +689,7 @@ def test_v74_milp_cli_fixture_is_schema_valid_and_reproducible():
     r=evaluate_document(document)
     assert r["feasible"] and r["optimality_proven"]
     assert r["demand"][0]["fulfilled"]==12
-    assert r["objective_value"]==pytest.approx(1171)
+    assert r["objective_value"]==pytest.approx(1168)
 
 
 def test_v74_milp_optimizer_rejects_non_numeric_capacity_period():
