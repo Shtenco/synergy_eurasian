@@ -1,0 +1,25 @@
+{
+  "project": "SYNERGY V6.4 auditable supply-chain research kernel",
+  "status": "research prototype; synthetic assumptions; not production-ready",
+  "main_runs": 1500,
+  "price_sweep_runs": 6200,
+  "adaptive_ca_sensitivity_runs": 1600,
+  "total_distinct_simulation_runs": 9300,
+  "verification_reruns": 1600,
+  "invariant_test_scenarios": 360,
+  "unit_tests": 6,
+  "policies": ["independent", "market", "dao", "ca", "ca_t40", "ca_t50", "ca_t60", "ca_t75", "hybrid"],
+  "regimes": ["normal", "volatile", "severe"],
+  "main_seed_range": [2000, 2099],
+  "main_horizon_days": 60,
+  "main_final_price": 15.0,
+  "max_cash_conservation_error_main": 1.9963408703915775e-10,
+  "max_cash_conservation_error_invariant_sweep": 1.4597389963455498e-10,
+  "limitations": [
+    "7 aggregate nodes, not 147 individual agents",
+    "FIFO lots are recorded but production batches are largely make-to-order and consumed immediately",
+    "CA is a local supplier-preference heuristic, not the full cellular automaton",
+    "no taxes, household wage spending, price elasticity, legal insolvency, collateral recovery, or calibrated credit data",
+    "all parameters are synthetic"
+  ]
+}

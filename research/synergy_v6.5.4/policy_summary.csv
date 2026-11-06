@@ -1,0 +1,13 @@
+regime,policy,runs,mean_defaults,p95_defaults,survival_rate,mean_sales,mean_operating_surplus,mean_production_lost,mean_transfers
+moderate,isolated,100,0.0,0.0,1.0,79576.591,43724.784,0.0,0.0
+moderate,liquidity_pool,100,0.0,0.0,1.0,79576.591,43724.784,0.0,0.0
+moderate,firewall,100,0.0,0.0,1.0,79576.591,43724.784,0.0,0.0
+moderate,adaptive_synergy,100,0.0,0.0,1.0,79576.591,43724.784,0.0,0.0
+severe,isolated,100,1.05,6.25,0.987,64015.735,33660.207,4.54,0.0
+severe,liquidity_pool,100,0.99,6.25,0.988,64027.324,33656.46,3.381,6.657
+severe,firewall,100,1.05,6.25,0.987,64017.892,33661.15,4.325,0.0
+severe,adaptive_synergy,100,0.92,0.55,0.988,64036.462,33652.93,2.468,12.28
+systemic,isolated,100,7.02,30.1,0.912,51455.501,25734.286,28.658,0.0
+systemic,liquidity_pool,100,6.28,30.05,0.922,51546.925,25713.092,19.516,46.44
+systemic,firewall,100,6.8,30.0,0.915,51484.718,25747.057,25.736,0.0
+systemic,adaptive_synergy,100,5.1,29.05,0.936,51611.196,25701.107,13.089,76.368

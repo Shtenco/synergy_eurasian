@@ -1,0 +1,26 @@
+{
+  "version": "V6.5.5",
+  "name": "Self-Healing Economy",
+  "status": "synthetic heuristic prototype",
+  "policy_paths": 2400,
+  "components": {
+    "severe": 400,
+    "systemic": 2000
+  },
+  "nodes": 80,
+  "sectors": 4,
+  "days": 100,
+  "reserve_units": 180,
+  "policies": [
+    "isolated",
+    "liquidity_first",
+    "random_rescue",
+    "network_optimizer"
+  ],
+  "test_methods": 6,
+  "limitations": [
+    "Heuristic network repair score, not globally optimal",
+    "Synthetic uncalibrated assumptions",
+    "No inventory/lead-time or invoice-level cash ledger"
+  ]
+}

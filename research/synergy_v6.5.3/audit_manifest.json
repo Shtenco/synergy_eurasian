@@ -1,0 +1,54 @@
+{
+  "version": "V6.5.3",
+  "status": "synthetic research experiment",
+  "paired_scenarios": {
+    "main_grid": 8000,
+    "concentration_tail": 4000,
+    "systemic_correlation": 3000,
+    "total": 15000
+  },
+  "policy_paths": 45000,
+  "policies": [
+    "14-day baseline",
+    "7-day early payment",
+    "80% advance non-recourse factoring"
+  ],
+  "test_methods": 6,
+  "parameters": {
+    "operating_days": 120,
+    "settlement_days": 150,
+    "customer_concentration_structures": 4,
+    "pd_grid": [
+      0.005,
+      0.02,
+      0.05,
+      0.1
+    ],
+    "recovery_grid": [
+      0.1,
+      0.3,
+      0.6,
+      0.9
+    ],
+    "fee_grid": [
+      0,
+      0.0025,
+      0.005,
+      0.01,
+      0.02
+    ],
+    "systemic_rho_grid": [
+      0,
+      0.1,
+      0.3,
+      0.6,
+      0.9,
+      1
+    ]
+  },
+  "limitations": [
+    "Synthetic uncalibrated assumptions",
+    "Cash-gap/profit results depend on simplified settlement and factoring mechanics",
+    "Not a real-world credit-risk estimate"
+  ]
+}
