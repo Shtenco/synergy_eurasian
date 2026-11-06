@@ -113,14 +113,9 @@ def test_foreign_currency_posting_requires_fx_reference_and_balances_functional_
 
 
 def test_same_currency_functional_value_cannot_be_changed_without_fx():
-    journal = new_journal()
-    bad = JournalEntry("je-bad", date(2026, 11, 6), datetime(2026, 11, 6, tzinfo=timezone.utc), "USD",
-        (JournalLine("a", "cash", "DEBIT", Money("10", "USD"), Money("11", "USD"), "co1", "x",
-                     fx_rate_ref="bad"),
-         JournalLine("b", "revenue", "CREDIT", Money("11", "USD"), Money("11", "USD"), "co1", "y")),
-        "event-bad", "idem-bad", "Invalid same-currency valuation")
     with pytest.raises(ValueError, match="Same-currency"):
-        journal.post(bad)
+        JournalLine("a", "cash", "DEBIT", Money("10", "USD"), Money("11", "USD"), "co1", "x",
+                    fx_rate_ref="bad")
 
 
 def test_journal_enforces_idempotency_and_single_reversal():
