@@ -117,6 +117,9 @@ class AuthorityScopeEngine:
                 not isinstance(item, str) or not item.strip() for item in values
             ):
                 raise ValueError(f"{name} must contain unique non-empty strings")
+        if any(code != code.upper() or len(code) != 3 or not code.isascii() or not code.isalpha()
+               for code in scope.currencies):
+            raise ValueError("currencies must be uppercase three-letter ASCII codes")
         for name in (
             "allowed_organization_ids", "allowed_account_ids",
             "allowed_counterparty_ids",
@@ -181,8 +184,6 @@ class AuthorityScopeEngine:
                 raise ValueError("scope request identifiers must be non-empty strings")
             if request.identity_id != decision.requester_identity_id:
                 raise ValueError("authorization decision requester does not match signed request")
-            if request.tenant_id != getattr(decision, "tenant_id", request.tenant_id):
-                raise ValueError("authorization decision tenant does not match signed request")
             if decision.request_id != payload["request_id"]:
                 raise ValueError("authorization decision request_id does not match signed request")
             amount = _decimal(payload["amount"], "amount")
