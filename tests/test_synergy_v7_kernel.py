@@ -731,3 +731,12 @@ def test_v741_milp_optimizer_rejects_unknown_holding_cost_product():
     demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
     with pytest.raises(ValueError,match="holding_costs contains unknown"):
         optimize_production_schedule([recipe],demand,[],[],2,{"r":1},holding_costs={"ghost":1})
+
+
+def test_matched_pair_did_rejects_reusing_same_unit_in_multiple_pairs():
+    rows=did_fixture()
+    repeated=list(rows[:4])
+    for x in rows[4:]:
+        repeated.append(CausalObservation(x.observation_id,"pair0",x.unit_id,x.group,x.period,x.outcome,x.evidence_id,x.source_class))
+    with pytest.raises(ValueError,match="exactly one matched pair"):
+        matched_pair_difference_in_differences(repeated)
