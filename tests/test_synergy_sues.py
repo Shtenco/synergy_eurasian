@@ -12,7 +12,8 @@ from synergy_sues import (
     Account, AccountType, EconomicPeriod, EvidenceRecord, EvidenceStatus,
     FXRate, Journal, JournalEntry, JournalLine, Money, NormalBalance, Quantity,
     BenefitAttribution, BenefitAttributionRegistry, BenefitEvent, FlowBoundary,
-    PhysicalFlow, summarize_physical_flows,
+    PhysicalFlow, summarize_physical_flows, IntercompanyRecord, IntercompanyRecordType,
+    reconcile_intercompany,
 )
 
 
@@ -253,3 +254,43 @@ def test_journal_rejects_missing_wrong_direction_or_wrong_value_fx_rate():
         "event-value", "idem-value", "Wrong FX valuation")
     with pytest.raises(ValueError, match="does not match"):
         journal.post(bad_value)
+
+
+def test_intercompany_reconciliation_eliminates_only_reciprocal_amounts():
+    rows = [
+        IntercompanyRecord("r1", "tx1", "seller", "buyer", "SELLER_REVENUE", Money("100", "USD"), "2026-Q4", "erp:sale"),
+        IntercompanyRecord("e1", "tx1", "buyer", "seller", "BUYER_EXPENSE", Money("100", "USD"), "2026-Q4", "erp:purchase"),
+        IntercompanyRecord("ar1", "tx1", "seller", "buyer", "SELLER_RECEIVABLE", Money("60", "USD"), "2026-Q4", "erp:ar"),
+        IntercompanyRecord("ap1", "tx1", "buyer", "seller", "BUYER_PAYABLE", Money("55", "USD"), "2026-Q4", "erp:ap"),
+        IntercompanyRecord("ci1", "tx1", "seller", "buyer", "SELLER_CASH_IN", Money("40", "USD"), "2026-Q4", "bank:in"),
+        IntercompanyRecord("co1", "tx1", "buyer", "seller", "BUYER_CASH_OUT", Money("40", "USD"), "2026-Q4", "bank:out"),
+    ]
+    result = reconcile_intercompany(rows)
+    tx = result["transactions"][0]
+    assert tx["eliminations"]["P_AND_L"] == "100"
+    assert tx["eliminations"]["BALANCE_SHEET"] == "55"
+    assert tx["eliminations"]["CASH_TRANSFER"] == "40"
+    assert not result["complete"]
+    assert result["exceptions"][0]["seller_unmatched"] == "5"
+
+
+def test_intercompany_reconciliation_rejects_mixed_currency_and_wrong_counterparty():
+    mixed = [
+        IntercompanyRecord("r1", "tx1", "seller", "buyer", "SELLER_REVENUE", Money("10", "USD"), "2026-Q4", "sale"),
+        IntercompanyRecord("e1", "tx1", "buyer", "seller", "BUYER_EXPENSE", Money("10", "KZT"), "2026-Q4", "purchase"),
+    ]
+    with pytest.raises(ValueError, match="mixes currencies"):
+        reconcile_intercompany(mixed)
+
+    wrong = [
+        IntercompanyRecord("r2", "tx2", "seller", "other", "SELLER_REVENUE", Money("10", "USD"), "2026-Q4", "sale"),
+        IntercompanyRecord("e2", "tx2", "buyer", "seller", "BUYER_EXPENSE", Money("10", "USD"), "2026-Q4", "purchase"),
+    ]
+    with pytest.raises(ValueError, match="Counterparty mismatch"):
+        reconcile_intercompany(wrong)
+
+
+def test_intercompany_reconciliation_rejects_duplicate_record_ids():
+    row = IntercompanyRecord("r1", "tx1", "seller", "buyer", "SELLER_REVENUE", Money("10", "USD"), "2026-Q4", "sale")
+    with pytest.raises(ValueError, match="Duplicate"):
+        reconcile_intercompany([row, row])
