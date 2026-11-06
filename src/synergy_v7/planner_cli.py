@@ -1,4 +1,4 @@
-"""CLI for the V7.6 cash-constrained production scheduler."""
+"""CLI for the V7.6.2 credit-aware cash-constrained production scheduler."""
 from __future__ import annotations
 import argparse,json,sys
 from pathlib import Path
@@ -38,13 +38,17 @@ def evaluate_document(document,schema_path=None):
       document.get("cash_opening_balance"),cash_floor,
       ({int(k):v for k,v in document["cash_inflows_by_period"].items()} if "cash_inflows_by_period" in document else None),
       cash_outflows if ("cash_outflows_by_period" in document or supplier_payments) else None,
-      document.get("collection_lag_by_demand"),document.get("collection_fraction_by_demand"))
+      document.get("collection_lag_by_demand"),document.get("collection_fraction_by_demand"),
+      document.get("credit_limit"),document.get("credit_opening_balance",0.0),
+      ({int(k):v for k,v in document["credit_draw_limits_by_period"].items()} if "credit_draw_limits_by_period" in document else None),
+      ({int(k):v for k,v in document["credit_repayment_limits_by_period"].items()} if "credit_repayment_limits_by_period" in document else None),
+      ({int(k):v for k,v in document["credit_interest_rates_by_period"].items()} if "credit_interest_rates_by_period" in document else None))
     result["supplier_payment_commitments"]=supplier_report
     return result
 
 
 def main(argv=None):
-    parser=argparse.ArgumentParser(description="Optimize a SYNERGY V7.6 cash-constrained production schedule")
+    parser=argparse.ArgumentParser(description="Optimize a SYNERGY V7.6.2 credit-aware cash-constrained production schedule")
     parser.add_argument("plan",help="MILP production plan JSON")
     args=parser.parse_args(argv)
     try:
@@ -53,7 +57,7 @@ def main(argv=None):
         print(json.dumps(result,ensure_ascii=False,indent=2,sort_keys=True))
         return 0 if result["feasible"] and result["optimality_proven"] else 2
     except Exception as exc:
-        print(f"SYNERGY V7.6 optimizer error: {exc}",file=sys.stderr)
+        print(f"SYNERGY V7.6.2 optimizer error: {exc}",file=sys.stderr)
         return 1
 
 
