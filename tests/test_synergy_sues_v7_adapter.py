@@ -2,8 +2,10 @@ from dataclasses import dataclass
 from datetime import date
 from hashlib import sha256
 import json
+from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from synergy_sues.v7_adapter import adapt_v7_event_store, adapt_v7_realization_chain
 
@@ -237,3 +239,33 @@ def test_realization_adapter_preserves_future_source_rows_for_complete_replay():
         if row.record_type == "DELIVERY_ACCEPTANCE"
     }
     assert delivery_ids == {"delivery-1", "delivery-future"}
+
+
+
+def test_v7_bridge_json_schema_validates_event_link_and_bridge_contracts():
+    schema_path = Path(__file__).resolve().parents[1] / "interfaces" / "synergy_sues_v7_bridge.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    source_event = {
+        "source_event_id": "event-1", "source_event_hash": "a" * 64, "previous_hash": "",
+        "aggregate_type": "PROJECT", "aggregate_id": "project-1", "sequence": 1,
+        "event_type": "PRODUCTION_COMPLETED", "effective_at": "2026-11-06T08:00:00+00:00",
+        "recorded_at": "2026-11-06T08:01:00+00:00", "source_ref": "source:event-1",
+        "evidence_ids": ["evidence:1"], "idempotency_key": "idem:event-1",
+        "payload_json": "{\"quantity\":\"10\"}",
+    }
+    link = {
+        "source_record_id": "output-1", "record_type": "OUTPUT_OBSERVATION",
+        "effective_date": None, "source_ref": "meter:1", "evidence_refs": ["meter:1"],
+        "related_record_ids": [], "entity_id": "co-1", "project_id": "factory-1",
+        "benefit_stream_id": "stream-1", "period_id": "2026-11",
+        "quantity": "100", "unit": "unit", "amount": None,
+        "evidence_status": "OBSERVED", "payload_json": "{\"output_id\":\"output-1\"}",
+    }
+    bridge = {
+        "as_of": "2026-11-06", "links": [link],
+        "validated_report_json": "{\"revenue_is_not_cash\":true}",
+    }
+    for sample in (source_event, link, bridge):
+        validator.validate(sample)
