@@ -1,0 +1,374 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/synergy_v7_realization_chain.schema.json",
+  "title": "SYNERGY V7.3 Realization Evidence Chain Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "as_of",
+    "outputs",
+    "deliveries",
+    "invoice_allocations",
+    "invoices",
+    "settlements",
+    "collection_attributions",
+    "costs"
+  ],
+  "properties": {
+    "as_of": {
+      "type": "string",
+      "format": "date"
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "output_id",
+          "enterprise_id",
+          "project_id",
+          "benefit_stream_id",
+          "period",
+          "product_id",
+          "observed_quantity",
+          "baseline_quantity",
+          "unit",
+          "evidence_method",
+          "evidence_id",
+          "source_class"
+        ],
+        "properties": {
+          "output_id": {
+            "type": "string"
+          },
+          "enterprise_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "benefit_stream_id": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "observed_quantity": {
+            "type": "number",
+            "minimum": 0
+          },
+          "baseline_quantity": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unit": {
+            "type": "string"
+          },
+          "evidence_method": {
+            "enum": [
+              "CONTROL_GROUP",
+              "MATCHED_CONTROL",
+              "PRE_POST",
+              "ENGINEERING_MODEL",
+              "SCENARIO"
+            ]
+          },
+          "evidence_id": {
+            "type": "string"
+          },
+          "source_class": {
+            "enum": [
+              "OBSERVED",
+              "VERIFIED",
+              "UNDERWRITTEN",
+              "SCENARIO"
+            ]
+          }
+        }
+      }
+    },
+    "deliveries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "delivery_id",
+          "output_id",
+          "customer_id",
+          "accepted_date",
+          "accepted_quantity",
+          "unit",
+          "acceptance_ref",
+          "source_class"
+        ],
+        "properties": {
+          "delivery_id": {
+            "type": "string"
+          },
+          "output_id": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "accepted_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "accepted_quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "unit": {
+            "type": "string"
+          },
+          "acceptance_ref": {
+            "type": "string"
+          },
+          "source_class": {
+            "enum": [
+              "OBSERVED",
+              "VERIFIED",
+              "UNDERWRITTEN",
+              "SCENARIO"
+            ]
+          }
+        }
+      }
+    },
+    "invoice_allocations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "allocation_id",
+          "delivery_id",
+          "invoice_document_id",
+          "invoiced_quantity",
+          "unit",
+          "invoiced_amount",
+          "currency",
+          "source_ref"
+        ],
+        "properties": {
+          "allocation_id": {
+            "type": "string"
+          },
+          "delivery_id": {
+            "type": "string"
+          },
+          "invoice_document_id": {
+            "type": "string"
+          },
+          "invoiced_quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "unit": {
+            "type": "string"
+          },
+          "invoiced_amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "currency": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "invoices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "document_id",
+          "side",
+          "enterprise_id",
+          "counterparty_id",
+          "issue_date",
+          "due_date",
+          "currency",
+          "original_amount",
+          "source_ref"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string"
+          },
+          "side": {
+            "const": "RECEIVABLE"
+          },
+          "enterprise_id": {
+            "type": "string"
+          },
+          "counterparty_id": {
+            "type": "string"
+          },
+          "issue_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "original_amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "source_ref": {
+            "type": "string"
+          },
+          "contract_ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "settlements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "settlement_id",
+          "document_id",
+          "settlement_date",
+          "amount",
+          "currency",
+          "cash_account_id",
+          "source_ref"
+        ],
+        "properties": {
+          "settlement_id": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "settlement_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "currency": {
+            "type": "string"
+          },
+          "cash_account_id": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "collection_attributions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "attribution_id",
+          "settlement_id",
+          "invoice_allocation_id",
+          "amount",
+          "currency",
+          "source_ref"
+        ],
+        "properties": {
+          "attribution_id": {
+            "type": "string"
+          },
+          "settlement_id": {
+            "type": "string"
+          },
+          "invoice_allocation_id": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "currency": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "costs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "cost_id",
+          "enterprise_id",
+          "project_id",
+          "benefit_stream_id",
+          "period",
+          "cost_type",
+          "amount",
+          "currency",
+          "evidence_id",
+          "source_class"
+        ],
+        "properties": {
+          "cost_id": {
+            "type": "string"
+          },
+          "enterprise_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "benefit_stream_id": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string"
+          },
+          "cost_type": {
+            "enum": [
+              "DIRECT_COST",
+              "INCREMENTAL_OPEX",
+              "REPLACEMENT_OBLIGATION"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string"
+          },
+          "evidence_id": {
+            "type": "string"
+          },
+          "source_class": {
+            "enum": [
+              "OBSERVED",
+              "VERIFIED",
+              "UNDERWRITTEN",
+              "SCENARIO"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
