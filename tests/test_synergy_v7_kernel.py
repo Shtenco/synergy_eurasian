@@ -186,3 +186,66 @@ def test_integrated_factory_fixture_is_schema_valid_and_feasible():
     assert result["demand"]["machine_part"]["fulfilled"]==12
     assert result["completed_output"]["steel"]==80
     assert result["completed_output"]["machine_part"]==12
+
+
+from synergy_v7 import (WorkingCapitalSnapshot, working_capital_cash_impact,
+    CashWaterfallInput, run_cash_waterfall)
+
+
+def test_working_capital_and_cash_conversion_cycle():
+    w=WorkingCapitalSnapshot(100,200,50,10,1000,730,365)
+    assert w.net_operating_working_capital==240
+    assert w.dso_days==pytest.approx(36.5)
+    assert w.dio_days==pytest.approx(100)
+    assert w.dpo_days==pytest.approx(25)
+    assert w.cash_conversion_cycle_days==pytest.approx(111.5)
+
+
+def test_reduction_in_net_working_capital_releases_cash():
+    old=WorkingCapitalSnapshot(100,200,50,10,1000,730)
+    new=WorkingCapitalSnapshot(80,180,60,10,1000,730)
+    assert working_capital_cash_impact(old,new)==40
+
+
+def test_cash_waterfall_respects_replacement_reserve_and_distribution_gates():
+    x=CashWaterfallInput(opening_cash=50,customer_collections=100,
+      other_external_operating_receipts=0,financing_proceeds=25,internal_transfers_received=10,
+      opening_reserve=20,reserve_target=50,opex_due=70,replacement_due=40,
+      debt_service_due=20,growth_capex_requested=20,distributions_requested=10)
+    r=run_cash_waterfall(x)
+    assert r["solvent_for_listed_mandatory_obligations"]
+    assert r["reserve"]["ending"]==50
+    assert r["growth_capex_funded"]==20
+    assert r["distribution_funded"]==5
+    assert r["external_operating_cash_generation"]==100
+    assert r["financing_proceeds_excluded_from_operating_generation"]==25
+    assert r["internal_transfers_excluded_from_consolidated_operating_generation"]==10
+
+
+def test_cash_waterfall_uses_reserve_for_mandatory_shortfall_and_blocks_distributions():
+    x=CashWaterfallInput(opening_cash=10,customer_collections=0,
+      other_external_operating_receipts=0,financing_proceeds=0,internal_transfers_received=0,
+      opening_reserve=5,reserve_target=5,opex_due=20,replacement_due=10,
+      debt_service_due=0,growth_capex_requested=50,distributions_requested=10)
+    r=run_cash_waterfall(x)
+    assert r["allocations"]["opex"]["funded"]==15
+    assert r["allocations"]["replacement"]["unfunded"]==10
+    assert r["distribution_funded"]==0
+    assert not r["distribution_gate_passed"]
+    assert r["growth_capex_funded"]==0
+
+
+def test_cash_waterfall_funds_reserve_before_growth_and_distribution():
+    x=CashWaterfallInput(opening_cash=100,customer_collections=0,
+      other_external_operating_receipts=0,financing_proceeds=0,internal_transfers_received=0,
+      opening_reserve=0,reserve_target=80,opex_due=0,replacement_due=0,
+      debt_service_due=0,growth_capex_requested=50,distributions_requested=50)
+    r=run_cash_waterfall(x)
+    assert r["reserve"]["ending"]==80
+    assert r["growth_capex_funded"]==20
+    assert r["distribution_funded"]==0
+
+
+def test_working_capital_rejects_negative_balances():
+    with pytest.raises(ValueError,match="non-negative"):
+        WorkingCapitalSnapshot(-1,0,0,0,0,0)
