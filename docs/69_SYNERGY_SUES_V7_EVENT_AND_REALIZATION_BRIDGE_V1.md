@@ -56,7 +56,7 @@ On success, the adapter preserves each source row as an immutable `SUESRealizati
 - evidence status where the V7 source defines one;
 - canonical JSON of the original source row.
 
-The validated V7 report is retained as canonical JSON in `SUESRealizationBridge.validated_report_json`.
+The validated V7 report is retained as canonical JSON in `SUESRealizationBridge.validated_report_json`. The adapter preserves the complete supplied source set, including future-dated rows; the V7 evaluator owns all `as_of` inclusion semantics. This keeps the evidence bridge replayable and prevents silent source-row loss.
 
 ## 4. Accounting and causal safety
 
