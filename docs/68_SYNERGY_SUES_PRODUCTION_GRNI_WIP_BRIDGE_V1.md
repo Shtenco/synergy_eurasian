@@ -37,7 +37,7 @@ Journal sequence:
 - matched invoice: Dr GRNI / Cr Accounts Payable;
 - supplier payment remains a separate settlement event handled by the trade/payment authorities.
 
-V1 journal posting is intentionally limited to PO currency equal to entity functional currency. FX GRNI matching and invoice price/quantity variance accounts are future work.
+V1 journal posting is intentionally limited to PO currency equal to entity functional currency. FX GRNI matching and invoice price/quantity variance accounts are future work. The dedicated GRNI receipt journal helper and the inventory-ledger receipt posting are alternative bridges for the same physical event; an adapter must select exactly one to prevent duplicate inventory and GRNI recognition.
 
 ## 3. BOM consumption and production capitalization
 
