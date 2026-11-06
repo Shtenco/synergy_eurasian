@@ -443,3 +443,96 @@ def test_bank_reconciliation_rejects_duplicate_statement_and_allocations():
         reconcile_bank_statement([doc],[],[line,line],[alloc],"2026-02-02")
     with pytest.raises(ValueError,match="Duplicate cash allocation"):
         reconcile_bank_statement([doc],[],[line],[alloc,alloc],"2026-02-02")
+
+
+from synergy_v7 import (OutputObservation, DeliveryAcceptance, InvoiceDeliveryAllocation,
+    CollectionAttribution, CostObservation, evaluate_realization_chain)
+
+
+def realization_fixture():
+    output=OutputObservation("out1","factory","project1","energy-efficiency","2026-Q1",
+      "machine_part",100,80,"unit","PRE_POST","meter:output","OBSERVED")
+    delivery=DeliveryAcceptance("del1","out1","buyer","2026-02-01",90,"unit","acceptance:del1")
+    invoice=trade_doc("invoice1","RECEIVABLE",9000,"buyer")
+    allocation=InvoiceDeliveryAllocation("ial1","del1","invoice1",80,"unit",8000,"USD","erp:invoice-line")
+    settlement=SettlementEvent("settle1","invoice1","2026-02-10",5000,"USD","bank-usd","bank:line")
+    collection=CollectionAttribution("ca1","settle1","ial1",5000,"USD","bank:allocation")
+    costs=[CostObservation("cost1","factory","project1","energy-efficiency","2026-Q1","DIRECT_COST",2000,"USD","erp:cost"),
+      CostObservation("cost2","factory","project1","energy-efficiency","2026-Q1","INCREMENTAL_OPEX",500,"USD","erp:opex"),
+      CostObservation("cost3","factory","project1","energy-efficiency","2026-Q1","REPLACEMENT_OBLIGATION",300,"USD","asset:replacement")]
+    return output,delivery,invoice,allocation,settlement,collection,costs
+
+
+def test_realization_chain_links_output_acceptance_invoice_and_collected_cash():
+    o,d,i,a,s,c,costs=realization_fixture()
+    r=evaluate_realization_chain([o],[d],[a],[i],[s],[c],costs,"2026-02-15")
+    report=r["benefit_stream_reports"][0]
+    assert report["observed_delta_vs_baseline"]==20
+    assert report["accepted_quantity"]==90
+    assert report["invoiced_quantity"]==80
+    assert report["invoiced_amount_by_currency"]["USD"]==8000
+    assert report["collected_cash_by_currency"]["USD"]==5000
+    assert report["costs_by_currency"]["USD"]["DIRECT_COST"]==2000
+    assert report["output_delta_is_not_causal_proof"]
+
+
+def test_realization_chain_rejects_accepted_delivery_above_observed_output():
+    o,d,i,a,s,c,costs=realization_fixture()
+    bad=DeliveryAcceptance("del2","out1","buyer","2026-02-01",110,"unit","acceptance:bad")
+    with pytest.raises(ValueError,match="exceeds observed output"):
+        evaluate_realization_chain([o],[bad],[a],[i],[s],[c],costs,"2026-02-15")
+
+
+def test_realization_chain_rejects_invoicing_more_than_customer_accepted():
+    o,d,i,a,s,c,costs=realization_fixture()
+    bad=InvoiceDeliveryAllocation("ial2","del1","invoice1",91,"unit",8000,"USD","erp:bad")
+    with pytest.raises(ValueError,match="exceeds accepted delivery"):
+        evaluate_realization_chain([o],[d],[bad],[i],[s],[c],costs,"2026-02-15")
+
+
+def test_realization_chain_rejects_invoice_value_above_invoice_document():
+    o,d,i,a,s,c,costs=realization_fixture()
+    bad=InvoiceDeliveryAllocation("ial2","del1","invoice1",80,"unit",9500,"USD","erp:bad")
+    with pytest.raises(ValueError,match="exceeds document amount"):
+        evaluate_realization_chain([o],[d],[bad],[i],[s],[c],costs,"2026-02-15")
+
+
+def test_realization_chain_rejects_collection_attribution_above_bank_settlement():
+    o,d,i,a,s,c,costs=realization_fixture()
+    bad=CollectionAttribution("ca2","settle1","ial1",6000,"USD","bank:bad")
+    with pytest.raises(ValueError,match="exceeds settlement"):
+        evaluate_realization_chain([o],[d],[a],[i],[s],[bad],costs,"2026-02-15")
+
+
+def test_realization_chain_rejects_collection_attribution_above_invoiced_line():
+    o,d,i,a,s,c,costs=realization_fixture()
+    bad=CollectionAttribution("ca2","settle1","ial1",8500,"USD","bank:bad")
+    settlement=SettlementEvent("settle1","invoice1","2026-02-10",9000,"USD","bank-usd","bank:line")
+    with pytest.raises(ValueError,match="exceeds invoice allocation"):
+        evaluate_realization_chain([o],[d],[a],[i],[settlement],[bad],costs,"2026-02-15")
+
+
+def test_realization_chain_rejects_future_delivery_invoicing_and_unknown_links():
+    o,d,i,a,s,c,costs=realization_fixture()
+    future=DeliveryAcceptance("del2","out1","buyer","2026-03-01",5,"unit","acceptance:future")
+    future_allocation=InvoiceDeliveryAllocation("ial2","del2","invoice1",1,"unit",100,"USD","erp:future")
+    with pytest.raises(ValueError,match="exceeds accepted delivery"):
+        evaluate_realization_chain([o],[future],[future_allocation],[i],[],[],[],"2026-02-15")
+    orphan=InvoiceDeliveryAllocation("ial3","missing","invoice1",1,"unit",100,"USD","erp:orphan")
+    with pytest.raises(ValueError,match="Unknown delivery"):
+        evaluate_realization_chain([o],[d],[orphan],[i],[],[],[],"2026-02-15")
+
+
+def test_realization_chain_excludes_future_collections_from_cash_metric():
+    o,d,i,a,s,c,costs=realization_fixture()
+    future=SettlementEvent("future-settle","invoice1","2026-03-01",1000,"USD","bank","bank:future")
+    future_attr=CollectionAttribution("future-ca","future-settle","ial1",1000,"USD","bank:future")
+    r=evaluate_realization_chain([o],[d],[a],[i],[future],[future_attr],costs,"2026-02-15")
+    assert r["benefit_stream_reports"][0]["collected_cash_by_currency"]["USD"]==0
+
+
+def test_realization_chain_rejects_cost_without_matching_output_group():
+    o,d,i,a,s,c,costs=realization_fixture()
+    orphan=CostObservation("orphan","factory","other-project","stream","2026-Q1","DIRECT_COST",10,"USD","erp:orphan")
+    with pytest.raises(ValueError,match="no matching output"):
+        evaluate_realization_chain([o],[d],[a],[i],[s],[c],costs+[orphan],"2026-02-15")
