@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Iterable
 
 from .contracts import Money, _aware
-from .journal import Journal, JournalEntry, JournalLine, PostingSide
+from .journal import AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide
 
 
 class IntercompanyRecordType(str, Enum):
@@ -197,6 +197,9 @@ def post_intercompany_eliminations(
     functional currency. Translation and CTA belong to the next consolidation layer.
     """
     _aware(recorded_at, "recorded_at")
+    if not all((source_event_id_prefix, idempotency_prefix)):
+        raise ValueError("Consolidation event and idempotency prefixes are required")
+    account_map = {account.account_id: account for account in journal.accounts}
     rows = list(records)
     result = reconcile_intercompany(rows)
     by_transaction_period: dict[tuple[str, str], list[IntercompanyRecord]] = {}
@@ -227,6 +230,22 @@ def post_intercompany_eliminations(
                     raise ValueError(f"One explicit debit account_id is required for {category}")
                 if len(credit_accounts) != 1 or "" in credit_accounts:
                     raise ValueError(f"One explicit credit account_id is required for {category}")
+                if period_id not in effective_dates_by_period:
+                    raise ValueError(f"Missing effective date for intercompany period: {period_id}")
+                debit_account = account_map[next(iter(debit_accounts))]
+                credit_account = account_map[next(iter(credit_accounts))]
+                if category == "P_AND_L":
+                    if (debit_account.account_type != AccountType.REVENUE
+                            or debit_account.normal_balance != NormalBalance.CREDIT
+                            or credit_account.account_type != AccountType.EXPENSE
+                            or credit_account.normal_balance != NormalBalance.DEBIT):
+                        raise ValueError("P&L elimination requires revenue debit and expense credit accounts")
+                else:
+                    if (debit_account.account_type != AccountType.LIABILITY
+                            or debit_account.normal_balance != NormalBalance.CREDIT
+                            or credit_account.account_type != AccountType.ASSET
+                            or credit_account.normal_balance != NormalBalance.DEBIT):
+                        raise ValueError("Balance-sheet elimination requires payable debit and receivable credit accounts")
                 identity = f"{tx['transaction_id']}|{period_id}|{category}"
                 suffix = sha256(identity.encode("utf-8")).hexdigest()[:20]
                 entry_id = f"elim-{suffix}"
