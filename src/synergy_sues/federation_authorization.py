@@ -34,6 +34,7 @@ class AuthorizationDecision:
     requester_identity_id: str
     matched_rule_ids: tuple[str, ...] = ()
     approval_identity_ids: tuple[str, ...] = ()
+    approval_event_refs: tuple[tuple[str, str], ...] = ()
 
 
 class FederationAuthorizationPolicy:
@@ -128,8 +129,8 @@ class FederationAuthorizationPolicy:
             return AuthorizationDecision(False, "no_matching_allow_rule", request_id,
                 requester.identity_id)
 
-        verified_approvals: dict[str, str] = {}
-        vetoes: list[str] = []
+        verified_approvals: dict[str, tuple[str, str]] = {}
+        vetoes: list[tuple[str, str, str]] = []
         seen_events: set[str] = set()
         for approval in approvals:
             approver = registry.verify(approval, received_at)
@@ -159,14 +160,16 @@ class FederationAuthorizationPolicy:
             if approval_payload["decision"] not in {"APPROVE", "REJECT"}:
                 raise ValueError("approval decision must be APPROVE or REJECT")
             if approval_payload["decision"] == "REJECT":
-                vetoes.append(approver.identity_id)
+                vetoes.append((approver.identity_id, approval.event["event_id"], approval.event["event_hash"]))
             else:
-                verified_approvals[approver.identity_id] = approval.event["event_id"]
+                verified_approvals[approver.identity_id] = (
+                    approval.event["event_id"], approval.event["event_hash"])
 
         if vetoes:
             return AuthorizationDecision(False, "approval_veto", request_id,
                 requester.identity_id, tuple(sorted(rule.rule_id for rule in allows)),
-                tuple(sorted(set(vetoes))))
+                tuple(sorted({item[0] for item in vetoes})),
+                tuple(sorted({(item[1], item[2]) for item in vetoes})))
 
         # Rules are evaluated independently: approvals never combine across policies.
         eligible = []
@@ -182,9 +185,11 @@ class FederationAuthorizationPolicy:
         if not eligible:
             return AuthorizationDecision(False, "insufficient_approvals", request_id,
                 requester.identity_id, tuple(sorted(rule.rule_id for rule in allows)),
-                tuple(sorted(verified_approvals)))
+                tuple(sorted(verified_approvals)),
+                tuple(sorted(set(verified_approvals.values()))))
         # Prefer the narrowest resource scope; rule IDs provide deterministic tie-break.
         eligible.sort(key=lambda item: (item[0].resource_id is None, item[0].rule_id))
         selected, selected_approvals = eligible[0]
+        approval_refs = tuple(sorted(verified_approvals[identity_id] for identity_id in selected_approvals))
         return AuthorizationDecision(True, "authorized_by_policy", request_id,
-            requester.identity_id, (selected.rule_id,), selected_approvals)
+            requester.identity_id, (selected.rule_id,), selected_approvals, approval_refs)
