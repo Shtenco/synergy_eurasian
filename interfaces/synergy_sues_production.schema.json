@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/synergy_sues_production.schema.json",
+  "title": "SYNERGY SUES — procurement and production contracts",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/purchase_order_line" },
+    { "$ref": "#/$defs/goods_receipt" },
+    { "$ref": "#/$defs/supplier_invoice_line" },
+    { "$ref": "#/$defs/bom_component" },
+    { "$ref": "#/$defs/production_order" },
+    { "$ref": "#/$defs/production_cost_event" },
+    { "$ref": "#/$defs/production_execution" }
+  ],
+  "$defs": {
+    "positive_decimal": {
+      "type": "string",
+      "pattern": "^(?=.*[1-9])(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]{2,11}$"
+    },
+    "unit": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_./*-]{0,31}$"
+    },
+    "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "currency"],
+      "properties": {
+        "amount": { "$ref": "#/$defs/positive_decimal" },
+        "currency": { "$ref": "#/$defs/currency" }
+      }
+    },
+    "quantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "unit"],
+      "properties": {
+        "amount": { "$ref": "#/$defs/positive_decimal" },
+        "unit": { "$ref": "#/$defs/unit" }
+      }
+    },
+    "purchase_order_line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["po_line_id", "entity_id", "supplier_id", "item_id", "ordered_quantity", "unit_price", "order_date", "source_ref"],
+      "properties": {
+        "po_line_id": { "type": "string", "minLength": 1 },
+        "entity_id": { "type": "string", "minLength": 1 },
+        "supplier_id": { "type": "string", "minLength": 1 },
+        "item_id": { "type": "string", "minLength": 1 },
+        "ordered_quantity": { "$ref": "#/$defs/quantity" },
+        "unit_price": { "$ref": "#/$defs/money" },
+        "order_date": { "type": "string", "format": "date" },
+        "source_ref": { "type": "string", "minLength": 1 }
+      }
+    },
+    "goods_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["receipt_id", "po_line_id", "received_quantity", "received_date", "evidence_ref"],
+      "properties": {
+        "receipt_id": { "type": "string", "minLength": 1 },
+        "po_line_id": { "type": "string", "minLength": 1 },
+        "received_quantity": { "$ref": "#/$defs/quantity" },
+        "received_date": { "type": "string", "format": "date" },
+        "evidence_ref": { "type": "string", "minLength": 1 }
+      }
+    },
+    "supplier_invoice_line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["invoice_line_id", "po_line_id", "invoiced_quantity", "amount", "invoice_date", "source_ref"],
+      "properties": {
+        "invoice_line_id": { "type": "string", "minLength": 1 },
+        "po_line_id": { "type": "string", "minLength": 1 },
+        "invoiced_quantity": { "$ref": "#/$defs/quantity" },
+        "amount": { "$ref": "#/$defs/money" },
+        "invoice_date": { "type": "string", "format": "date" },
+        "source_ref": { "type": "string", "minLength": 1 }
+      }
+    },
+    "bom_component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item_id", "quantity_per_output_unit"],
+      "properties": {
+        "item_id": { "type": "string", "minLength": 1 },
+        "quantity_per_output_unit": { "$ref": "#/$defs/quantity" }
+      }
+    },
+    "production_order": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order_id", "entity_id", "product_id", "output_quantity", "location_id", "components", "planned_date", "source_ref"],
+      "properties": {
+        "order_id": { "type": "string", "minLength": 1 },
+        "entity_id": { "type": "string", "minLength": 1 },
+        "product_id": { "type": "string", "minLength": 1 },
+        "output_quantity": { "$ref": "#/$defs/quantity" },
+        "location_id": { "type": "string", "minLength": 1 },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/bom_component" }
+        },
+        "planned_date": { "type": "string", "format": "date" },
+        "source_ref": { "type": "string", "minLength": 1 }
+      }
+    },
+    "production_cost_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "order_id", "entity_id", "cost_type", "amount", "effective_date", "source_ref", "evidence_ref"],
+      "properties": {
+        "event_id": { "type": "string", "minLength": 1 },
+        "order_id": { "type": "string", "minLength": 1 },
+        "entity_id": { "type": "string", "minLength": 1 },
+        "cost_type": {
+          "enum": ["LABOR", "ENERGY", "MACHINE", "MAINTENANCE", "DEPRECIATION", "SUBCONTRACT", "OTHER_OVERHEAD"]
+        },
+        "amount": { "$ref": "#/$defs/money" },
+        "effective_date": { "type": "string", "format": "date" },
+        "source_ref": { "type": "string", "minLength": 1 },
+        "evidence_ref": { "type": "string", "minLength": 1 }
+      }
+    },
+    "production_execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order_id", "direct_material_cost", "conversion_cost", "capitalized_cost", "output_quantity", "journal_entry_ids"],
+      "properties": {
+        "order_id": { "type": "string", "minLength": 1 },
+        "direct_material_cost": { "$ref": "#/$defs/money" },
+        "conversion_cost": { "$ref": "#/$defs/money" },
+        "capitalized_cost": { "$ref": "#/$defs/money" },
+        "output_quantity": { "$ref": "#/$defs/quantity" },
+        "journal_entry_ids": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    }
+  }
+}
