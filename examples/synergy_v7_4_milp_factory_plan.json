@@ -69,6 +69,14 @@
       "unit": "kg",
       "available_period": 0,
       "status": "OBSERVED"
+    },
+    {
+      "receipt_id": "steel-opening-stock",
+      "product_id": "steel",
+      "quantity": 10,
+      "unit": "kg",
+      "available_period": 0,
+      "status": "OBSERVED"
     }
   ],
   "resource_capacities": [
