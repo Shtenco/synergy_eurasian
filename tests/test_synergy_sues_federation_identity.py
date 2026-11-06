@@ -95,3 +95,72 @@ def test_future_signature_timestamp_and_unsigned_extension_fields_rejected(tmp_p
     extended = replace(signed, event={**signed.event, "unhashed_extension": "not-allowed"})
     with pytest.raises(ValueError, match="unsupported fields"):
         registry.verify(extended, "2026-11-06T10:01:00+00:00")
+
+import sqlite3
+from synergy_sues.federation_identity import SQLiteTrustedKeyRegistry
+
+
+def test_sqlite_trust_registry_persists_and_reloads_across_instances(tmp_path):
+    path = str(tmp_path / "trust.db")
+    private, public = generate_ed25519_keypair()
+    first = SQLiteTrustedKeyRegistry(path)
+    first.register_identity(FederationIdentity("org:persist", "tenant:persist", "ORGANIZATION"))
+    first.register_key(TrustedSigningKey("org:persist", "tenant:persist", "key-1",
+        ALGORITHM, public, "2026-01-01T00:00:00+00:00"))
+    second = SQLiteTrustedKeyRegistry(path)
+    assert second.resolve("org:persist", "key-1").public_key_b64 == public
+    assert second.verify(sign_event(event(tmp_path, "persist-event.db"), "org:persist",
+        "tenant:persist", "key-1", private, "2026-11-06T10:00:00+00:00"),
+        "2026-11-06T10:01:00+00:00").identity_id == "org:persist"
+    assert second.verify_audit()
+    assert [x["action"] for x in second.audit_events()] == ["IDENTITY_REGISTERED", "KEY_REGISTERED"]
+
+
+def test_sqlite_revocation_is_durable_and_visible_to_existing_registry_instance(tmp_path):
+    path = str(tmp_path / "trust.db")
+    private, public = generate_ed25519_keypair()
+    first = SQLiteTrustedKeyRegistry(path)
+    first.register_identity(FederationIdentity("org:revoked", "tenant:r", "ORGANIZATION"))
+    first.register_key(TrustedSigningKey("org:revoked", "tenant:r", "key-1",
+        ALGORITHM, public, "2026-01-01T00:00:00+00:00"))
+    second = SQLiteTrustedKeyRegistry(path)
+    signed = sign_event(event(tmp_path), "org:revoked", "tenant:r", "key-1",
+        private, "2026-11-06T10:00:00+00:00")
+    assert second.verify(signed, "2026-11-06T10:01:00+00:00")
+    first.revoke_key("org:revoked", "key-1", "2026-11-06T10:00:30+00:00")
+    with pytest.raises(ValueError, match="revoked"):
+        second.verify(signed, "2026-11-06T10:01:00+00:00")
+    reopened = SQLiteTrustedKeyRegistry(path)
+    assert reopened.resolve("org:revoked", "key-1").revoked_at == "2026-11-06T10:00:30+00:00"
+    assert reopened.verify_audit()
+    assert [x["action"] for x in reopened.audit_events()] == [
+        "IDENTITY_REGISTERED", "KEY_REGISTERED", "KEY_REVOKED"]
+
+
+def test_sqlite_trust_registry_audit_is_append_only_and_hash_chained(tmp_path):
+    path = str(tmp_path / "trust.db")
+    registry = SQLiteTrustedKeyRegistry(path)
+    registry.register_identity(FederationIdentity("org:audit", "tenant:a", "ORGANIZATION"))
+    assert registry.verify_audit()
+    with sqlite3.connect(path) as db:
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            db.execute("UPDATE trust_audit SET action='FORGED' WHERE sequence=1")
+    with sqlite3.connect(path) as db:
+        db.execute("DROP TRIGGER trust_audit_no_update")
+        db.execute("UPDATE trust_audit SET action='FORGED' WHERE sequence=1")
+    assert not registry.verify_audit()
+
+
+def test_sqlite_trust_registry_rejects_memory_database_and_conflicting_records(tmp_path):
+    with pytest.raises(ValueError, match="file-backed"):
+        SQLiteTrustedKeyRegistry(":memory:")
+    registry = SQLiteTrustedKeyRegistry(str(tmp_path / "trust.db"))
+    registry.register_identity(FederationIdentity("org:one", "tenant:one", "ORGANIZATION"))
+    with pytest.raises(ValueError, match="different attributes"):
+        registry.register_identity(FederationIdentity("org:one", "tenant:two", "ORGANIZATION"))
+    private, public = generate_ed25519_keypair()
+    with pytest.raises(ValueError, match="not registered"):
+        registry.register_key(TrustedSigningKey("org:missing", "tenant:one", "key",
+            ALGORITHM, public, "2026-01-01T00:00:00+00:00"))
+    assert [x["action"] for x in registry.audit_events()] == ["IDENTITY_REGISTERED"]
+    assert registry.verify_audit()
