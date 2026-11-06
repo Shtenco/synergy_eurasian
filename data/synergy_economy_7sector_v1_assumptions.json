@@ -257,16 +257,18 @@
   ],
   "critical_minimum_service_share": 0.7,
   "fund_accumulation_legacy": {
-    "monthly_contribution_usd": 10007,
-    "nominal_annual_rate_assumption": 0.03,
-    "compounding": "monthly",
+    "monthly_contribution_real_usd": 10007,
+    "effective_annual_real_rate_assumption": 0.03,
+    "compounding": "monthly_equivalent_rate",
+    "monthly_rate_formula": "(1 + annual_real_rate)^(1/12) - 1",
     "contribution_timing": "end_of_month",
     "horizons_years": [
       10,
       20,
       30,
       40
-    ]
+    ],
+    "status": "LEGACY_ILLUSTRATIVE_NOT_PART_OF_SEVEN_SECTOR_PORTFOLIO"
   },
   "notes": [
     "All values are illustrative assumptions, not observed enterprise data.",

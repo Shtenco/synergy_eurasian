@@ -386,18 +386,18 @@ This is an endowment arithmetic exercise, not a claim that the fund can buy or p
 
 ### 10.5 Monthly contribution accumulation
 
-A separate illustrative accumulation exercise used $10,007 monthly contributions and a 3% nominal annual rate compounded monthly, contributions at month-end. It is not the same as the seven-sector portfolio model and should not be combined with its cashflows.
+A separate illustrative accumulation exercise used $10,007 monthly contributions in constant real dollars and a 3% effective annual real return, converted to an equivalent monthly rate, with contributions at month-end. It is not the same as the seven-sector portfolio model and should not be combined with its cashflows.
 
-Using the ordinary annuity formula `FV = P * (((1 + r/12)^(12*n) - 1) / (r/12))`, with `P = $10,007`, `r = 3%`, and month-end deposits:
+Using the ordinary annuity formula with monthly equivalent rate `r_m = (1 + 0.03)^(1/12) - 1` and `FV = P * (((1 + r_m)^(12*n) - 1) / r_m)`, with `P = $10,007` in constant real dollars and month-end deposits:
 
 | Horizon | Accumulated balance | 3% annual payout equivalent / month |
 |---|---:|---:|
-| 10 years | $1,398,392 | $3,496 |
-| 20 years | $3,285,318 | $8,213 |
-| 30 years | $5,831,448 | $14,579 |
-| 40 years | $9,267,077 | $23,168 |
+| 10 years | $1,395,456 | $3,489 |
+| 20 years | $3,270,832 | $8,177 |
+| 30 years | $5,791,181 | $14,478 |
+| 40 years | $9,178,320 | $22,946 |
 
-This assumes an unchanged contribution in real terms only if the contribution is indexed; the stated 3% is a nominal accumulation assumption in this isolated example. Fees, taxes, default, volatility, contribution interruptions and inflation treatment are not modelled. The payout column is 3% of accumulated capital divided by 12; it is not guaranteed income.
+This is a real-dollar illustration: both the monthly contribution and return are treated as constant in purchasing-power terms. Fees, taxes, default, volatility, contribution interruptions and implementation risk are not modelled. The payout column is 3% of accumulated capital divided by 12; it is not guaranteed income.
 
 ### 10.6 Preliminary labor baseline and energy-node examples
 
