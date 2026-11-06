@@ -108,3 +108,7 @@ The research branch now also includes explicit bank statement reconciliation: ma
 ### V7.3 update — realization evidence chain
 
 V7.3 now validates the explicit chain from observed production output to customer acceptance, invoice allocations, settlement events and sourced cash attribution. It separately reports baseline output deltas, accepted quantities, invoiced revenue, collected cash and cost categories. It does **not** infer causality from a pre/post comparison, prorate cash receipts, or collapse recognized revenue into collected cash. See [V7.3 specification](docs/51_SYNERGY_V7_3_REALIZATION_EVIDENCE_CHAIN.md) and [PR #10](https://github.com/Shtenco/synergy_eurasian/pull/10).
+
+### V7.3.1 update — causal measurement discipline
+
+V7.3.1 adds a matched-pair difference-in-differences estimator with pair-level effects, Student-t confidence intervals and explicit treatment/control identity checks. It records that parallel trends, no spillovers and matching quality require independent review; a single pre-period cannot test parallel trends. It is a design-conditional estimate, not automatic causal certification. See [V7.3.1 specification](docs/52_SYNERGY_V7_3_1_CAUSAL_DID.md).
