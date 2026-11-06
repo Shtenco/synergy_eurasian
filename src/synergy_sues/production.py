@@ -225,8 +225,9 @@ def execute_production_order(
 ) -> ProductionExecution:
     """Consume a complete BOM batch and capitalize direct materials into finished goods.
 
-    The inventory subledger records both raw-material issues and finished output.
-    The GL posts raw-material issues to WIP, then WIP to finished-goods inventory.
+    The inventory subledger records raw-material issues and finished output. The GL
+    posts direct materials to WIP, then WIP to finished goods. Labor, overhead,
+    depreciation, scrap variances and by-product credits are excluded from V1.
     """
     _aware(recorded_at, "recorded_at")
     if journal.functional_currency != inventory.functional_currency:
