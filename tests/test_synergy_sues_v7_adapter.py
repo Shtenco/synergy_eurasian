@@ -218,3 +218,22 @@ def test_realization_adapter_does_not_build_bridge_when_v7_validation_fails():
             reject, [Output()], [Delivery()], [Allocation()], [Invoice()],
             [Settlement()], [Collection()], [Cost()], "2026-11-06",
         )
+
+
+
+def test_realization_adapter_preserves_future_source_rows_for_complete_replay():
+    future_delivery = Delivery(
+        delivery_id="delivery-future",
+        accepted_date="2026-12-01",
+        accepted_quantity=10.0,
+    )
+    bridge = adapt_v7_realization_chain(
+        lambda *args: {"as_of": args[-1], "future_rows_preserved": True},
+        [Output()], [Delivery(), future_delivery], [Allocation()], [Invoice()],
+        [Settlement()], [Collection()], [Cost()], "2026-11-06",
+    )
+    delivery_ids = {
+        row.source_record_id for row in bridge.links
+        if row.record_type == "DELIVERY_ACCEPTANCE"
+    }
+    assert delivery_ids == {"delivery-1", "delivery-future"}
