@@ -788,3 +788,16 @@ def test_v75_stress_test_rejects_unknown_shocks_and_invalid_weights():
         stress_test_fixed_schedule(*args,receipt_delays=[ReceiptDelay("missing",1,1)])
     with pytest.raises(ValueError,match="Demand weight"):
         stress_test_fixed_schedule(*args,demand_weights={"d1":0})
+
+
+def test_v75_stress_cli_fixture_is_schema_valid_and_reproducible():
+    import json
+    from synergy_v7.stress_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_5_stress_test_demo.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    a=evaluate_document(document); b=evaluate_document(document)
+    assert a==b
+    assert a["scenario_count"]==250
+    assert 0<=a["mean_weighted_service_level"]<=1
+    assert 0<=a["empirical_cvar_service_shortfall"]<=1
