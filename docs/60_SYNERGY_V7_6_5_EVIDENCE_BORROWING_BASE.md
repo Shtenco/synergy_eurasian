@@ -37,7 +37,7 @@ WIP, obsolete, damaged, consigned and unverified stock is excluded unless the el
 
 The current policy uses one reserve amount per period. It does not yet model reserve categories such as dilution, returns, taxes, insurance, shrinkage or lender-specific exclusions separately.
 
-The CLI combines calculated net base with any separately supplied `credit_borrowing_base_by_period` by taking the lower amount. The resulting effective borrowing base is passed to the V7.6.4 credit constraint.
+The CLI combines calculated net base with any separately supplied `credit_borrowing_base_by_period` by taking the lower amount. The resulting effective borrowing base is passed to the V7.6.4 credit constraint. When collateral calculation is enabled, a missing period snapshot is treated as zero availability (fail-closed), not as an unlimited facility; provide a dated snapshot for every period in which collateral is expected to support debt.
 
 ## Inputs
 
