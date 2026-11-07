@@ -47,3 +47,17 @@ Regional and federation reserve balances remain separate cash accounts. Funding 
 A percentage of opening cash is only a transparent initial-liquidity constraint. It is not a complete measure of ability to pay, risk, expected benefit, wealth, or fairness. The experiment does not specify legal contribution authority, exemptions, hardship relief, appeals, replenishment or governance.
 
 All values are synthetic. No real-world EAEU guarantee contribution or reserve size is recommended.
+
+
+## 5. CI smoke-sample observation
+
+The three-seed, 20-day severe synthetic run used a 10-unit federation reserve, 5 units per region in local reserves and a 10% combined member contribution cap. The capacity-weighted federation contribution allocator funded exactly 10 units while keeping each member's combined local-plus-federal contribution within its cap.
+
+| Financing mode | Mean service level | Mean federal guarantee paid | Mean federal reserve remaining | Maximum cash-conservation residual |
+|---|---:|---:|---:|---:|
+| Mutual credit | 69.533% | 0.279 | 9.721 | 9.1×10⁻¹³ |
+| Hybrid | 69.647% | 10.000 | 0.000 | 1.8×10⁻¹² |
+
+In this small fixture, the hybrid path exhausted the federation reserve while the mutual-credit path used only a small fraction. This is a scenario-specific exposure result, not evidence that hybrid is generally riskier or that the reserve size is adequate. The sample does not establish a recommended contribution rule or reserve target.
+
+**Validation:** 147 pytest tests passed on commit `3a64a6a6bcfab55a776b4b5a60718169c69182f7`. Full EIIOM CI and README integrity completed successfully. The CI step wrote `outputs/synergy_v66_federation_liquidity_cap.json`.
