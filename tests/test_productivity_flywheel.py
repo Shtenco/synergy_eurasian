@@ -77,3 +77,18 @@ def test_productivity_flywheel_rejects_nonfinite_negative_and_zero_denominator_i
     bad["stress_scenarios"][0]["cashflow_shock"] = 1.0
     with pytest.raises(ValueError, match="cashflow shock"):
         calculate(bad)
+
+
+
+def test_productivity_flywheel_rejects_finite_inputs_that_overflow_outputs():
+    base = load_config()
+    bad = copy.deepcopy(base)
+    bad["baseline"]["gross_cashflow_usd"] = 1e308
+    bad["baseline"]["initial_operating_cashflow_uplift"] = 1e308
+    with pytest.raises(ValueError, match="repaired_gross_cashflow"):
+        calculate(bad)
+
+    bad = copy.deepcopy(base)
+    bad["stress_scenarios"][0]["replacement_inflation"] = 1e308
+    with pytest.raises(ValueError, match="stressed replacement capex"):
+        calculate(bad)
