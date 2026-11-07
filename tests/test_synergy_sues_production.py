@@ -100,7 +100,7 @@ def test_grni_rejects_over_receipt_unreceived_invoice_and_price_variance():
 
 def test_bom_execution_reconciles_material_wip_and_finished_goods():
     journal = production_journal()
-    inventory = InventoryLedger("USD")
+    inventory = InventoryLedger("USD", entity_id="co1")
     receipt = inventory.receive("raw-receipt", "steel-lot", "steel", "factory",
         Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 1), "receipt:steel")
     inventory.post_to_journal("raw-receipt", journal, "raw", "grni", "co1", NOW)
@@ -130,7 +130,7 @@ def test_bom_execution_reconciles_material_wip_and_finished_goods():
 
 def test_production_preflight_prevents_partial_material_consumption():
     journal = production_journal()
-    inventory = InventoryLedger("USD")
+    inventory = InventoryLedger("USD", entity_id="co1")
     inventory.receive("r1", "lot-1", "steel", "factory",
         Quantity("3", "kg"), Money("30", "USD"), date(2026, 11, 1), "receipt:steel")
     before = inventory.summary()
@@ -152,7 +152,7 @@ def test_production_preflight_prevents_partial_material_consumption():
 
 def test_zero_cost_bom_is_rejected_before_inventory_mutation():
     journal = production_journal()
-    inventory = InventoryLedger("USD")
+    inventory = InventoryLedger("USD", entity_id="co1")
     inventory.receive("free-input", "free-lot", "sample", "factory",
         Quantity("2", "kg"), Money("0", "USD"), date(2026, 11, 1), "receipt:free")
     before = inventory.summary()
@@ -171,7 +171,7 @@ def test_zero_cost_bom_is_rejected_before_inventory_mutation():
 
 def test_evidence_backed_labor_and_energy_costs_are_capitalized_into_finished_goods():
     journal = production_journal()
-    inventory = InventoryLedger("USD")
+    inventory = InventoryLedger("USD", entity_id="co1")
     inventory.receive("raw-receipt-costed", "steel-lot-costed", "steel", "factory",
         Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 1), "receipt:steel-costed")
     inventory.post_to_journal("raw-receipt-costed", journal, "raw", "grni", "co1", NOW)
@@ -201,7 +201,7 @@ def test_evidence_backed_labor_and_energy_costs_are_capitalized_into_finished_go
 
 def test_production_cost_events_require_mapping_before_inventory_is_consumed():
     journal = production_journal()
-    inventory = InventoryLedger("USD")
+    inventory = InventoryLedger("USD", entity_id="co1")
     inventory.receive("raw-receipt-unmapped", "steel-lot-unmapped", "steel", "factory",
         Quantity("2", "kg"), Money("20", "USD"), date(2026, 11, 1), "receipt:steel-unmapped")
     before = inventory.summary()
@@ -303,7 +303,7 @@ def test_grni_invoice_cannot_clear_forged_journal_entry_with_receipt_id():
 
 def test_production_books_measured_partial_output_not_planned_output():
     journal = production_journal()
-    inventory = InventoryLedger("USD")
+    inventory = InventoryLedger("USD", entity_id="co1")
     inventory.receive("steel-partial", "steel-lot-partial", "steel", "factory",
         Quantity("20", "kg"), Money("200", "USD"), date(2026, 11, 1), "receipt:steel-partial")
     order = ProductionOrder(
@@ -330,7 +330,7 @@ def test_production_books_measured_partial_output_not_planned_output():
 def test_production_journal_failure_rolls_back_all_inventory_mutations():
     from synergy_sues.journal import JournalEntry, JournalLine, PostingSide
     journal = production_journal()
-    inventory = InventoryLedger("USD")
+    inventory = InventoryLedger("USD", entity_id="co1")
     inventory.receive("steel-rollback", "steel-lot-rollback", "steel", "factory",
         Quantity("5", "kg"), Money("50", "USD"), date(2026, 11, 1), "receipt:steel-rollback")
     conflicting_source = "production-consumption:production:batch-rollback:issue:steel"
