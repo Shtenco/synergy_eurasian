@@ -47,7 +47,10 @@ class AuthorizationDecision:
 class FederationAuthorizationPolicy:
     """Explicit exact-scope policy; deny-by-default with deny-rule precedence."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_request_age_seconds: int = 300) -> None:
+        if isinstance(max_request_age_seconds, bool) or not isinstance(max_request_age_seconds, int) or max_request_age_seconds <= 0:
+            raise ValueError("max_request_age_seconds must be a positive integer")
+        self.max_request_age_seconds = max_request_age_seconds
         self._rules: dict[str, AuthorizationRule] = {}
 
     def register_rule(self, rule: AuthorizationRule) -> None:
@@ -122,6 +125,9 @@ class FederationAuthorizationPolicy:
         if now.tzinfo is None or now.utcoffset() is None:
             raise ValueError("received_at must be timezone-aware")
         now = now.astimezone(timezone.utc)
+        request_age = (now - requested_at).total_seconds()
+        if request_age < 0 or request_age > self.max_request_age_seconds:
+            raise ValueError("authorization request is stale or not yet effective")
 
         matching = []
         for rule in self._rules.values():
@@ -161,6 +167,10 @@ class FederationAuthorizationPolicy:
                     raise ValueError("approval event ID collision with conflicting event hash")
                 continue
             seen_events[approval_event_id] = approval_event_hash
+            approval_time = _utc(approval.signed_at, "signed_at")
+            approval_age = (now - approval_time).total_seconds()
+            if approval_age < 0 or approval_age > self.max_request_age_seconds:
+                raise ValueError("authorization approval is stale or not yet effective")
             scope_matches = (
                 approval_payload["request_id"] == request_id
                 and approval_payload["request_event_id"] == request.event["event_id"]
@@ -170,7 +180,7 @@ class FederationAuthorizationPolicy:
                 and approval_payload["resource_id"] == resource_id
                 and approval_payload["requester_identity_id"] == requester.identity_id
                 and approver.tenant_id == requester.tenant_id
-                and _utc(approval.signed_at, "signed_at") >= requested_at
+                and approval_time >= requested_at
             )
             if not scope_matches:
                 continue
