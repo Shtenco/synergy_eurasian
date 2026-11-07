@@ -19,25 +19,63 @@ def load_config(path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _finite_number(value: Any, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field} must be a finite JSON number")
+    result = float(value)
+    if not np.isfinite(result):
+        raise ValueError(f"{field} must be finite")
+    return result
+
+
+def _strict_int(value: Any, field: str, minimum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"{field} must be an integer >= {minimum}")
+    return value
+
+
 def simulate_paths(cfg: dict[str, Any], shock_probability: float) -> dict[str, Any]:
+    if not isinstance(cfg, dict):
+        raise ValueError("Monte Carlo config must be an object")
+    shock_probability = _finite_number(shock_probability, "shock_probability")
     if not 0.0 <= shock_probability <= 1.0:
         raise ValueError("Shock probability must be between 0 and 1.")
-    rng = np.random.default_rng(int(cfg["random_seed"]))
-    n_paths = int(cfg["paths"])
-    years = int(cfg["horizon_years"])
+    rng = np.random.default_rng(_strict_int(cfg["random_seed"], "random_seed", 0))
+    n_paths = _strict_int(cfg["paths"], "paths", 1)
+    years = _strict_int(cfg["horizon_years"], "horizon_years", 1)
     start = cfg["starting_point"]
     uncertainty = cfg["annual_uncertainty"]
     shock = cfg["correlated_shock"]
     auto = cfg["automation_projects"]
     rd = cfg["rd_projects"]
     allocation = cfg["fund_allocation"]
-    if abs(sum(float(x) for x in allocation.values()) - 1.0) > 1e-9:
+    required_funds = {"productive_automation", "breakthrough_rd", "resilience_reserve"}
+    if not isinstance(allocation, dict) or set(allocation) != required_funds:
+        raise ValueError("Fund allocation must contain exactly the three modeled funds")
+    allocation_values = {
+        name: _finite_number(value, f"fund_allocation.{name}")
+        for name, value in allocation.items()
+    }
+    if any(not 0.0 <= value <= 1.0 for value in allocation_values.values()):
+        raise ValueError("Fund allocation shares must be between 0 and 1.")
+    if abs(sum(allocation_values.values()) - 1.0) > 1e-9:
         raise ValueError("Fund allocation shares must sum to 1.0.")
 
-    initial_reserve = (
-        float(start["productive_capital_usd"])
-        * float(start["initial_reserve_share_of_productive_capital"])
+    productive_capital = _finite_number(start["productive_capital_usd"], "productive_capital_usd")
+    reserve_share = _finite_number(
+        start["initial_reserve_share_of_productive_capital"],
+        "initial_reserve_share_of_productive_capital",
     )
+    gross0 = _finite_number(
+        start["gross_cashflow_after_opex_before_replacement_usd"],
+        "gross_cashflow_after_opex_before_replacement_usd",
+    )
+    replacement0 = _finite_number(start["replacement_capex_usd"], "replacement_capex_usd")
+    if productive_capital <= 0 or gross0 <= 0 or replacement0 <= 0:
+        raise ValueError("Starting productive capital, cashflow and replacement capex must be positive")
+    if not 0.0 <= reserve_share <= 1.0:
+        raise ValueError("Initial reserve share must be between 0 and 1")
+    initial_reserve = productive_capital * reserve_share
     final_reserves = np.zeros(n_paths)
     total_unfunded = np.zeros(n_paths)
     ever_exhausted = np.zeros(n_paths, dtype=bool)
@@ -45,8 +83,8 @@ def simulate_paths(cfg: dict[str, Any], shock_probability: float) -> dict[str, A
     final_year_residual = np.zeros(n_paths)
 
     for path in range(n_paths):
-        gross = float(start["gross_cashflow_after_opex_before_replacement_usd"])
-        replacement = float(start["replacement_capex_usd"])
+        gross = gross0
+        replacement = replacement0
         reserve = initial_reserve
         auto_cohorts: list[tuple[int, float, float]] = []
         rd_cohorts: list[tuple[int, float, int]] = []
@@ -67,8 +105,10 @@ def simulate_paths(cfg: dict[str, Any], shock_probability: float) -> dict[str, A
             if rng.random() < shock_probability:
                 growth = max(-0.50, growth + float(shock["cashflow_growth_additive_shock"]))
                 inflation = min(0.50, inflation + float(shock["replacement_inflation_additive_shock"]))
-            gross *= 1.0 + growth
-            replacement *= 1.0 + inflation
+            gross = _finite_number(gross * (1.0 + growth), f"path {path} year {year} gross cashflow")
+            replacement = _finite_number(
+                replacement * (1.0 + inflation), f"path {path} year {year} replacement capex"
+            )
 
             automation_return = sum(
                 amount * yield_rate
@@ -124,6 +164,7 @@ def simulate_paths(cfg: dict[str, Any], shock_probability: float) -> dict[str, A
     return {
         "shock_probability_per_year": shock_probability,
         "paths": n_paths,
+        "horizon_years": years,
         "reserve_exhaustion_probability": float(ever_exhausted.mean()),
         "reserve_end_usd_quantiles": quantiles(final_reserves),
         "cumulative_unfunded_gap_usd_quantiles": quantiles(total_unfunded),
@@ -132,13 +173,14 @@ def simulate_paths(cfg: dict[str, Any], shock_probability: float) -> dict[str, A
         "median_first_exhaustion_year_conditioned_on_exhaustion": (
             float(np.median(exhausted_years)) if len(exhausted_years) else None
         ),
-        "year_10_residual_usd_quantiles": quantiles(final_year_residual),
+        "final_year_residual_usd_quantiles": quantiles(final_year_residual),
+        "year_10_residual_usd_quantiles": quantiles(final_year_residual) if years == 10 else None,
     }
 
 
 def build_report(cfg: dict[str, Any]) -> dict[str, Any]:
     scenarios = [
-        simulate_paths(cfg, float(p))
+        simulate_paths(cfg, p)
         for p in cfg["correlated_shock"]["annual_probability_sensitivity"]
     ]
     return {
