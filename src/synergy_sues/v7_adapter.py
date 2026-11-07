@@ -250,14 +250,6 @@ def adapt_v7_realization_chain(
     settlement_rows, collection_rows, cost_rows = (
         list(settlements), list(collection_attributions), list(costs)
     )
-    report = evaluator(
-        output_rows, delivery_rows, allocation_rows, invoice_rows,
-        settlement_rows, collection_rows, cost_rows, as_of,
-    )
-    if not isinstance(report, dict):
-        raise ValueError("V7 realization evaluator must return a report object")
-    report_json = _canonical(report)
-
     def unique_index(rows: list[Any], field: str, label: str) -> dict[str, Any]:
         result: dict[str, Any] = {}
         for item in rows:
@@ -390,6 +382,17 @@ def adapt_v7_realization_chain(
         add(row, "COST_OBSERVATION", "cost_id", None, "evidence_id", ("evidence_id",), (),
             "enterprise_id", "project_id", "benefit_stream_id", "period",
             amount_field="amount", currency_field="currency", status_field="source_class")
+
+    # Do not invoke the evaluator until all source identities, references,
+    # dates and numeric contracts have passed validation. A failing input must
+    # not trigger evaluator-side effects before the bridge rejects it.
+    report = evaluator(
+        output_rows, delivery_rows, allocation_rows, invoice_rows,
+        settlement_rows, collection_rows, cost_rows, as_of,
+    )
+    if not isinstance(report, dict):
+        raise ValueError("V7 realization evaluator must return a report object")
+    report_json = _canonical(report)
 
     # Preserve the complete source set. The V7 evaluator owns as-of semantics;
     # dropping source rows here would make the bridge incomplete and non-replayable.
