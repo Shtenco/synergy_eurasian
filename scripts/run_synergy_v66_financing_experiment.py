@@ -168,6 +168,7 @@ def main() -> int:
             reserve_per_region=10.0,
             max_contribution_fraction=0.10,
             scheme="production_capacity_weighted",
+            minimum_post_contribution_cash=75.0,
         )
         liquidity_path = output.with_name("synergy_v66_liquidity_capped_reserve.json")
         liquidity_path.write_text(json.dumps(liquidity_report, indent=2, allow_nan=False), encoding="utf-8")
@@ -179,6 +180,7 @@ def main() -> int:
                 "mode": mode,
                 "reserve_per_region": liquidity_report["reserve_per_region"],
                 "max_contribution_fraction": liquidity_report["max_contribution_fraction"],
+                "minimum_post_contribution_cash": liquidity_report["minimum_post_contribution_cash"],
                 "service_level_mean": metrics["service_level"]["mean"],
                 "defaults_mean": metrics["defaulted_cells"]["mean"],
                 "reserve_paid_mean": metrics["regional_pool_guarantee_paid"]["mean"],
@@ -197,6 +199,7 @@ def main() -> int:
             contribution_scheme="equal_all_members",
             max_contribution_fraction=0.10,
             base_config={"initial_cash_by_cell": cash_fixture},
+            minimum_post_contribution_cash=75.0,
         )
         sizing_path = output.with_name("synergy_v66_regional_reserve_sizing.json")
         sizing_path.write_text(json.dumps(sizing, indent=2, allow_nan=False), encoding="utf-8")
@@ -232,6 +235,7 @@ def main() -> int:
                     cell_id: 0.5 for cell_id in cash_fixture
                 },
             },
+            minimum_post_contribution_cash=75.0,
         )
         federal_path = output.with_name("synergy_v66_federation_liquidity_cap.json")
         federal_path.write_text(json.dumps(federal_report, indent=2, allow_nan=False), encoding="utf-8")
