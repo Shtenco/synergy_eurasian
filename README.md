@@ -448,3 +448,7 @@ The credit ledger supports heterogeneous opening cash by cell. A deterministic w
 - [V6.6.4-G regional reserve adequacy and sizing sensitivity](docs/77_SYNERGY_V6_6_4G_REGIONAL_RESERVE_ADEQUACY.md)
 
 A paired reserve-size grid now reports guarantee utilization, exhaustion, remaining reserve, seller losses, service level and defaults against the opening-liquidity cost of funding the reserve. CI sweeps five synthetic reserve sizes per region under a 10% member contribution cap.
+
+- [V6.6.4-H federation-wide guarantee reserve](docs/78_SYNERGY_V6_6_4H_FEDERATION_GUARANTEE_RESERVE.md)
+
+A separately funded federation reserve now forms the second tier of the guarantee waterfall. Local reserves cover same-region claims first; the federation reserve can cover remaining local claims and eligible cross-region defaults. It is funded by explicit member cash contributions and included in consolidated cash conservation.
