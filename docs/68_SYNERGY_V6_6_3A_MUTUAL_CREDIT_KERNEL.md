@@ -25,14 +25,7 @@ Cash is never allowed to become negative. A bank draw is recorded explicitly and
 `authorize_production(cell, variable_cost, day)` authorizes only if the cell is not in default and cash plus undrawn approved bank credit covers the modeled variable cost. The cost is charged before output authorization. Rejection leaves cash and external payments unchanged.
 
 ### Supplier purchase
-`authorize_purchase(buyer, seller, amount, due_day, day, invoice_id)` authorizes only if:
-- buyer and (if internal) seller are known cells;
-- amount is positive and due date is not earlier than issue date;
-- invoice ID is unique;
-- buyer is not defaulted;
-- buyer's existing trade payables plus the new invoice do not exceed the buyer's trade-credit limit.
-
-Internal purchases create matching buyer AP and seller AR. An external supplier is represented by `seller=None`.
+`authorize_purchase(buyer, seller, amount, due_day, day, invoice_id)` applies a cash-first funding waterfall. Available cash is paid immediately; the uncovered remainder may be carried as trade credit if it fits the buyer's unused limit. If the remainder exceeds trade-credit capacity, an approved bank line may fund the full purchase for immediate payment. The request is rejected without spending any cash if neither path can fund it. Buyer and (if internal) seller must be known cells, the amount must be finite and positive, the due date cannot precede issue, the invoice ID must be unique, and neither party may be defaulted. Internal trade-credit balances create matching buyer AP and seller AR; cash-funded portions settle immediately. An external supplier is represented by `seller=None`.
 
 ### Settlement and default
 At each `process_day(day)`, due customer invoices are collected first, followed by payable invoices in stable due-date / invoice-ID order. A payable is settled only if cash plus unused approved bank credit covers the full remaining amount. Otherwise it remains outstanding; after the configured grace period the buyer defaults and is frozen from new production authorization and purchases.
