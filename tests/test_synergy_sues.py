@@ -984,3 +984,34 @@ def test_inventory_transfer_cannot_move_a_future_receipt_back_in_time():
             Quantity("1", "kg"), date(2026, 11, 6), "transfer:early")
     assert len(ledger.movements) == 1
     assert ledger.summary()["pools"][0]["location_id"] == "warehouse-a"
+
+
+
+def test_money_and_quantity_reject_binary_float_inputs():
+    with pytest.raises(ValueError, match="float"):
+        Money(0.1, "USD")
+    with pytest.raises(ValueError, match="float"):
+        Quantity(0.1, "kg")
+    with pytest.raises(ValueError, match="float"):
+        Money("1", "USD").scale(0.1)
+
+
+def test_calendar_date_contracts_reject_datetime_subclasses():
+    with pytest.raises(ValueError, match="calendar date"):
+        EconomicPeriod("bad", datetime(2026, 11, 1, tzinfo=timezone.utc), date(2026, 11, 30))
+    period = EconomicPeriod("good", date(2026, 11, 1), date(2026, 11, 30))
+    with pytest.raises(ValueError, match="calendar date"):
+        period.contains(datetime(2026, 11, 6, tzinfo=timezone.utc))
+
+
+def test_fifo_inventory_excludes_future_receipts_from_historical_availability_and_issue():
+    ledger = InventoryLedger("USD")
+    ledger.receive("future-r", "future-lot", "steel", "factory",
+        Quantity("5", "kg"), Money("50", "USD"), date(2026, 11, 7), "receipt:future")
+    assert ledger.available("steel", "factory", "kg", date(2026, 11, 6)) == Quantity("0", "kg")
+    assert ledger.available("steel", "factory", "kg") == Quantity("5", "kg")
+    before = ledger.summary()
+    with pytest.raises(ValueError, match="Insufficient inventory"):
+        ledger.issue("early-issue", "steel", "factory", Quantity("1", "kg"),
+            date(2026, 11, 6), "production:early")
+    assert ledger.summary() == before
