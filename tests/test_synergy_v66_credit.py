@@ -553,6 +553,9 @@ def test_regional_member_assessment_covers_local_residual_loss_pro_rata():
     assert invoice.member_assessment_paid == pytest.approx(10.0)
     assert invoice.written_off == pytest.approx(0.0)
     assert snap["regional_assessment_paid_by_region"]["WEST"] == pytest.approx(10.0)
+    assert snap["regional_assessment_attempt_count"] == 1
+    assert snap["regional_assessment_requested_by_region"]["WEST"] == pytest.approx(10.0)
+    assert snap["regional_assessment_eligible_capacity_by_region"]["WEST"] == pytest.approx(16.0)
     assert snap["trade_bad_debt_by_cell"]["WEST-AG1"] == pytest.approx(0.0)
     contributions = snap["regional_assessment_contributed_by_cell"]
     assert contributions["WEST-PR1"] == pytest.approx(0.0)
