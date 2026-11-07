@@ -503,21 +503,25 @@ class DurableEventStore:
             db.execute("BEGIN IMMEDIATE")
             try:
                 existing = db.execute(
-                    "SELECT event_hash FROM inbox WHERE consumer=? AND message_id=?",
+                    "SELECT event_hash,message_json FROM inbox WHERE consumer=? AND message_id=?",
                     (consumer, message_snapshot["message_id"]),
                 ).fetchone()
                 if existing is not None:
                     if existing["event_hash"] != digest:
                         raise ValueError("Inbox message ID reused with a different event hash")
+                    if existing["message_json"] == "{}":
+                        raise ValueError("Legacy inbox receipt lacks retained publisher proof; explicit reauthentication is required")
                     db.rollback()
                     return False
                 existing_event = db.execute(
-                    "SELECT message_id,event_hash FROM inbox WHERE consumer=? AND event_id=?",
+                    "SELECT message_id,event_hash,message_json FROM inbox WHERE consumer=? AND event_id=?",
                     (consumer, message_snapshot["event_id"]),
                 ).fetchone()
                 if existing_event is not None:
                     if existing_event["event_hash"] != digest:
                         raise ValueError("Inbox event ID reused with a different event hash")
+                    if existing_event["message_json"] == "{}":
+                        raise ValueError("Legacy inbox receipt lacks retained publisher proof; explicit reauthentication is required")
                     db.rollback()
                     return False
                 handler_message = json.loads(_canonical(message_snapshot))
