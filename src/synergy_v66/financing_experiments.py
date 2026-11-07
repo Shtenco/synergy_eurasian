@@ -677,6 +677,101 @@ def build_liquidity_capped_reserve_contributions(
     return result
 
 
+def allocate_federation_reserve_claims(
+    claims: Iterable[dict[str, Any]],
+    reserve_available: float,
+    rule: str = "first_come_first_served",
+) -> dict[str, Any]:
+    """Compare deterministic FCFS and simultaneous pro-rata allocation of finite reserve cash."""
+    claim_list = list(claims)
+    if rule not in {"first_come_first_served", "batch_pro_rata"}:
+        raise ValueError("unsupported federation reserve allocation rule")
+    if (
+        isinstance(reserve_available, bool) or not isinstance(reserve_available, (int, float))
+        or not math.isfinite(float(reserve_available)) or reserve_available < 0
+    ):
+        raise ValueError("reserve_available must be finite and non-negative")
+    seen: set[str] = set()
+    normalized = []
+    for claim in claim_list:
+        if not isinstance(claim, dict):
+            raise ValueError("each claim must be a mapping")
+        invoice_id = claim.get("invoice_id")
+        amount = claim.get("eligible_amount")
+        due_day = claim.get("due_day", 0)
+        if not isinstance(invoice_id, str) or not invoice_id.strip() or invoice_id in seen:
+            raise ValueError("claim invoice IDs must be non-empty and unique")
+        if not isinstance(due_day, int) or isinstance(due_day, bool) or due_day < 0:
+            raise ValueError("claim due_day must be a non-negative integer")
+        if (
+            isinstance(amount, bool) or not isinstance(amount, (int, float))
+            or not math.isfinite(float(amount)) or amount < 0
+        ):
+            raise ValueError("claim eligible_amount must be finite and non-negative")
+        seen.add(invoice_id)
+        normalized.append({
+            "invoice_id": invoice_id,
+            "due_day": due_day,
+            "eligible_amount": float(amount),
+        })
+
+    normalized.sort(key=lambda x: (x["due_day"], x["invoice_id"]))
+    total_claims = sum(item["eligible_amount"] for item in normalized)
+    reserve = float(reserve_available)
+    allocations = {item["invoice_id"]: 0.0 for item in normalized}
+    if rule == "first_come_first_served":
+        remaining = reserve
+        for item in normalized:
+            paid = min(item["eligible_amount"], remaining)
+            allocations[item["invoice_id"]] = paid
+            remaining -= paid
+    elif total_claims > EPS:
+        coverage = min(1.0, reserve / total_claims)
+        for item in normalized:
+            allocations[item["invoice_id"]] = item["eligible_amount"] * coverage
+
+    paid_total = sum(allocations.values())
+    return {
+        "rule": rule,
+        "reserve_opening": reserve,
+        "eligible_claim_total": total_claims,
+        "allocated_total": paid_total,
+        "reserve_remaining": max(0.0, reserve - paid_total),
+        "allocations_by_invoice": allocations,
+        "uncovered_by_invoice": {
+            item["invoice_id"]: item["eligible_amount"] - allocations[item["invoice_id"]]
+            for item in normalized
+        },
+        "allocation_order": [item["invoice_id"] for item in normalized],
+        "allocation_conservation_error": reserve - paid_total - max(0.0, reserve - paid_total),
+        "interpretation_guard": (
+            "Batch pro-rata assumes claims are presented simultaneously in one clearing batch; "
+            "FCFS uses due-day/invoice-ID order. Neither rule is a legal creditor-priority rule."
+        ),
+    }
+
+
+def compare_federation_reserve_allocation_rules(
+    claims: Iterable[dict[str, Any]],
+    reserve_available: float,
+) -> dict[str, Any]:
+    """Side-by-side pure allocation comparison on the exact same claim batch."""
+    claim_list = list(claims)
+    return {
+        "model_id": "SYNERGY_V6.6.4J_FEDERATION_RESERVE_ALLOCATION_RULES",
+        "claims": claim_list,
+        "reserve_available": reserve_available,
+        "reports_by_rule": {
+            rule: allocate_federation_reserve_claims(claim_list, reserve_available, rule)
+            for rule in ("first_come_first_served", "batch_pro_rata")
+        },
+        "interpretation_guard": (
+            "Allocation-rule comparison only. It does not change the current ledger, which remains "
+            "deterministic FCFS by due day and invoice ID."
+        ),
+    }
+
+
 def build_liquidity_capped_federation_contributions(
     reserve_total: float,
     initial_cash_by_cell: dict[str, float],
