@@ -59,3 +59,6 @@ The paired financing experiment enables the regional pool in mutual-credit and h
 The integrated credit ledger can hold a separate regional guarantee reserve. Its initial balance is transferred from member opening cash (equal contribution per cell in the current synthetic fixture); it is not minted or added on top of system cash. When a same-region buyer defaults on a trade-credit invoice, the reserve covers the seller up to the available reserve balance. Any uncovered residual is written off as seller trade bad debt. Buyer AP, seller AR and the corresponding regional net positions are reduced symmetrically.
 
 The reserve balance is included in consolidated cash conservation. A reserve payment moves cash from the reserve account to the seller; it does not create new system cash. Cross-region defaults are not covered by a local regional reserve. The reserve is a guarantee mechanism, distinct from the memorandum mutual-credit positions.
+
+
+A matured payable default currently triggers a cell-level cross-default: all other open payables of that buyer are resolved at the same time. The regional reserve is applied in due-date/invoice-ID order; once depleted, the remaining losses are written off to the respective sellers. This is a deliberately simple insolvency rule, not a jurisdiction-specific legal waterfall.
