@@ -224,3 +224,50 @@ def test_production_json_schema_validates_all_procurement_and_production_contrac
     ]
     for sample in samples:
         validator.validate(sample)
+
+
+def test_grni_rejects_invoice_before_supporting_physical_receipt():
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-temporal", "co1", "supplier", "steel",
+            Quantity("10", "kg"), Money("5", "USD"), date(2026, 11, 1), "po:temporal")
+    ])
+    matcher.record_receipt(GoodsReceipt(
+        "receipt-later", "po-temporal", Quantity("5", "kg"),
+        date(2026, 11, 10), "warehouse:receipt-later",
+    ))
+    with pytest.raises(ValueError, match="precedes the physical receipt"):
+        matcher.record_invoice(SupplierInvoiceLine(
+            "invoice-earlier", "po-temporal", Quantity("5", "kg"),
+            Money("25", "USD"), date(2026, 11, 5), "invoice:earlier",
+        ))
+    assert matcher.invoices == ()
+
+
+def test_grni_invoice_cannot_clear_forged_journal_entry_with_receipt_id():
+    from synergy_sues.journal import JournalEntry, JournalLine, PostingSide
+    journal = production_journal()
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-forged", "co1", "supplier", "steel",
+            Quantity("2", "kg"), Money("5", "USD"), date(2026, 11, 1), "po:forged")
+    ])
+    receipt = matcher.record_receipt(GoodsReceipt(
+        "receipt-forged", "po-forged", Quantity("2", "kg"),
+        date(2026, 11, 3), "warehouse:receipt-forged",
+    ))
+    invoice = matcher.record_invoice(SupplierInvoiceLine(
+        "invoice-forged", "po-forged", Quantity("2", "kg"),
+        Money("10", "USD"), date(2026, 11, 4), "supplier:invoice-forged",
+    ))
+    fake_id = f"grni:receipt:{receipt.receipt_id}"
+    journal.post(JournalEntry(
+        fake_id, receipt.received_date, NOW, "USD",
+        (
+            JournalLine(f"{fake_id}:dr", "raw", PostingSide.DEBIT,
+                Money("10", "USD"), Money("10", "USD"), "co1", "fake:source"),
+            JournalLine(f"{fake_id}:cr", "grni", PostingSide.CREDIT,
+                Money("10", "USD"), Money("10", "USD"), "co1", "fake:source"),
+        ),
+        "not-the-grni-receipt-event", "not-the-grni-receipt-idem", "Forged GRNI receipt",
+    ))
+    with pytest.raises(ValueError, match="cannot clear more GRNI"):
+        post_grni_invoice(invoice, matcher, journal, "grni", "ap", "co1", NOW)
