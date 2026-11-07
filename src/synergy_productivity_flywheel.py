@@ -48,8 +48,12 @@ def calculate(cfg: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Initial operating cashflow uplift must be greater than -100%")
     if not 0.0 <= replacement_saving < 1.0:
         raise ValueError("Replacement cost reduction must be in [0, 1)")
-    repaired_gross = gross0 * (1.0 + first_uplift)
-    repaired_replacement = replacement0 * (1.0 - replacement_saving)
+    repaired_gross = _finite_number(
+        gross0 * (1.0 + first_uplift), "repaired_gross_cashflow"
+    )
+    repaired_replacement = _finite_number(
+        replacement0 * (1.0 - replacement_saving), "repaired_replacement_capex"
+    )
     allocation = cfg["residual_fund_allocation"]
     if not isinstance(allocation, Mapping) or not allocation:
         raise ValueError("Residual fund allocation must be a non-empty object")
@@ -76,19 +80,22 @@ def calculate(cfg: dict[str, Any]) -> dict[str, Any]:
         extra = _finite_number(extra_raw, "additional_productivity_uplift")
         if extra < -1.0:
             raise ValueError("Additional productivity uplift cannot be below -100%")
-        gross = repaired_gross * (1.0 + extra)
-        residual = gross - repaired_replacement
+        gross = _finite_number(
+            repaired_gross * (1.0 + extra), "scenario gross_cashflow"
+        )
+        residual = _finite_number(gross - repaired_replacement, "scenario residual")
         positive_residual = max(0.0, residual)
         fund_allocations = {
-            name: positive_residual * share
+            name: _finite_number(positive_residual * share, f"fund allocation {name}")
             for name, share in allocation_values.items()
         }
+        coverage = _finite_number(gross / repaired_replacement, "scenario replacement coverage")
         scenarios.append({
             "additional_productivity_uplift": extra,
             "gross_cashflow_usd": gross,
             "replacement_capex_usd": repaired_replacement,
             "residual_after_replacement_usd": residual,
-            "replacement_coverage": gross / repaired_replacement,
+            "replacement_coverage": coverage,
             "fund_allocations_usd": fund_allocations,
             "unfunded_gap_usd": max(0.0, -residual),
         })
@@ -105,12 +112,21 @@ def calculate(cfg: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("Stress cashflow shock must be in [0, 1)")
         if replacement_inflation < -1.0:
             raise ValueError("Stress replacement inflation cannot be below -100%")
-        stressed_gross = repaired_gross * (1.0 - cash_shock)
-        stressed_replacement = repaired_replacement * (1.0 + replacement_inflation)
-        stressed_residual = stressed_gross - stressed_replacement
-        required_extra_uplift = (
-            stressed_replacement / (repaired_gross * (1.0 - cash_shock))
-        ) - 1.0
+        stressed_gross = _finite_number(
+            repaired_gross * (1.0 - cash_shock), "stressed gross cashflow"
+        )
+        stressed_replacement = _finite_number(
+            repaired_replacement * (1.0 + replacement_inflation),
+            "stressed replacement capex",
+        )
+        stressed_residual = _finite_number(
+            stressed_gross - stressed_replacement, "stressed residual"
+        )
+        required_extra_uplift = _finite_number(
+            (stressed_replacement / stressed_gross) - 1.0
+            if stressed_gross > 0 else float("inf"),
+            "required additional productivity uplift",
+        )
         # This is the extra uplift required on top of the first repair package,
         # before applying the cashflow shock.
         stress.append({
