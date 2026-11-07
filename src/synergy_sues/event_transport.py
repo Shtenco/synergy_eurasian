@@ -55,6 +55,41 @@ def _now(value: datetime | None) -> datetime:
     return result.astimezone(timezone.utc)
 
 
+def signed_event_authenticator(registry: Any, received_at: datetime | str | None = None):
+    """Build an inbox authenticator that binds an Ed25519 envelope to the exact message.
+
+    The signed envelope must contain the exact event represented by payload_json;
+    event_id and event_hash must also match the outer transport message.
+    """
+    verify = getattr(registry, "verify", None)
+    if not callable(verify):
+        raise ValueError("registry must expose a trusted verify() method")
+
+    def authenticate(message: Mapping[str, Any]) -> bool:
+        envelope = message.get("signed_envelope")
+        if not isinstance(envelope, Mapping):
+            return False
+        try:
+            payload_json = message.get("payload_json")
+            if not isinstance(payload_json, str):
+                return False
+            payload = json.loads(payload_json)
+            if not isinstance(payload, dict) or _canonical(payload) != payload_json:
+                return False
+            signed_event = envelope.get("event")
+            if not isinstance(signed_event, dict) or _canonical(signed_event) != _canonical(payload):
+                return False
+            if (payload.get("event_id") != message.get("event_id")
+                    or payload.get("event_hash") != message.get("event_hash")):
+                return False
+            verify(envelope, received_at=received_at)
+            return True
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return False
+
+    return authenticate
+
+
 def _unsigned(row: Mapping[str, Any], previous_hash: str) -> dict[str, Any]:
     return {
         "event_id": row["event_id"],
