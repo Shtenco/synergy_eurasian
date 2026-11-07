@@ -171,7 +171,7 @@ class AuthorityScopeEngine:
         if not decision.allowed:
             return ScopeEvaluation(False, "authorization_not_allowed", None, str(request_id))
         try:
-            if not isinstance(payload, dict):
+            if not isinstance(request.event, dict) or not isinstance(payload, dict):
                 raise ValueError("request payload must be an object")
             if request.event.get("event_type") != "AUTHORIZATION_REQUEST":
                 raise ValueError("expected AUTHORIZATION_REQUEST event")
