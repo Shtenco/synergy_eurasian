@@ -66,6 +66,12 @@ class JournalLine:
     def __post_init__(self) -> None:
         if not all((self.line_id, self.account_id, self.entity_id, self.source_ref)):
             raise ValueError("Journal line identity, entity and source are required")
+        if not isinstance(self.evidence_ids, tuple):
+            object.__setattr__(self, "evidence_ids", tuple(self.evidence_ids))
+        if any(not isinstance(item, str) or not item for item in self.evidence_ids):
+            raise ValueError("Journal evidence IDs must be non-empty strings")
+        if len(self.evidence_ids) != len(set(self.evidence_ids)):
+            raise ValueError("Journal evidence IDs must be unique")
         if not isinstance(self.side, PostingSide):
             object.__setattr__(self, "side", PostingSide(self.side))
         if self.amount.amount <= 0 or self.functional_amount.amount <= 0:
@@ -114,6 +120,7 @@ class Journal:
         self._accounts: dict[str, Account] = {}
         self._entries: dict[str, JournalEntry] = {}
         self._idempotency_keys: set[str] = set()
+        self._source_event_ids: set[str] = set()
         self._reversed: set[str] = set()
         self._fx_rates: dict[str, FXRate] = {}
 
@@ -158,6 +165,7 @@ class Journal:
         rows = tuple(entries)
         pending_entry_ids: set[str] = set()
         pending_idempotency: set[str] = set()
+        pending_source_events: set[str] = set()
         pending_reversed: set[str] = set()
 
         for entry in rows:
@@ -165,6 +173,8 @@ class Journal:
                 raise ValueError(f"Duplicate journal entry: {entry.entry_id}")
             if entry.idempotency_key in self._idempotency_keys or entry.idempotency_key in pending_idempotency:
                 raise ValueError(f"Duplicate idempotency key: {entry.idempotency_key}")
+            if entry.source_event_id in self._source_event_ids or entry.source_event_id in pending_source_events:
+                raise ValueError(f"Duplicate source_event_id: {entry.source_event_id}")
             if entry.functional_currency != self.functional_currency:
                 raise ValueError("Journal entry functional currency mismatch")
             line_ids = [line.line_id for line in entry.lines]
@@ -228,11 +238,13 @@ class Journal:
                 pending_reversed.add(entry.reversal_of)
             pending_entry_ids.add(entry.entry_id)
             pending_idempotency.add(entry.idempotency_key)
+            pending_source_events.add(entry.source_event_id)
 
         # Commit only after every candidate has passed validation.
         for entry in rows:
             self._entries[entry.entry_id] = entry
             self._idempotency_keys.add(entry.idempotency_key)
+            self._source_event_ids.add(entry.source_event_id)
             if entry.reversal_of is not None:
                 self._reversed.add(entry.reversal_of)
         return rows
