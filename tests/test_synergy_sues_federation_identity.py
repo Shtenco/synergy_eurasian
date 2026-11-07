@@ -178,3 +178,19 @@ def test_sqlite_registry_protects_trust_records_from_application_level_mutation(
         with pytest.raises(sqlite3.IntegrityError, match="immutable"):
             db.execute("DELETE FROM trust_identities WHERE identity_id='org:immutable'")
     assert registry.verify_audit()
+
+
+def test_historical_signature_remains_verifiable_after_later_key_revocation(tmp_path):
+    signed, registry = envelope(tmp_path)
+    registry.revoke_key("org:a", "k1", "2026-11-06T10:00:30+00:00")
+    with pytest.raises(ValueError, match="revoked"):
+        registry.verify(signed, "2026-11-06T10:01:00+00:00")
+    assert registry.verify_historical(
+        signed, verified_at="2026-11-06T10:01:00+00:00"
+    ).identity_id == "org:a"
+    after_revocation = sign_event(
+        event(tmp_path, "after-revocation.db"), "org:a", "tenant:a", "k1",
+        # The test helper's key is not exposed here; the existing signed envelope
+        # is deliberately kept as the only pre-revocation signature.
+        b"", "2026-11-06T10:00:45+00:00",
+    )
