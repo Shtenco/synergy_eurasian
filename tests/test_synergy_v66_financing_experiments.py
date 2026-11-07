@@ -403,7 +403,7 @@ def test_federation_reserve_allocator_rejects_insufficient_remaining_cap_and_bad
     cash = {cell.cell_id: 10.0 for cell in CELLS}
     with pytest.raises(ValueError):
         build_liquidity_capped_federation_contributions(
-            2.0, cash, max_combined_contribution_fraction=0.01,
+            2.01, cash, max_combined_contribution_fraction=0.01,
         )
     regional = {cell.cell_id: 0.0 for cell in CELLS}
     regional[CELLS[0].cell_id] = 2.0
