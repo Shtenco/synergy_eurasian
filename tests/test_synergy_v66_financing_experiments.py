@@ -526,3 +526,46 @@ def test_federation_allocator_rejects_existing_regional_contribution_below_cash_
             regional_contributions_by_cell=regional,
             minimum_post_contribution_cash=99.0,
         )
+
+
+def test_federation_reserve_fcfs_and_batch_pro_rata_rules_conserve_and_allocate_same_claim_batch():
+    from synergy_v66.financing_experiments import compare_federation_reserve_allocation_rules
+
+    claims = [
+        {"invoice_id": "C-3", "due_day": 2, "eligible_amount": 30.0},
+        {"invoice_id": "C-1", "due_day": 1, "eligible_amount": 10.0},
+        {"invoice_id": "C-2", "due_day": 1, "eligible_amount": 20.0},
+    ]
+    report = compare_federation_reserve_allocation_rules(claims, reserve_available=25.0)
+    fcfs = report["reports_by_rule"]["first_come_first_served"]
+    pro_rata = report["reports_by_rule"]["batch_pro_rata"]
+    assert fcfs["allocation_order"] == ["C-1", "C-2", "C-3"]
+    assert fcfs["allocations_by_invoice"] == {
+        "C-1": pytest.approx(10.0),
+        "C-2": pytest.approx(15.0),
+        "C-3": pytest.approx(0.0),
+    }
+    assert pro_rata["allocations_by_invoice"]["C-1"] == pytest.approx(25.0 / 60.0 * 10.0)
+    assert pro_rata["allocations_by_invoice"]["C-2"] == pytest.approx(25.0 / 60.0 * 20.0)
+    assert pro_rata["allocations_by_invoice"]["C-3"] == pytest.approx(25.0 / 60.0 * 30.0)
+    for row in (fcfs, pro_rata):
+        assert row["allocated_total"] <= 25.0 + 1e-9
+        assert row["reserve_remaining"] + row["allocated_total"] == pytest.approx(25.0)
+        assert sum(row["uncovered_by_invoice"].values()) == pytest.approx(60.0 - row["allocated_total"])
+        assert row["allocation_conservation_error"] == pytest.approx(0.0)
+
+
+def test_federation_reserve_batch_allocation_validates_claims_and_reserve():
+    from synergy_v66.financing_experiments import allocate_federation_reserve_claims
+
+    with pytest.raises(ValueError):
+        allocate_federation_reserve_claims([{"invoice_id": "X", "eligible_amount": float("nan")}], 10.0)
+    with pytest.raises(ValueError):
+        allocate_federation_reserve_claims(
+            [{"invoice_id": "X", "eligible_amount": 1.0}, {"invoice_id": "X", "eligible_amount": 2.0}],
+            10.0,
+        )
+    with pytest.raises(ValueError):
+        allocate_federation_reserve_claims([], -1.0)
+    with pytest.raises(ValueError):
+        allocate_federation_reserve_claims([], 10.0, rule="priority-by-favor")
