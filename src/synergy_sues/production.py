@@ -604,7 +604,7 @@ def post_grni_invoice(
         for receipt in matcher.receipts
         if receipt.po_line_id == invoice.po_line_id
         and receipt.receipt_id in matcher._journalized_receipts
-        and f"grni:receipt:{receipt.receipt_id}" in journal_entry_ids
+        and f"inventory:{receipt.receipt_id}" in journal_entry_ids
     ), Decimal("0"))
     posted_invoices = sum((
         row.amount.amount for row in matcher.invoices
