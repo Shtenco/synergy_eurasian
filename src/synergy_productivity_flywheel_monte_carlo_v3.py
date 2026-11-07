@@ -43,7 +43,10 @@ def simulate_paths(cfg: dict[str, Any], shock_probability: float) -> dict[str, A
     shock_probability = _finite_number(shock_probability, "shock_probability")
     if not 0.0 <= shock_probability <= 1.0:
         raise ValueError("Shock probability must be between 0 and 1.")
-    rng = np.random.default_rng(_strict_int(cfg["random_seed"], "random_seed", 0))
+    random_seed = _strict_int(cfg["random_seed"], "random_seed", 0)
+    if random_seed > 2**64 - 1:
+        raise ValueError("random_seed must fit an unsigned 64-bit integer")
+    rng = np.random.default_rng(random_seed)
     n_paths = _strict_int(cfg["paths"], "paths", 1)
     years = _strict_int(cfg["horizon_years"], "horizon_years", 1)
     start = cfg["starting_point"]
