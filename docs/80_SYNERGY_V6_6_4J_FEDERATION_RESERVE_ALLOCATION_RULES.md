@@ -49,3 +49,19 @@ FCFS protects earlier-due claims and creates a strong timing advantage. Batch pr
 The current ledger remains FCFS by due day and invoice ID. That is a reproducibility convention, not a recommendation for a real guarantee institution. A real design would need an explicit claim admission process, cut-off time, priority classes, dispute handling and appeal rights.
 
 All claim amounts are synthetic. This comparison does not estimate real default loss distributions or establish a preferred policy.
+
+
+## 4. CI smoke-fixture result
+
+CI used a 25-unit reserve against 60 units of eligible claims. Both allocation rules paid 25 units, left zero reserve and left 35 units uncovered.
+
+| Claim | Due day | Eligible loss | FCFS payout | Batch pro-rata payout |
+|---|---:|---:|---:|---:|
+| CLAIM-001 | 1 | 10.0 | 10.000 | 4.167 |
+| CLAIM-002 | 1 | 20.0 | 15.000 | 8.333 |
+| CLAIM-003 | 2 | 30.0 | 0.000 | 12.500 |
+| **Total** | | **60.0** | **25.000** | **25.000** |
+
+The sample makes the distributional difference explicit: FCFS fully protects the earliest invoice, while batch pro-rata shares the shortfall across all three claims. Neither changes aggregate reserve capacity or total uncovered loss. The difference is who bears the loss and when.
+
+The CLI report was generated in the successful CI run on code commit `6348e85a80e3c46da9770daae29dfe3e6a72bf6a` (154 tests passed). Later commits add member operating-cash floor enforcement; they do not alter this pure allocation function.
