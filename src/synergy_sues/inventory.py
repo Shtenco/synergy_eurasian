@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from copy import deepcopy
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Iterable
@@ -416,6 +416,8 @@ class InventoryLedger:
         if movement_id in self._journal_posted_movements:
             raise ValueError(f"Inventory movement already journalized: {movement_id}")
         _aware(recorded_at, "recorded_at")
+        if movement.movement_date > recorded_at.astimezone(timezone.utc).date():
+            raise ValueError("Inventory movement cannot be journalized before its effective date")
         if journal.functional_currency != self.functional_currency:
             raise ValueError("Inventory and journal functional currencies must match")
         accounts = {row.account_id: row for row in journal.accounts}
