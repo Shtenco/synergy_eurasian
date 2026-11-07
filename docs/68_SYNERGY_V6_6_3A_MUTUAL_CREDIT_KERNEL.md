@@ -30,7 +30,7 @@ Cash is never allowed to become negative. A bank draw is recorded explicitly and
 ### Settlement and default
 At each `process_day(day)`, due customer invoices are collected first, followed by payable invoices in stable due-date / invoice-ID order. A payable is settled only if cash plus unused approved bank credit covers the full remaining amount. Otherwise it remains outstanding; after the configured grace period the buyer defaults and is frozen from new production authorization and purchases.
 
-Partial settlement, interest, collateral, guarantees, legal recovery, priority classes, supplier-side contagion and automatic debt-service sweeps are intentionally not yet modeled. Manual principal repayment is supported.
+Interest, collateral, guarantees, legal recovery, priority classes, supplier-side contagion and automatic debt-service sweeps are intentionally not yet modeled. V6.6.3-C adds partial payable settlement and seller-side receivable exposure limits on top of this kernel. Manual bank principal repayment is supported.
 
 ## 4. Accounting invariants
 
