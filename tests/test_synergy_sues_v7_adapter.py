@@ -168,7 +168,7 @@ class Collection:
     attribution_id: str = "collection-1"
     settlement_id: str = "settlement-1"
     invoice_allocation_id: str = "alloc-1"
-    amount: float = 400.0
+    amount: str = "400"
     currency: str = "USD"
     source_ref: str = "remittance:1"
 
