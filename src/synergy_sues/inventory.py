@@ -99,12 +99,16 @@ class InventoryMovement:
 class InventoryLedger:
     """FIFO inventory quantity/value subledger; costs are stored in entity functional currency."""
 
-    def __init__(self, functional_currency: str) -> None:
+    def __init__(self, functional_currency: str, entity_id: str | None = None) -> None:
         self.functional_currency = Money("0", functional_currency).currency
+        if entity_id is not None and (not isinstance(entity_id, str) or not entity_id.strip()):
+            raise ValueError("inventory ledger entity_id must be a non-empty string")
+        self.entity_id = entity_id
         self._lots: dict[tuple[str, str], list[_InventoryLot]] = {}
         self._pool_units: dict[tuple[str, str], str] = {}
         self._lot_ids: set[str] = set()
         self._movements: dict[str, InventoryMovement] = {}
+        self._journal_posted_movements: set[str] = set()
 
     @property
     def movements(self) -> tuple[InventoryMovement, ...]:
@@ -112,10 +116,26 @@ class InventoryLedger:
 
     def _snapshot(self):
         """Capture the complete in-memory subledger state for a compound operation."""
-        return deepcopy((self._lots, self._pool_units, self._lot_ids, self._movements))
+        return deepcopy((
+            self._lots, self._pool_units, self._lot_ids, self._movements,
+            self._journal_posted_movements,
+        ))
 
     def _restore(self, snapshot) -> None:
-        self._lots, self._pool_units, self._lot_ids, self._movements = deepcopy(snapshot)
+        (
+            self._lots, self._pool_units, self._lot_ids, self._movements,
+            self._journal_posted_movements,
+        ) = deepcopy(snapshot)
+
+    def _mark_journal_posted(self, movement_ids: Iterable[str], entity_id: str) -> None:
+        if self.entity_id is None or self.entity_id != entity_id:
+            raise ValueError("Inventory ledger entity ownership mismatch")
+        ids = tuple(movement_ids)
+        if any(movement_id not in self._movements for movement_id in ids):
+            raise ValueError("Cannot journalize an unknown inventory movement")
+        if any(movement_id in self._journal_posted_movements for movement_id in ids):
+            raise ValueError("Inventory movement has already been journalized")
+        self._journal_posted_movements.update(ids)
 
     def _check_pool(self, item_id: str, location_id: str, unit: str) -> tuple[str, str]:
         key = (item_id, location_id)
@@ -395,6 +415,12 @@ class InventoryLedger:
             raise ValueError(f"Unknown inventory movement: {movement_id}")
         if movement.movement_type in {InventoryMovementType.TRANSFER_IN, InventoryMovementType.TRANSFER_OUT}:
             return None
+        if self.entity_id is None:
+            raise ValueError("Inventory ledger must be bound to an entity before GL posting")
+        if entity_id != self.entity_id or journal.entity_id not in (None, self.entity_id):
+            raise ValueError("Inventory ledger, journal and posting entity ownership mismatch")
+        if movement_id in self._journal_posted_movements:
+            raise ValueError(f"Inventory movement already journalized: {movement_id}")
         _aware(recorded_at, "recorded_at")
         if journal.functional_currency != self.functional_currency:
             raise ValueError("Inventory and journal functional currencies must match")
@@ -422,9 +448,11 @@ class InventoryLedger:
                 JournalLine(f"{entry_id}:cr", inventory_account_id, PostingSide.CREDIT,
                     money, money, entity_id, movement.source_ref),
             )
-        return journal.post(JournalEntry(
+        posted = journal.post(JournalEntry(
             entry_id, movement.movement_date, recorded_at, journal.functional_currency,
             lines, f"inventory-movement:{movement.movement_id}",
             f"inventory-movement:{movement.movement_id}",
             f"Post inventory {movement.movement_type.value.lower()} {movement.movement_id}",
         ))
+        self._journal_posted_movements.add(movement_id)
+        return posted
