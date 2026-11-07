@@ -651,3 +651,50 @@ def test_federation_liquidity_capped_experiment_enforces_absolute_member_cash_fl
     for mode in ("mutual_credit", "hybrid"):
         for row in report["comparison"]["observations"][mode]:
             assert row["cash_conservation_error"] < 1e-6
+
+
+def test_explicit_claim_class_priority_precedes_due_date_and_shares_within_class():
+    from synergy_v66.financing_experiments import compare_federation_reserve_allocation_rules
+
+    claims = [
+        {"invoice_id": "ORDINARY-EARLY", "due_day": 0, "eligible_amount": 30.0, "claim_class": "ordinary"},
+        {"invoice_id": "ESSENTIAL-LATE", "due_day": 2, "eligible_amount": 10.0, "claim_class": "essential"},
+        {"invoice_id": "ESSENTIAL-EARLY", "due_day": 1, "eligible_amount": 20.0, "claim_class": "essential"},
+    ]
+    report = compare_federation_reserve_allocation_rules(
+        claims, reserve_available=25.0, priority_order=["essential", "ordinary"],
+    )
+    rows = report["reports_by_rule"]
+    fcfs = rows["first_come_first_served"]["allocations_by_invoice"]
+    priority_fcfs = rows["priority_class_then_first_come_first_served"]["allocations_by_invoice"]
+    priority_pro_rata = rows["priority_class_then_batch_pro_rata"]["allocations_by_invoice"]
+    assert fcfs["ORDINARY-EARLY"] == pytest.approx(25.0)
+    assert priority_fcfs["ESSENTIAL-EARLY"] == pytest.approx(20.0)
+    assert priority_fcfs["ESSENTIAL-LATE"] == pytest.approx(5.0)
+    assert priority_fcfs["ORDINARY-EARLY"] == pytest.approx(0.0)
+    assert priority_pro_rata["ESSENTIAL-EARLY"] == pytest.approx(25.0 * 20.0 / 30.0)
+    assert priority_pro_rata["ESSENTIAL-LATE"] == pytest.approx(25.0 * 10.0 / 30.0)
+    assert priority_pro_rata["ORDINARY-EARLY"] == pytest.approx(0.0)
+    for allocation in rows.values():
+        assert allocation["allocated_total"] == pytest.approx(25.0)
+        assert allocation["reserve_remaining"] == pytest.approx(0.0)
+        assert allocation["allocation_conservation_error"] == pytest.approx(0.0)
+
+
+def test_claim_priority_order_must_list_every_class_once():
+    from synergy_v66.financing_experiments import allocate_federation_reserve_claims
+
+    claims = [
+        {"invoice_id": "A", "eligible_amount": 2.0, "claim_class": "essential"},
+        {"invoice_id": "B", "eligible_amount": 3.0, "claim_class": "ordinary"},
+    ]
+    with pytest.raises(ValueError):
+        allocate_federation_reserve_claims(
+            claims, 3.0, "priority_class_then_batch_pro_rata",
+            priority_order=["essential"],
+        )
+    with pytest.raises(ValueError):
+        allocate_federation_reserve_claims(
+            claims, 3.0, "priority_class_then_first_come_first_served",
+            priority_order=["essential", "essential"],
+        )
