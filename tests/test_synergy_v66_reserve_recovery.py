@@ -129,7 +129,7 @@ def test_stale_recovery_plan_is_rejected_before_any_transfer():
 
 
 def test_unified_reserve_replenishment_is_atomic_when_one_member_breaches_floor():
-    ledger = CreditLedger(initial_cash_per_cell=20.0, minimum_post_contribution_cash=10.0)
+    ledger = CreditLedger(initial_cash_per_cell=20.0, minimum_post_contribution_cash=10.0, reserve_recovery_contribution_fraction=1.0)
     ledger.process_day(0)
     regional = _zero_map()
     federation = _zero_map()
@@ -237,3 +237,34 @@ def test_legacy_federation_api_cannot_bypass_period_cap_with_new_ids():
     assert after["cash_by_cell"] == before["cash_by_cell"]
     assert after["federation_pool_reserve_balance"] == before["federation_pool_reserve_balance"]
     assert after["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_ledger_rejects_caller_supplied_period_cap_above_its_own_policy():
+    ledger = CreditLedger(initial_cash_per_cell=100.0, reserve_recovery_contribution_fraction=0.10)
+    ledger.process_day(0)
+    regional = _zero_map()
+    federation = _zero_map()
+    regional["WEST-PR1"] = 1.0
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match="exceeds ledger policy cap"):
+        ledger.replenish_reserves(
+            regional,
+            federation,
+            day=0,
+            replenishment_id="INFLATED-CAP",
+            recovery_period_id="day-window-0",
+            contribution_limit_by_cell={cell.cell_id: 100.0 for cell in CELLS},
+        )
+    assert ledger.snapshot()["cash_by_cell"] == before["cash_by_cell"]
+    assert ledger.snapshot()["regional_pool_reserve_by_region"] == before["regional_pool_reserve_by_region"]
+
+
+def test_planner_cannot_raise_ledger_owned_period_cap():
+    ledger = CreditLedger(initial_cash_per_cell=100.0, reserve_recovery_contribution_fraction=0.10)
+    with pytest.raises(ValueError, match="cannot exceed the ledger policy cap"):
+        plan_reserve_recovery(
+            ledger,
+            target_regional_by_region={"WEST": 5.0, "EAST": 5.0},
+            target_federation=0.0,
+            contribution_fraction_per_period=0.50,
+        )
