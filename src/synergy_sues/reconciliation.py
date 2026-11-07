@@ -6,7 +6,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Iterable
 
-from .contracts import EconomicPeriod, Money
+from .contracts import EconomicPeriod, Money, _calendar_date
 from .journal import AccountType, Journal, NormalBalance, PostingSide
 
 
@@ -21,8 +21,7 @@ class BankStatementLine:
     def __post_init__(self) -> None:
         if not all((self.line_id, self.bank_reference, self.source_ref)):
             raise ValueError("Bank statement line identity and provenance are required")
-        if not isinstance(self.booked_date, date):
-            raise ValueError("booked_date must be a date")
+        _calendar_date(self.booked_date, "bank booked_date")
         if self.signed_amount.amount == 0:
             raise ValueError("Bank statement movement cannot be zero")
 
