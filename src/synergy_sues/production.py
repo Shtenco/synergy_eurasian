@@ -10,7 +10,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Iterable
 
-from .contracts import Money, Quantity, _aware
+from .contracts import Money, Quantity, _aware, _calendar_date
 from .inventory import InventoryLedger, InventoryMovement
 from .journal import (
     AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide,
@@ -33,8 +33,7 @@ class PurchaseOrderLine:
             raise ValueError("PO line identity, entity, supplier, item and source are required")
         if self.ordered_quantity.amount <= 0 or self.unit_price.amount < 0:
             raise ValueError("PO quantity must be positive and unit price non-negative")
-        if not isinstance(self.order_date, date):
-            raise ValueError("PO order_date must be a date")
+        _calendar_date(self.order_date, "PO order_date")
 
 
 @dataclass(frozen=True)
@@ -48,8 +47,9 @@ class GoodsReceipt:
     def __post_init__(self) -> None:
         if not all((self.receipt_id, self.po_line_id, self.evidence_ref)):
             raise ValueError("Goods receipt identity and evidence are required")
-        if self.received_quantity.amount <= 0 or not isinstance(self.received_date, date):
-            raise ValueError("Goods receipt requires positive quantity and valid date")
+        if self.received_quantity.amount <= 0:
+            raise ValueError("Goods receipt requires positive quantity")
+        _calendar_date(self.received_date, "goods receipt date")
 
 
 @dataclass(frozen=True)
@@ -66,8 +66,7 @@ class SupplierInvoiceLine:
             raise ValueError("Invoice line identity and source are required")
         if self.invoiced_quantity.amount <= 0 or self.amount.amount <= 0:
             raise ValueError("Invoice quantity and amount must be positive")
-        if not isinstance(self.invoice_date, date):
-            raise ValueError("Invoice date must be a date")
+        _calendar_date(self.invoice_date, "supplier invoice date")
 
 
 class GRNIMatcher:
@@ -122,12 +121,25 @@ class GRNIMatcher:
             raise ValueError("Invoice currency differs from PO currency")
         if row.invoice_date < po.order_date:
             raise ValueError("Supplier invoice cannot predate purchase order")
-        received = sum((x.received_quantity.amount for x in self._receipts.values()
-                        if x.po_line_id == row.po_line_id), Decimal("0"))
+        receipts_for_po = [
+            x for x in self._receipts.values() if x.po_line_id == row.po_line_id
+        ]
+        received = sum((x.received_quantity.amount for x in receipts_for_po), Decimal("0"))
         already_invoiced = sum((x.invoiced_quantity.amount for x in self._invoices.values()
                                 if x.po_line_id == row.po_line_id), Decimal("0"))
         if already_invoiced + row.invoiced_quantity.amount > received:
             raise ValueError("Invoice quantity exceeds physically received, not-yet-invoiced quantity")
+        # An invoice cannot recognize goods received only after its invoice date.
+        received_by_invoice_date = sum((
+            x.received_quantity.amount for x in receipts_for_po
+            if x.received_date <= row.invoice_date
+        ), Decimal("0"))
+        previously_invoiced_by_date = sum((
+            x.invoiced_quantity.amount for x in self._invoices.values()
+            if x.po_line_id == row.po_line_id and x.invoice_date <= row.invoice_date
+        ), Decimal("0"))
+        if previously_invoiced_by_date + row.invoiced_quantity.amount > received_by_invoice_date:
+            raise ValueError("Invoice date precedes the physical receipt supporting its quantity")
         expected = po.unit_price.amount * row.invoiced_quantity.amount
         if row.amount.amount != expected:
             raise ValueError("Invoice amount does not match PO price; route variance for approval")
@@ -188,8 +200,7 @@ class ProductionOrder:
             object.__setattr__(self, "components", tuple(self.components))
         if len({x.item_id for x in self.components}) != len(self.components):
             raise ValueError("BOM item IDs must be unique; aggregate duplicate components explicitly")
-        if not isinstance(self.planned_date, date):
-            raise ValueError("Production planned_date must be a date")
+        _calendar_date(self.planned_date, "production planned_date")
 
 
 class ProductionCostType(str, Enum):
@@ -218,8 +229,9 @@ class ProductionCostEvent:
             raise ValueError("Production cost event identity and evidence are required")
         if not isinstance(self.cost_type, ProductionCostType):
             object.__setattr__(self, "cost_type", ProductionCostType(self.cost_type))
-        if self.amount.amount <= 0 or not isinstance(self.effective_date, date):
-            raise ValueError("Production cost event requires positive amount and valid date")
+        if self.amount.amount <= 0:
+            raise ValueError("Production cost event requires positive amount")
+        _calendar_date(self.effective_date, "production cost effective_date")
 
 
 @dataclass(frozen=True)
@@ -328,7 +340,9 @@ def execute_production_order(
             raise ValueError(
                 f"Insufficient component {component.item_id}: required {quantity.amount}, available {available.amount}"
             )
-        previewed_cost += inventory.preview_issue_cost(component.item_id, order.location_id, quantity).amount
+        previewed_cost += inventory.preview_issue_cost(
+            component.item_id, order.location_id, quantity, order.planned_date
+        ).amount
         required.append((component, quantity))
     # Validate output pool units and zero-cost policy before consuming any input.
     inventory.available(order.product_id, order.location_id, order.output_quantity.unit)
