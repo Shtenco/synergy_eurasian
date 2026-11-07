@@ -55,3 +55,17 @@ Neither rule is proven fair or optimal. A more defensible design may use a hybri
 - explicit public-benefit or solidarity subsidies for support infrastructure and smaller members.
 
 Those alternatives require observable and independently auditable data, governance rules, appeals, and protection against risk-model gaming. This increment does not infer real member risk or prescribe actual contributions.
+
+
+## 5. CI smoke-sample observations
+
+A three-seed, 20-day severe-regime sample was run with 20 synthetic currency units of reserve per region. Both allocation schemes fund the same total reserve. The table reports mean outcomes across the three seeds.
+
+| Contribution rule | Financing mode | Service level | Defaults per run | Guarantee paid | Seller trade bad debt | Reserve remaining |
+|---|---|---:|---:|---:|---:|---:|
+| Equal all-members | Mutual credit | 69.979% | 1.00 | 5.113 | 6.828 | 34.887 |
+| Capacity-weighted | Mutual credit | 70.035% | 1.00 | 5.721 | 7.010 | 34.279 |
+| Equal all-members | Hybrid | 70.535% | 1.00 | 12.742 | 7.873 | 27.258 |
+| Capacity-weighted | Hybrid | 70.535% | 1.00 | 13.533 | 7.873 | 26.467 |
+
+The smoke run is not a fairness verdict. It shows that changing who contributes changes member liquidity and can change reserve utilization and downstream losses even when total reserve capital is fixed. A larger paired sample is needed before drawing conclusions. The first displayed service-level value should be read from the CI log rather than inferred; the raw CI observation is 0.6997929 for equal mutual-credit and 0.7003472 for capacity-weighted mutual-credit.
