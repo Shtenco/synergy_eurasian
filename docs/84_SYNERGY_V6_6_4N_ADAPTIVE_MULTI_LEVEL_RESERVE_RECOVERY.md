@@ -1,6 +1,6 @@
 # SYNERGY V6.6.4-N — adaptive multi-level reserve recovery
 
-**Status:** additive research implementation; GitHub Actions validation pending for the implementation commit.  
+**Status:** additive research implementation; the V6.6.4-N baseline passed 186 pytest tests on commit `9db42c867f713db2368ca90f20facf8385e64e6f`. Later V6.6.4-O stress-hook changes require fresh full CI on the current PR head.  
 **Purpose:** plan and execute repeated member-funded restoration of regional and federation guarantee reserves without creating cash or bypassing member liquidity limits.
 
 ## 1. Scope
@@ -58,7 +58,7 @@ This release accepts explicit targets. A stress-quantile / CVaR target-calibrati
 
 The ledger requires the canonical ledger-derived period ID and the complete per-member period ceiling map; direct callers cannot omit the cumulative-cap control or choose a fresh arbitrary period label. The ledger then debits member cash and credits the matching regional and federation reserve accounts. Regional contributions can only be credited to the contributor's own region. Each leg is recorded as an audit event.
 
-The older `replenish_federation_reserve(...)` API remains available for compatibility with V6.6.4-K.
+The older `replenish_federation_reserve(...)` API remains available for compatibility with V6.6.4-K and delegates to the same ledger-owned 30-day cumulative contribution cap.
 
 ## 5. Accounting invariants
 
