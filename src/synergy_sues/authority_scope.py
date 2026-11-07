@@ -241,12 +241,22 @@ class AuthorityScopeEngine:
         request_id: str,
         settlement_ref: str,
         now: datetime | None = None,
+        *,
+        settlement_verifier: object | None = None,
     ) -> None:
-        """Release a reservation in the same transaction that records its ledger settlement."""
+        """Release only after a trusted verifier finds the exact settlement in this transaction.
+
+        The verifier receives (connection, request_id, settlement_ref, scope_id,
+        tenant_id, currency, amount) and must query the authoritative settlement
+        ledger on this same connection. Returning anything other than literal
+        True keeps the reservation active.
+        """
         if not isinstance(request_id, str) or not request_id.strip():
             raise ValueError("request_id is required to release a scope reservation")
         if not isinstance(settlement_ref, str) or not settlement_ref.strip():
             raise ValueError("settlement_ref is required to release a scope reservation")
+        if not callable(settlement_verifier):
+            raise ValueError("a trusted same-transaction settlement_verifier is required")
         if now is None:
             instant = datetime.now(timezone.utc)
         elif isinstance(now, datetime) and now.tzinfo is not None and now.utcoffset() is not None:
@@ -261,6 +271,11 @@ class AuthorityScopeEngine:
         if not rows or rows[-1][0] != "RESERVED":
             raise ValueError("only an active scope reservation can be released")
         latest = rows[-1]
+        if settlement_verifier(
+            connection, request_id, settlement_ref, latest[1], latest[2],
+            latest[4], latest[5],
+        ) is not True:
+            raise ValueError("settlement evidence does not match the active scope reservation")
         connection.execute(
             """INSERT INTO authority_scope_reservation_events
             (event_id,request_id,event_type,scope_id,tenant_id,period_key,currency,
