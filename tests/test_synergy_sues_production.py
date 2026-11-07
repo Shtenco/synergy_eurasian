@@ -11,7 +11,7 @@ from synergy_sues.inventory import InventoryLedger
 from synergy_sues.journal import Account, AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide
 from synergy_sues.production import (
     BOMComponent, GRNIMatcher, GoodsReceipt, ProductionOrder,
-    ProductionCompletionEvidence, ProductionCostEvent, ProductionCostType, PurchaseOrderLine, SupplierInvoiceLine, execute_production_order,
+    ProductionCompletionEvidence, ProductionInputConsumption, ProductionCostEvent, ProductionCostType, PurchaseOrderLine, SupplierInvoiceLine, execute_production_order,
     post_grni_invoice, post_grni_receipt,
 )
 
@@ -36,9 +36,14 @@ def production_journal():
 
 
 
-def completion(order_id, amount):
+def completion(order_id, amount, inputs):
+    measured_inputs = tuple(
+        ProductionInputConsumption(item_id, Quantity(quantity, unit), evidence_ref)
+        for item_id, (quantity, unit, evidence_ref) in inputs.items()
+    )
     return ProductionCompletionEvidence(
-        order_id, Quantity(amount, "unit"), NOW, f"evidence:completion:{order_id}"
+        order_id, Quantity(amount, "unit"), NOW,
+        f"evidence:completion:{order_id}", measured_inputs,
     )
 
 
@@ -100,7 +105,7 @@ def test_bom_execution_reconciles_material_wip_and_finished_goods():
         date(2026, 11, 6), "production-order:batch-1",
     )
     result = execute_production_order(order, inventory, journal,
-        "raw", "wip", "finished", NOW, completion=completion("batch-1", "2"))
+        "raw", "wip", "finished", NOW, completion=completion("batch-1", "2", {"steel": ("4", "kg", "meter:steel-batch-1")}))
 
     assert result.direct_material_cost == Money("40", "USD")
     assert result.output_movement.quantity == Quantity("2", "unit")
@@ -113,7 +118,7 @@ def test_bom_execution_reconciles_material_wip_and_finished_goods():
     assert journal.trial_balance()["balanced"]
     assert journal.trial_balance()["total_debits"] == journal.trial_balance()["total_credits"] == "180"
     with pytest.raises(ValueError, match="already executed"):
-        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, completion=completion("batch-1", "2"))
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, completion=completion("batch-1", "2", {"steel": ("4", "kg", "meter:steel-batch-1")}))
 
 
 def test_production_preflight_prevents_partial_material_consumption():
@@ -131,7 +136,7 @@ def test_production_preflight_prevents_partial_material_consumption():
         date(2026, 11, 6), "production-order:short",
     )
     with pytest.raises(ValueError, match="Insufficient component copper"):
-        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, completion=completion("batch-short", "2"))
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, completion=completion("batch-short", "2", {"steel": ("2", "kg", "meter:steel-short"), "copper": ("2", "kg", "meter:copper-short")}))
     assert inventory.summary() == before
     assert journal.entries == ()
 
@@ -149,7 +154,7 @@ def test_zero_cost_bom_is_rejected_before_inventory_mutation():
         date(2026, 11, 6), "production-order:free",
     )
     with pytest.raises(ValueError, match="Zero-cost production batch"):
-        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, completion=completion("batch-free", "1"))
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, completion=completion("batch-free", "1", {"sample": ("1", "kg", "meter:sample-free")}))
     assert inventory.summary() == before
     assert journal.entries == ()
 
@@ -175,7 +180,7 @@ def test_evidence_backed_labor_and_energy_costs_are_capitalized_into_finished_go
     result = execute_production_order(
         order, inventory, journal, "raw", "wip", "finished", NOW,
         costs, {ProductionCostType.LABOR: "labor_payable", ProductionCostType.ENERGY: "energy_payable"},
-        completion=completion("batch-costed", "2"),
+        completion=completion("batch-costed", "2", {"steel": ("4", "kg", "meter:steel-costed")}),
     )
     assert result.direct_material_cost == Money("40", "USD")
     assert result.conversion_cost == Money("30", "USD")
@@ -200,7 +205,7 @@ def test_production_cost_events_require_mapping_before_inventory_is_consumed():
         Money("5", "USD"), date(2026, 11, 6), "payroll:unmapped", "evidence:unmapped")
     with pytest.raises(ValueError, match="Missing credit account mapping"):
         execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, (event,), {},
-        completion=completion("batch-unmapped", "1"))
+        completion=completion("batch-unmapped", "1", {"steel": ("1", "kg", "meter:steel-unmapped")}))
     assert inventory.summary() == before
     assert journal.entries == ()
 
@@ -228,7 +233,9 @@ def test_production_json_schema_validates_all_procurement_and_production_contrac
          "amount": {"amount": "5", "currency": "USD"}, "effective_date": "2026-11-06",
          "source_ref": "payroll:1", "evidence_ref": "timesheet:1"},
         {"order_id": "batch", "output_quantity": {"amount": "1", "unit": "unit"},
-         "completed_at": "2026-11-06T12:00:00Z", "evidence_ref": "production:completion:1"},
+         "completed_at": "2026-11-06T12:00:00Z", "evidence_ref": "production:completion:1",
+         "input_consumption": [{"item_id": "steel", "quantity": {"amount": "2", "unit": "kg"},
+             "evidence_ref": "meter:steel:1"}]},
         {"order_id": "batch", "direct_material_cost": {"amount": "10", "currency": "USD"},
          "conversion_cost": {"amount": "5", "currency": "USD"}, "capitalized_cost": {"amount": "15", "currency": "USD"},
          "output_quantity": {"amount": "1", "unit": "unit"}, "completion_evidence_ref": "production:completion:1",
@@ -267,14 +274,15 @@ def test_production_books_measured_output_not_planned_quantity():
     )
     result = execute_production_order(
         order, inventory, journal, "raw", "wip", "finished", NOW,
-        completion=completion("batch-measured", "1"),
+        completion=completion("batch-measured", "1", {"steel": ("3", "kg", "meter:steel-measured")}),
     )
     assert result.output_quantity == Quantity("1", "unit")
     assert result.output_movement.quantity == Quantity("1", "unit")
     assert result.completion_evidence_ref == "evidence:completion:batch-measured"
     pools = {row["item_id"]: row for row in inventory.summary()["pools"]}
-    assert pools["steel"]["quantity"] == "8"
+    assert pools["steel"]["quantity"] == "7"
     assert pools["part"]["quantity"] == "1"
+    assert result.direct_material_cost == Money("30", "USD")
 
 
 def test_production_execution_requires_completion_evidence_and_rejects_overproduction():
@@ -292,7 +300,7 @@ def test_production_execution_requires_completion_evidence_and_rejects_overprodu
     with pytest.raises(ValueError, match="exceeds the authorized order"):
         execute_production_order(
             order, inventory, journal, "raw", "wip", "finished", NOW,
-            completion=completion("batch-no-evidence", "3"),
+            completion=completion("batch-no-evidence", "3", {"steel": ("3", "kg", "meter:steel-overrun")}),
         )
     assert inventory.summary()["pools"][0]["quantity"] == "10"
     assert journal.entries == ()
@@ -322,8 +330,30 @@ def test_production_rolls_back_inventory_when_atomic_journal_batch_rejects():
     with pytest.raises(ValueError, match="Duplicate source_event_id"):
         execute_production_order(
             order, inventory, journal, "raw", "wip", "finished", NOW,
-            completion=completion("batch-atomic", "2"),
+            completion=completion("batch-atomic", "2", {"steel": ("2", "kg", "meter:steel-atomic")}),
         )
     assert inventory.summary() == before_summary
     assert inventory.movements == before_movements
     assert len(journal.entries) == 1
+
+
+def test_production_completion_requires_measured_inputs_for_every_bom_component():
+    journal = production_journal()
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("input-evidence", "input-evidence-lot", "steel", "factory",
+        Quantity("5", "kg"), Money("50", "USD"), date(2026, 11, 1), "receipt:input-evidence")
+    order = ProductionOrder(
+        "batch-input-evidence", "co1", "part", Quantity("1", "unit"), "factory",
+        (BOMComponent("steel", Quantity("1", "kg")),),
+        date(2026, 11, 6), "production:input-evidence",
+    )
+    missing = ProductionCompletionEvidence(
+        "batch-input-evidence", Quantity("1", "unit"), NOW,
+        "evidence:completion:missing-input", (),
+    )
+    with pytest.raises(ValueError, match="measured input consumption"):
+        execute_production_order(
+            order, inventory, journal, "raw", "wip", "finished", NOW, completion=missing
+        )
+    assert inventory.summary()["pools"][0]["quantity"] == "5"
+    assert journal.entries == ()
