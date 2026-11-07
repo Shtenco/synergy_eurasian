@@ -410,3 +410,5 @@ The integrated credit ledger now also supports partial invoice settlement during
 - [Experiment tests](tests/test_synergy_v66_financing_experiments.py)
 
 The runner compares cash-only, bank-only, mutual-credit and hybrid modes against an unconstrained reference using identical seed-specific exogenous environments. It reports service level, output, defaults, bad debt, financing usage, rejection counts and accounting residuals. It does not assume any policy is superior.
+
+The experiment module also provides `compare_all_shock_regimes(...)`, which runs the same paired financing comparison under normal, volatile and severe synthetic shocks.
