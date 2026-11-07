@@ -222,3 +222,57 @@ def test_approval_cannot_be_replayed_against_a_different_signed_request_event(tm
         "2026-11-06T10:02:00+00:00")
     assert decision.allowed is False
     assert decision.reason == "insufficient_approvals"
+
+
+def test_conflicting_duplicate_approval_event_id_is_rejected(tmp_path):
+    registry, keys = setup_registry()
+    request = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
+        keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "duplicate-request")
+    approval = signed_event(tmp_path, "org:approver", "tenant:one", "key-1",
+        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(request),
+        "duplicate-approval", "2026-11-06T10:01:00+00:00")
+    conflicting_payload = approval_payload(request, "REJECT")
+    conflicting_source = AuthorizationEvent(
+        approval.event["event_id"], "AUTHORIZATION", "req-1", 1,
+        "AUTHORIZATION_APPROVAL", "2026-11-06T09:00:00+00:00",
+        "2026-11-06T09:01:00+00:00", conflicting_payload,
+        "source:conflicting-duplicate", ("evidence:conflicting-duplicate",),
+        "idem:conflicting-duplicate",
+    )
+    stored = DurableEventStore(str(tmp_path / "conflicting-duplicate.db")).append(
+        conflicting_source, now=datetime(2026, 11, 6, 9, 1, tzinfo=timezone.utc))
+    conflicting = sign_event(stored, "org:approver", "tenant:one", "key-1",
+        keys["org:approver"], "2026-11-06T10:01:00+00:00")
+    assert approval.event["event_id"] == conflicting.event["event_id"]
+    assert approval.event["event_hash"] != conflicting.event["event_hash"]
+    with pytest.raises(ValueError, match="different event hash"):
+        policy().authorize(request, [approval, conflicting], registry,
+            "2026-11-06T10:02:00+00:00")
+
+
+
+def test_authorization_uses_the_verified_request_snapshot(tmp_path):
+    registry, keys = setup_registry()
+    request = signed_event(
+        tmp_path, "org:requester", "tenant:one", "key-1",
+        keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "snapshot-request",
+    )
+    approval = signed_event(
+        tmp_path, "org:approver", "tenant:one", "key-1",
+        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(request),
+        "snapshot-approval", "2026-11-06T10:01:00+00:00",
+    )
+    real_verify = registry.verify
+
+    def mutate_caller_owned_request_after_verification(envelope, received_at=None):
+        identity = real_verify(envelope, received_at)
+        request.event["payload"]["action"] = "DELETE_ALL"
+        return identity
+
+    registry.verify = mutate_caller_owned_request_after_verification
+    decision = policy().authorize(
+        request, [approval], registry, "2026-11-06T10:02:00+00:00",
+    )
+    assert decision.allowed is True
+    assert decision.action == "JOURNAL_POST"
+    assert request.event["payload"]["action"] == "DELETE_ALL"

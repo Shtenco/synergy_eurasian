@@ -137,3 +137,140 @@ def test_supply_solver_rejects_invalid_capacity_multipliers():
             assert "Capacity multiplier" in str(exc) or "finite and non-negative" in str(exc)
         else:
             raise AssertionError(f"Invalid capacity multipliers were accepted: {multipliers}")
+
+
+
+def test_portfolio_simulation_never_creates_negative_productive_capital():
+    cfg = config()
+    cfg["replacement_rate"] = [10.0] * len(cfg["sectors"])
+    result = simulate_portfolio(cfg, years=1, gross_yield=0.0, include_crises=False)
+    assert result["final_productive_capital_usd"] == 0.0
+    assert result["annual"][0]["unfunded_renewal_gap_usd"] > 0.0
+    assert result["cumulative_unfunded_renewal_gap_usd"] == result["annual"][0]["unfunded_renewal_gap_usd"]
+
+
+def test_portfolio_simulation_rejects_invalid_horizon_yield_and_allocation():
+    cfg = config()
+    for years in (0, -1, True, 1.5):
+        try:
+            simulate_portfolio(cfg, years=years)
+        except ValueError as exc:
+            assert "positive integer" in str(exc)
+        else:
+            raise AssertionError(f"Invalid simulation horizon accepted: {years!r}")
+    for gross_yield in (float("nan"), float("inf"), -0.1):
+        try:
+            simulate_portfolio(cfg, gross_yield=gross_yield)
+        except ValueError as exc:
+            assert "gross_yield" in str(exc)
+        else:
+            raise AssertionError(f"Invalid gross yield accepted: {gross_yield!r}")
+    bad_allocation = copy.deepcopy(cfg)
+    bad_allocation["surplus_allocation"] = {
+        "growth": 1.2, "reserve": -0.1, "dividends": -0.1
+    }
+    try:
+        simulate_portfolio(bad_allocation)
+    except ValueError as exc:
+        assert "surplus_allocation" in str(exc) and ("<= 1" in str(exc) or ">= 0" in str(exc))
+    else:
+        raise AssertionError("Out-of-range allocation shares were accepted")
+
+
+
+def test_economic_model_rejects_invalid_portfolio_and_productivity_assumptions():
+    cfg = config()
+    bad_capital = copy.deepcopy(cfg)
+    bad_capital["capital_usd"][0] = float("nan")
+    try:
+        portfolio_accounting(bad_capital)
+    except ValueError as exc:
+        assert "finite" in str(exc)
+    else:
+        raise AssertionError("Non-finite productive capital was accepted")
+
+    bad_ownership = copy.deepcopy(cfg)
+    bad_ownership["public_ownership_share"][0] = 1.01
+    try:
+        portfolio_accounting(bad_ownership)
+    except ValueError as exc:
+        assert "public_ownership_share" in str(exc)
+    else:
+        raise AssertionError("Public ownership share above 100% was accepted")
+
+    bad_adoption = copy.deepcopy(cfg)
+    bad_adoption["automation_adoption"][0] = 1.1
+    try:
+        productivity_results(bad_adoption)
+    except ValueError as exc:
+        assert "automation_adoption" in str(exc)
+    else:
+        raise AssertionError("Automation adoption above 100% was accepted")
+
+    bad_basket = copy.deepcopy(cfg)
+    bad_basket["basket_share"][0] = 0.5
+    try:
+        productivity_results(bad_basket)
+    except ValueError as exc:
+        assert "must each sum to 1" in str(exc)
+    else:
+        raise AssertionError("Basket shares that do not sum to 1 were accepted")
+
+
+def test_supply_solver_rejects_boolean_controls_and_indices():
+    cfg = config()
+    for multipliers in ([True, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1]):
+        if multipliers[0] is True:
+            try:
+                solve_supply(cfg, multipliers)
+            except ValueError as exc:
+                assert "not booleans" in str(exc)
+            else:
+                raise AssertionError("Boolean capacity multiplier was accepted")
+    bad_indices = copy.deepcopy(cfg)
+    bad_indices["critical_sector_indices"] = [True, 1, 2]
+    try:
+        solve_supply(bad_indices, [1, 1, 1, 1, 1, 1, 1])
+    except ValueError as exc:
+        assert "not booleans" in str(exc)
+    else:
+        raise AssertionError("Boolean critical sector index was accepted")
+    try:
+        solve_supply(cfg, [1, 1, 1, 1, 1, 1, 1], enforce_critical_floor="false")
+    except ValueError as exc:
+        assert "must be a boolean" in str(exc)
+    else:
+        raise AssertionError("String critical-floor switch was accepted")
+
+
+
+def test_repair_scenario_handles_zero_target_replacement_without_infinity():
+    from synergy_economy_7sector import reproduction_repair_results
+    cfg = config()
+    cfg["reproduction_repair_plan"]["replacement_cost_reduction_target"] = 1.0
+    result = reproduction_repair_results(cfg)
+    assert result["target_replacement_capex_usd"] == 0.0
+    assert result["target_replacement_coverage"] is None
+    assert result["target_residual_margin_pct_of_replacement"] is None
+    assert result["replacement_coverage_defined"] is False
+
+
+def test_leontief_matrix_rejects_boolean_and_string_coefficients():
+    cfg = config()
+    bad_boolean = copy.deepcopy(cfg)
+    bad_boolean["input_output_matrix"][0][0] = True
+    try:
+        leontief_results(bad_boolean)
+    except ValueError as exc:
+        assert "not a boolean or string" in str(exc)
+    else:
+        raise AssertionError("Boolean Leontief coefficient was accepted")
+
+    bad_string = copy.deepcopy(cfg)
+    bad_string["input_output_matrix"][0][0] = "0.1"
+    try:
+        leontief_results(bad_string)
+    except ValueError as exc:
+        assert "not a boolean or string" in str(exc)
+    else:
+        raise AssertionError("String Leontief coefficient was accepted")

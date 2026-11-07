@@ -1,4 +1,6 @@
 from pathlib import Path
+import copy
+import pytest
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,3 +80,68 @@ def test_deterministic_flywheel_accepts_recession_and_replacement_deflation():
         assert "at least -100%" in str(exc)
     else:
         raise AssertionError("Cashflow decline below -100% must be rejected")
+
+
+def test_dynamic_flywheel_rejects_invalid_financial_and_horizon_inputs():
+    cfg = load_config()
+    with pytest.raises(ValueError, match="finite"):
+        simulate_case(cfg, float("nan"), 0.02)
+    with pytest.raises(ValueError, match="finite JSON number"):
+        simulate_case(cfg, True, 0.02)
+    with pytest.raises(ValueError, match="non-negative"):
+        simulate_case(cfg, 0.02, 0.02, automation_yield=-0.1)
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        simulate_case(cfg, 0.02, 0.02, rd_success_probability=1.1)
+
+    bad = copy.deepcopy(cfg)
+    bad["starting_point"]["productive_capital_usd"] = -1
+    with pytest.raises(ValueError, match="must be positive"):
+        simulate_case(bad, 0.02, 0.02)
+
+    bad = copy.deepcopy(cfg)
+    bad["horizon_years"] = True
+    with pytest.raises(ValueError, match="integer"):
+        simulate_case(bad, 0.02, 0.02)
+
+    bad = copy.deepcopy(cfg)
+    bad["technology_projects"]["automation_deployment_lag_years"] = -1
+    with pytest.raises(ValueError, match="integer"):
+        simulate_case(bad, 0.02, 0.02)
+
+
+def test_break_even_and_sector_reconciliation_reject_invalid_inputs():
+    cfg = load_config()
+    with pytest.raises(ValueError, match="integer"):
+        break_even_cashflow_growth(100, 90, 0.02, True)
+    with pytest.raises(ValueError, match="positive"):
+        break_even_cashflow_growth(0, 90, 0.02, 10)
+    with pytest.raises(ValueError, match="at least -100%"):
+        from synergy_productivity_flywheel_dynamic_v2 import sector_reconciliation
+        sector_reconciliation(cfg, 0.02, -1.01)
+
+
+def test_dynamic_model_labels_non_ten_year_horizons_correctly():
+    cfg = load_config()
+    cfg["horizon_years"] = 5
+    result = simulate_case(cfg, 0.02, 0.02)
+    assert result["final_year"] == 5
+    assert result["final_year_residual_usd"] == result["annual"][-1]["residual_after_replacement_and_project_returns_usd"]
+    assert result["year_10_residual_usd"] is None
+
+
+
+def test_dynamic_flywheel_rejects_unknown_allocation_funds_and_derived_overflow():
+    cfg = load_config()
+    bad = copy.deepcopy(cfg)
+    bad["allocation"]["unmodeled_fund"] = 0.1
+    bad["allocation"]["resilience_reserve"] -= 0.1
+    with pytest.raises(ValueError, match="exactly productive_automation"):
+        simulate_case(bad, 0.02, 0.02)
+
+    bad = copy.deepcopy(cfg)
+    bad["starting_point"]["gross_cashflow_after_opex_before_replacement_usd"] = 1e308
+    with pytest.raises(ValueError, match="year 1 gross cashflow"):
+        simulate_case(bad, 1e308, 0.02)
+
+    with pytest.raises(ValueError, match="Break-even projection"):
+        break_even_cashflow_growth(100, 1e308, 1e308, 10)

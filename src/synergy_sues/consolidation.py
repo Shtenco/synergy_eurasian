@@ -6,9 +6,11 @@ from datetime import date, datetime
 from decimal import Decimal
 from hashlib import sha256
 from enum import Enum
+import calendar
+import re
 from typing import Iterable
 
-from .contracts import Money, _aware
+from .contracts import Money, _aware, _calendar_date
 from .journal import AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide
 
 
@@ -62,6 +64,28 @@ _MATCHES = (
 )
 
 
+def _period_bounds(period_id: str) -> tuple[date, date]:
+    """Resolve supported canonical period IDs to exact calendar boundaries."""
+    match = re.fullmatch(r"(\d{4})-Q([1-4])", period_id)
+    if match:
+        year, quarter = int(match.group(1)), int(match.group(2))
+        month = (quarter - 1) * 3 + 1
+        return date(year, month, 1), date(year, month + 2, calendar.monthrange(year, month + 2)[1])
+    match = re.fullmatch(r"(\d{4})-(0[1-9]|1[0-2])", period_id)
+    if match:
+        year, month = int(match.group(1)), int(match.group(2))
+        return date(year, month, 1), date(year, month, calendar.monthrange(year, month)[1])
+    match = re.fullmatch(r"(\d{4})-W(0[1-9]|[1-4]\d|5[0-3])", period_id)
+    if match:
+        year, week = int(match.group(1)), int(match.group(2))
+        start = date.fromisocalendar(year, week, 1)
+        return start, date.fromisocalendar(year, week, 7)
+    if re.fullmatch(r"\d{4}", period_id):
+        year = int(period_id)
+        return date(year, 1, 1), date(year, 12, 31)
+    raise ValueError(f"Unsupported or non-canonical intercompany period_id: {period_id}")
+
+
 def reconcile_intercompany(records: Iterable[IntercompanyRecord]) -> dict:
     """Match reciprocal records; eliminate only the amount supported on both sides.
 
@@ -72,6 +96,12 @@ def reconcile_intercompany(records: Iterable[IntercompanyRecord]) -> dict:
     ids = [row.record_id for row in rows]
     if len(ids) != len(set(ids)):
         raise ValueError("Duplicate intercompany record_id")
+    # Validate every period before categorizing records. Cash-transfer-only
+    # transactions do not create GL elimination entries, so validating periods
+    # only in the journal-posting branch would let malformed periods leak into
+    # consolidated cash-flow reports.
+    for row in rows:
+        _period_bounds(row.period_id)
 
     grouped: dict[str, list[IntercompanyRecord]] = {}
     for row in rows:
@@ -232,6 +262,13 @@ def post_intercompany_eliminations(
                     raise ValueError(f"One explicit credit account_id is required for {category}")
                 if period_id not in effective_dates_by_period:
                     raise ValueError(f"Missing effective date for intercompany period: {period_id}")
+                effective_date = effective_dates_by_period[period_id]
+                _calendar_date(effective_date, f"effective date for period {period_id}")
+                period_start, period_end = _period_bounds(period_id)
+                if not period_start <= effective_date <= period_end:
+                    raise ValueError(
+                        f"Intercompany elimination date {effective_date} falls outside period {period_id}"
+                    )
                 debit_account = account_map.get(next(iter(debit_accounts)))
                 credit_account = account_map.get(next(iter(credit_accounts)))
                 if debit_account is None or credit_account is None:
@@ -255,7 +292,7 @@ def post_intercompany_eliminations(
                 money = Money(amount, currency)
                 entry = JournalEntry(
                     entry_id=entry_id,
-                    effective_date=effective_dates_by_period[period_id],
+                    effective_date=effective_date,
                     recorded_at=recorded_at,
                     functional_currency=journal.functional_currency,
                     lines=(

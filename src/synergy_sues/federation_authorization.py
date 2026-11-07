@@ -5,6 +5,7 @@ module evaluates explicit policy; it does not execute the requested action.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Iterable
 
@@ -37,6 +38,12 @@ class AuthorizationDecision:
     approval_event_refs: tuple[tuple[str, str], ...] = ()
     policy_version: int | None = None
     policy_hash: str | None = None
+    request_event_id: str = ""
+    request_event_hash: str = ""
+    action: str = ""
+    resource_type: str = ""
+    resource_id: str = ""
+    tenant_id: str = ""
 
 
 class FederationAuthorizationPolicy:
@@ -91,12 +98,28 @@ class FederationAuthorizationPolicy:
                   approvals: Iterable[SignedEventEnvelope],
                   registry: TrustedKeyRegistry,
                   received_at: datetime | str | None = None) -> AuthorizationDecision:
-        """Verify signed request and approvals, then evaluate policy without execution."""
+        """Verify signed request and approvals, then evaluate policy without execution.
+
+        Snapshot caller-owned nested event mappings before signature verification.
+        All subsequent scope checks use the exact objects that were verified.
+        """
+        if not isinstance(request, SignedEventEnvelope):
+            raise ValueError("request must be a SignedEventEnvelope")
+        request = deepcopy(request)
+        approvals = tuple(deepcopy(item) for item in approvals)
         requester = registry.verify(request, received_at)
         payload = self._payload_fields(request, "AUTHORIZATION_REQUEST",
             ("request_id", "action", "resource_type", "resource_id"))
         request_id = payload["request_id"]
         action, resource_type, resource_id = payload["action"], payload["resource_type"], payload["resource_id"]
+        decision_context = {
+            "request_event_id": request.event["event_id"],
+            "request_event_hash": request.event["event_hash"],
+            "action": action,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "tenant_id": request.tenant_id,
+        }
         if any(not isinstance(x, str) or not x.strip() for x in (request_id, action, resource_type, resource_id)):
             raise ValueError("authorization request scope fields must be non-empty strings")
         requested_at = _utc(request.signed_at, "signed_at")
@@ -125,22 +148,27 @@ class FederationAuthorizationPolicy:
         denies = tuple(sorted(rule.rule_id for rule in matching if rule.effect == "DENY"))
         if denies:
             return AuthorizationDecision(False, "explicit_deny_rule", request_id,
-                requester.identity_id, denies)
+                requester.identity_id, denies, **decision_context)
         allows = [rule for rule in matching if rule.effect == "ALLOW"]
         if not allows:
             return AuthorizationDecision(False, "no_matching_allow_rule", request_id,
-                requester.identity_id)
+                requester.identity_id, **decision_context)
 
         verified_approvals: dict[str, tuple[str, str]] = {}
         vetoes: list[tuple[str, str, str]] = []
-        seen_events: set[str] = set()
+        seen_events: dict[str, str] = {}
         for approval in approvals:
             approver = registry.verify(approval, received_at)
             approval_payload = self._payload_fields(approval, "AUTHORIZATION_APPROVAL",
                 ("request_id", "request_event_id", "request_event_hash", "action", "resource_type", "resource_id", "requester_identity_id", "decision"))
-            if approval.event["event_id"] in seen_events:
+            approval_event_id = approval.event["event_id"]
+            approval_event_hash = approval.event["event_hash"]
+            previous_hash = seen_events.get(approval_event_id)
+            if previous_hash is not None:
+                if previous_hash != approval_event_hash:
+                    raise ValueError("approval event ID reused with a different event hash")
                 continue
-            seen_events.add(approval.event["event_id"])
+            seen_events[approval_event_id] = approval_event_hash
             scope_matches = (
                 approval_payload["request_id"] == request_id
                 and approval_payload["request_event_id"] == request.event["event_id"]
@@ -171,7 +199,7 @@ class FederationAuthorizationPolicy:
             return AuthorizationDecision(False, "approval_veto", request_id,
                 requester.identity_id, tuple(sorted(rule.rule_id for rule in allows)),
                 tuple(sorted({item[0] for item in vetoes})),
-                tuple(sorted({(item[1], item[2]) for item in vetoes})))
+                tuple(sorted({(item[1], item[2]) for item in vetoes})), **decision_context)
 
         # Rules are evaluated independently: approvals never combine across policies.
         eligible = []
@@ -188,10 +216,11 @@ class FederationAuthorizationPolicy:
             return AuthorizationDecision(False, "insufficient_approvals", request_id,
                 requester.identity_id, tuple(sorted(rule.rule_id for rule in allows)),
                 tuple(sorted(verified_approvals)),
-                tuple(sorted(set(verified_approvals.values()))))
+                tuple(sorted(set(verified_approvals.values()))), **decision_context)
         # Prefer the narrowest resource scope; rule IDs provide deterministic tie-break.
         eligible.sort(key=lambda item: (item[0].resource_id is None, item[0].rule_id))
         selected, selected_approvals = eligible[0]
         approval_refs = tuple(sorted(verified_approvals[identity_id] for identity_id in selected_approvals))
         return AuthorizationDecision(True, "authorized_by_policy", request_id,
-            requester.identity_id, (selected.rule_id,), selected_approvals, approval_refs)
+            requester.identity_id, (selected.rule_id,), selected_approvals, approval_refs,
+            **decision_context)

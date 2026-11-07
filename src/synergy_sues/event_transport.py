@@ -55,6 +55,41 @@ def _now(value: datetime | None) -> datetime:
     return result.astimezone(timezone.utc)
 
 
+def signed_event_authenticator(registry: Any, received_at: datetime | str | None = None):
+    """Build an inbox authenticator that binds an Ed25519 envelope to the exact message.
+
+    The signed envelope must contain the exact event represented by payload_json;
+    event_id and event_hash must also match the outer transport message.
+    """
+    verify = getattr(registry, "verify", None)
+    if not callable(verify):
+        raise ValueError("registry must expose a trusted verify() method")
+
+    def authenticate(message: Mapping[str, Any]) -> bool:
+        envelope = message.get("signed_envelope")
+        if not isinstance(envelope, Mapping):
+            return False
+        try:
+            payload_json = message.get("payload_json")
+            if not isinstance(payload_json, str):
+                return False
+            payload = json.loads(payload_json)
+            if not isinstance(payload, dict) or _canonical(payload) != payload_json:
+                return False
+            signed_event = envelope.get("event")
+            if not isinstance(signed_event, dict) or _canonical(signed_event) != _canonical(payload):
+                return False
+            if (payload.get("event_id") != message.get("event_id")
+                    or payload.get("event_hash") != message.get("event_hash")):
+                return False
+            verify(envelope, received_at=received_at)
+            return True
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return False
+
+    return authenticate
+
+
 def _unsigned(row: Mapping[str, Any], previous_hash: str) -> dict[str, Any]:
     return {
         "event_id": row["event_id"],
@@ -217,9 +252,23 @@ class DurableEventStore:
                     event_id TEXT NOT NULL,
                     event_hash TEXT NOT NULL,
                     received_at TEXT NOT NULL,
+                    message_json TEXT NOT NULL DEFAULT '{}',
                     PRIMARY KEY(consumer, message_id)
                 );
+                CREATE UNIQUE INDEX IF NOT EXISTS inbox_consumer_event_unique
+                    ON inbox(consumer, event_id);
+                CREATE TRIGGER IF NOT EXISTS inbox_no_update
+                BEFORE UPDATE ON inbox
+                BEGIN SELECT RAISE(ABORT, 'inbox receipts are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS inbox_no_delete
+                BEFORE DELETE ON inbox
+                BEGIN SELECT RAISE(ABORT, 'inbox receipts are append-only'); END;
             """)
+            inbox_columns = {
+                row["name"] for row in db.execute("PRAGMA table_info(inbox)").fetchall()
+            }
+            if "message_json" not in inbox_columns:
+                db.execute("ALTER TABLE inbox ADD COLUMN message_json TEXT NOT NULL DEFAULT '{}'")
 
     @property
     def events(self) -> tuple[DurableEvent, ...]:
@@ -409,30 +458,44 @@ class DurableEventStore:
         message: Mapping[str, Any],
         handler: Callable[[sqlite3.Connection, Mapping[str, Any]], None],
         received_at: datetime | None = None,
+        authenticator: Callable[[Mapping[str, Any]], bool] | None = None,
     ) -> bool:
-        """Apply local DB effects and record inbox receipt in one transaction.
+        """Authenticate, validate and apply an inbox message in one local boundary.
 
-        Handler must use only the supplied connection and must not perform network,
-        payment, filesystem or other external side effects. Return False for an
-        exact duplicate; reject message-ID reuse with a different event hash.
+        The authenticator must verify the sender's signed envelope against an
+        explicit trust registry and return literal True. SHA-256 checks below
+        provide integrity only; they do not authenticate the publisher.
+        Handler must use only the supplied connection and must not perform
+        network, payment, filesystem or other external side effects. Return
+        False for an exact duplicate; reject ID reuse with a different hash.
         """
         if not isinstance(consumer, str) or not consumer.strip():
             raise ValueError("consumer must be a non-empty string")
         if not callable(handler):
             raise ValueError("handler must be callable")
+        if not callable(authenticator):
+            raise ValueError("a trusted signed-message authenticator is required")
+        message_snapshot = json.loads(_canonical(dict(message)))
+        auth_snapshot = json.loads(_canonical(message_snapshot))
+        if authenticator(auth_snapshot) is not True:
+            raise ValueError("Inbox sender authentication failed")
+        if _canonical(auth_snapshot) != _canonical(message_snapshot):
+            raise ValueError("Inbox authenticator mutated the signed message snapshot")
         required = ("message_id", "event_id", "event_hash", "payload_json")
-        if any(not isinstance(message.get(key), str) or not message.get(key) for key in required):
+        if any(not isinstance(message_snapshot.get(key), str) or not message_snapshot.get(key) for key in required):
             raise ValueError("Inbox message is missing required string fields")
-        payload = json.loads(message["payload_json"])
+        payload = json.loads(message_snapshot["payload_json"])
         if not isinstance(payload, dict):
             raise ValueError("Inbox payload_json must contain an event object")
-        if payload.get("event_id") != message["event_id"] or payload.get("event_hash") != message["event_hash"]:
+        if _canonical(payload) != message_snapshot["payload_json"]:
+            raise ValueError("Inbox payload_json must use canonical JSON encoding")
+        if payload.get("event_id") != message_snapshot["event_id"] or payload.get("event_hash") != message_snapshot["event_hash"]:
             raise ValueError("Inbox envelope identity does not match its event payload")
         digest_row = dict(payload)
         supplied_hash = digest_row.pop("event_hash", None)
         unsigned = _unsigned(digest_row, str(digest_row.get("previous_hash") or ""))
         digest = sha256(_canonical(unsigned).encode("utf-8")).hexdigest()
-        if supplied_hash != digest or message["event_hash"] != digest:
+        if supplied_hash != digest or message_snapshot["event_hash"] != digest:
             raise ValueError("Inbox event hash verification failed")
         _validate_event(digest_row)
         stamp = _now(received_at).isoformat()
@@ -440,25 +503,89 @@ class DurableEventStore:
             db.execute("BEGIN IMMEDIATE")
             try:
                 existing = db.execute(
-                    "SELECT event_hash FROM inbox WHERE consumer=? AND message_id=?",
-                    (consumer, message["message_id"]),
+                    "SELECT event_hash,message_json FROM inbox WHERE consumer=? AND message_id=?",
+                    (consumer, message_snapshot["message_id"]),
                 ).fetchone()
                 if existing is not None:
                     if existing["event_hash"] != digest:
                         raise ValueError("Inbox message ID reused with a different event hash")
+                    if existing["message_json"] == "{}":
+                        raise ValueError("Legacy inbox receipt lacks retained publisher proof; explicit reauthentication is required")
                     db.rollback()
                     return False
-                handler(db, message)
+                existing_event = db.execute(
+                    "SELECT message_id,event_hash,message_json FROM inbox WHERE consumer=? AND event_id=?",
+                    (consumer, message_snapshot["event_id"]),
+                ).fetchone()
+                if existing_event is not None:
+                    if existing_event["event_hash"] != digest:
+                        raise ValueError("Inbox event ID reused with a different event hash")
+                    if existing_event["message_json"] == "{}":
+                        raise ValueError("Legacy inbox receipt lacks retained publisher proof; explicit reauthentication is required")
+                    db.rollback()
+                    return False
+                handler_message = json.loads(_canonical(message_snapshot))
+                handler(db, handler_message)
                 db.execute(
-                    """INSERT INTO inbox(consumer,message_id,event_id,event_hash,received_at)
-                    VALUES(?,?,?,?,?)""",
-                    (consumer, message["message_id"], message["event_id"], digest, stamp),
+                    """INSERT INTO inbox(
+                        consumer,message_id,event_id,event_hash,received_at,message_json
+                    ) VALUES(?,?,?,?,?,?)""",
+                    (consumer, message_snapshot["message_id"], message_snapshot["event_id"],
+                     digest, stamp, _canonical(message_snapshot)),
                 )
                 db.commit()
                 return True
             except Exception:
                 db.rollback()
                 raise
+
+    def verify_inbox(self, authenticator: Callable[[Mapping[str, Any]], bool]) -> bool:
+        """Re-verify retained publisher envelopes against the current trust registry.
+
+        Legacy inbox receipts without a retained message envelope are not
+        considered authenticated and make this verification fail closed.
+        """
+        if not callable(authenticator):
+            raise ValueError("a trusted signed-message authenticator is required")
+        with self._session() as db:
+            rows = db.execute("SELECT * FROM inbox ORDER BY consumer,message_id").fetchall()
+        for stored in rows:
+            try:
+                if stored["message_json"] == "{}":
+                    return False
+                message = json.loads(stored["message_json"])
+                if _canonical(message) != stored["message_json"]:
+                    return False
+                if (message.get("message_id") != stored["message_id"]
+                        or message.get("event_id") != stored["event_id"]
+                        or message.get("event_hash") != stored["event_hash"]):
+                    return False
+                payload = json.loads(message["payload_json"])
+                if not isinstance(payload, dict):
+                    return False
+                if (payload.get("event_id") != stored["event_id"]
+                        or payload.get("event_hash") != stored["event_hash"]):
+                    return False
+                digest_row = dict(payload)
+                supplied_hash = digest_row.pop("event_hash", None)
+                digest = sha256(_canonical(_unsigned(
+                    digest_row, str(digest_row.get("previous_hash") or "")
+                )).encode("utf-8")).hexdigest()
+                if supplied_hash != digest or digest != stored["event_hash"]:
+                    return False
+                _validate_event(digest_row)
+                snapshot = json.loads(_canonical(message))
+                try:
+                    authenticated = authenticator(snapshot)
+                except Exception:
+                    return False
+                if authenticated is not True:
+                    return False
+                if _canonical(snapshot) != _canonical(message):
+                    return False
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                return False
+        return True
 
     def inbox_contains(self, consumer: str, message_id: str) -> bool:
         with self._session() as db:
@@ -518,5 +645,30 @@ class DurableEventStore:
                     return False
                 expected_message_id = sha256(_canonical({"event_id": item["event_id"], "destination": item["destination"]}).encode()).hexdigest()
                 if item["message_id"] != expected_message_id or not item["destination"] or not item["topic"]:
+                    return False
+
+            # Retained inbox envelopes are integrity-checked here. Signature
+            # validity is re-evaluated separately by verify_inbox(authenticator).
+            for item in db.execute("SELECT * FROM inbox").fetchall():
+                if item["message_json"] == "{}":
+                    continue  # Legacy receipt: present, but not re-verifiable.
+                try:
+                    message = json.loads(item["message_json"])
+                    if (_canonical(message) != item["message_json"]
+                            or message.get("message_id") != item["message_id"]
+                            or message.get("event_id") != item["event_id"]
+                            or message.get("event_hash") != item["event_hash"]):
+                        return False
+                    payload = json.loads(message["payload_json"])
+                    if not isinstance(payload, dict):
+                        return False
+                    digest_row = dict(payload)
+                    supplied_hash = digest_row.pop("event_hash", None)
+                    digest = sha256(_canonical(_unsigned(
+                        digest_row, str(digest_row.get("previous_hash") or "")
+                    )).encode("utf-8")).hexdigest()
+                    if supplied_hash != digest or digest != item["event_hash"]:
+                        return False
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                     return False
         return True

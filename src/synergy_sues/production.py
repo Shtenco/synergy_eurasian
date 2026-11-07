@@ -5,12 +5,12 @@ Reference implementation only: callers must supply evidence and validated GL acc
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Iterable
 
-from .contracts import Money, Quantity, _aware
+from .contracts import Money, Quantity, _aware, _calendar_date
 from .inventory import InventoryLedger, InventoryMovement
 from .journal import (
     AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide,
@@ -33,8 +33,7 @@ class PurchaseOrderLine:
             raise ValueError("PO line identity, entity, supplier, item and source are required")
         if self.ordered_quantity.amount <= 0 or self.unit_price.amount < 0:
             raise ValueError("PO quantity must be positive and unit price non-negative")
-        if not isinstance(self.order_date, date):
-            raise ValueError("PO order_date must be a date")
+        _calendar_date(self.order_date, "PO order_date")
 
 
 @dataclass(frozen=True)
@@ -48,8 +47,9 @@ class GoodsReceipt:
     def __post_init__(self) -> None:
         if not all((self.receipt_id, self.po_line_id, self.evidence_ref)):
             raise ValueError("Goods receipt identity and evidence are required")
-        if self.received_quantity.amount <= 0 or not isinstance(self.received_date, date):
-            raise ValueError("Goods receipt requires positive quantity and valid date")
+        if self.received_quantity.amount <= 0:
+            raise ValueError("Goods receipt requires positive quantity")
+        _calendar_date(self.received_date, "goods receipt date")
 
 
 @dataclass(frozen=True)
@@ -66,8 +66,7 @@ class SupplierInvoiceLine:
             raise ValueError("Invoice line identity and source are required")
         if self.invoiced_quantity.amount <= 0 or self.amount.amount <= 0:
             raise ValueError("Invoice quantity and amount must be positive")
-        if not isinstance(self.invoice_date, date):
-            raise ValueError("Invoice date must be a date")
+        _calendar_date(self.invoice_date, "supplier invoice date")
 
 
 class GRNIMatcher:
@@ -77,6 +76,7 @@ class GRNIMatcher:
         self._orders: dict[str, PurchaseOrderLine] = {}
         self._receipts: dict[str, GoodsReceipt] = {}
         self._invoices: dict[str, SupplierInvoiceLine] = {}
+        self._journalized_receipts: set[str] = set()
         for row in purchase_orders:
             self.add_purchase_order(row)
 
@@ -122,12 +122,33 @@ class GRNIMatcher:
             raise ValueError("Invoice currency differs from PO currency")
         if row.invoice_date < po.order_date:
             raise ValueError("Supplier invoice cannot predate purchase order")
-        received = sum((x.received_quantity.amount for x in self._receipts.values()
-                        if x.po_line_id == row.po_line_id), Decimal("0"))
+        receipts_for_po = [
+            x for x in self._receipts.values() if x.po_line_id == row.po_line_id
+        ]
+        received = sum((x.received_quantity.amount for x in receipts_for_po), Decimal("0"))
         already_invoiced = sum((x.invoiced_quantity.amount for x in self._invoices.values()
                                 if x.po_line_id == row.po_line_id), Decimal("0"))
         if already_invoiced + row.invoiced_quantity.amount > received:
             raise ValueError("Invoice quantity exceeds physically received, not-yet-invoiced quantity")
+        # Validate the complete chronological invoice/receipt timeline. This also
+        # prevents a newly inserted backdated invoice from making a later invoice
+        # unsupported by the receipts available on that later invoice date.
+        candidate_invoices = [
+            x for x in self._invoices.values() if x.po_line_id == row.po_line_id
+        ] + [row]
+        for invoice_date in sorted({x.invoice_date for x in candidate_invoices}):
+            cumulative_invoiced = sum((
+                x.invoiced_quantity.amount for x in candidate_invoices
+                if x.invoice_date <= invoice_date
+            ), Decimal("0"))
+            cumulative_received = sum((
+                x.received_quantity.amount for x in receipts_for_po
+                if x.received_date <= invoice_date
+            ), Decimal("0"))
+            if cumulative_invoiced > cumulative_received:
+                raise ValueError(
+                    "Invoice date precedes the physical receipt supporting cumulative invoiced quantity"
+                )
         expected = po.unit_price.amount * row.invoiced_quantity.amount
         if row.amount.amount != expected:
             raise ValueError("Invoice amount does not match PO price; route variance for approval")
@@ -188,8 +209,7 @@ class ProductionOrder:
             object.__setattr__(self, "components", tuple(self.components))
         if len({x.item_id for x in self.components}) != len(self.components):
             raise ValueError("BOM item IDs must be unique; aggregate duplicate components explicitly")
-        if not isinstance(self.planned_date, date):
-            raise ValueError("Production planned_date must be a date")
+        _calendar_date(self.planned_date, "production planned_date")
 
 
 class ProductionCostType(str, Enum):
@@ -218,8 +238,51 @@ class ProductionCostEvent:
             raise ValueError("Production cost event identity and evidence are required")
         if not isinstance(self.cost_type, ProductionCostType):
             object.__setattr__(self, "cost_type", ProductionCostType(self.cost_type))
-        if self.amount.amount <= 0 or not isinstance(self.effective_date, date):
-            raise ValueError("Production cost event requires positive amount and valid date")
+        if self.amount.amount <= 0:
+            raise ValueError("Production cost event requires positive amount")
+        _calendar_date(self.effective_date, "production cost effective_date")
+
+
+@dataclass(frozen=True)
+class ProductionInputConsumption:
+    """Measured consumption of one BOM component, supported by source evidence."""
+
+    item_id: str
+    quantity: Quantity
+    evidence_ref: str
+
+    def __post_init__(self) -> None:
+        if not self.item_id or not self.evidence_ref:
+            raise ValueError("Production input consumption requires item and evidence references")
+        if self.quantity.amount <= 0:
+            raise ValueError("Measured production input quantity must be positive")
+
+
+@dataclass(frozen=True)
+class ProductionCompletionEvidence:
+    """Measured good output for one completed batch, tied to a source evidence record."""
+
+    order_id: str
+    output_quantity: Quantity
+    completed_at: datetime
+    evidence_ref: str
+    input_consumption: tuple[ProductionInputConsumption, ...]
+
+    def __post_init__(self) -> None:
+        if not self.order_id or not self.evidence_ref:
+            raise ValueError("Production completion order and evidence reference are required")
+        if self.output_quantity.amount <= 0:
+            raise ValueError("Measured production output must be positive")
+        if not isinstance(self.input_consumption, tuple):
+            object.__setattr__(self, "input_consumption", tuple(self.input_consumption))
+        if not self.input_consumption or any(
+            not isinstance(item, ProductionInputConsumption) for item in self.input_consumption
+        ):
+            raise ValueError("Production completion requires measured input consumption for each BOM component")
+        input_ids = [item.item_id for item in self.input_consumption]
+        if len(input_ids) != len(set(input_ids)):
+            raise ValueError("Production input consumption item IDs must be unique")
+        _aware(self.completed_at, "production completed_at")
 
 
 @dataclass(frozen=True)
@@ -231,6 +294,8 @@ class ProductionExecution:
     conversion_cost: Money
     capitalized_cost: Money
     output_quantity: Quantity
+    completion_evidence_ref: str
+    completed_at: datetime
     journal_entry_ids: tuple[str, ...]
 
     def __post_init__(self) -> None:
@@ -261,14 +326,33 @@ def execute_production_order(
     recorded_at: datetime,
     conversion_costs: Iterable[ProductionCostEvent] = (),
     conversion_cost_accounts: dict[ProductionCostType | str, str] | None = None,
+    completion: ProductionCompletionEvidence | None = None,
 ) -> ProductionExecution:
     """Consume a complete BOM batch and capitalize evidenced material/conversion costs.
 
-    Conversion events carry externally measured amounts and source evidence; this
-    function does not calculate payroll, machine rates, energy tariffs or overhead
-    allocation. The inventory subledger records raw issues and finished output.
+    Completion evidence supplies measured good output; BOM consumption is scaled to
+    that measured quantity, not the plan. Conversion events carry externally measured
+    amounts and source evidence. This function does not calculate payroll, tariffs or
+    overhead allocation. Inventory changes are rolled back if journal posting fails.
     """
     _aware(recorded_at, "recorded_at")
+    if completion is None:
+        raise ValueError("Independent production completion evidence is required")
+    if completion.order_id != order.order_id:
+        raise ValueError("Production completion evidence order mismatch")
+    if completion.output_quantity.unit != order.output_quantity.unit:
+        raise ValueError("Measured production output unit differs from the production order")
+    if completion.output_quantity.amount > order.output_quantity.amount:
+        raise ValueError("Measured production output exceeds the authorized order quantity")
+    completion_instant = completion.completed_at.astimezone(timezone.utc)
+    recorded_instant = recorded_at.astimezone(timezone.utc)
+    if completion_instant > recorded_instant:
+        raise ValueError("Production completion evidence cannot post-date its recording time")
+    completion_date = completion_instant.date()
+    if inventory.entity_id != order.entity_id:
+        raise ValueError("Production inventory ledger must be bound to the production order entity")
+    if journal.entity_id not in (None, order.entity_id):
+        raise ValueError("Production journal entity differs from production order")
     if journal.functional_currency != inventory.functional_currency:
         raise ValueError("Production inventory and journal currencies must match")
     _account_map(journal, inventory_account_id, AccountType.ASSET, NormalBalance.DEBIT, "Inventory account")
@@ -285,13 +369,23 @@ def execute_production_order(
     if len({row.event_id for row in cost_events}) != len(cost_events):
         raise ValueError("Production cost event IDs must be unique")
     account_map: dict[ProductionCostType, str] = {}
+    non_capitalizable_by_default = {
+        ProductionCostType.MAINTENANCE,
+        ProductionCostType.DEPRECIATION,
+        ProductionCostType.OTHER_OVERHEAD,
+    }
+    for event in cost_events:
+        if event.cost_type in non_capitalizable_by_default:
+            raise ValueError(
+                f"{event.cost_type.value} cannot be capitalized without an explicit approved accounting policy"
+            )
     for key, account_id in (conversion_cost_accounts or {}).items():
         kind = key if isinstance(key, ProductionCostType) else ProductionCostType(key)
         account_map[kind] = account_id
     for event in cost_events:
         if event.order_id != order.order_id or event.entity_id != order.entity_id:
             raise ValueError("Production cost event order/entity mismatch")
-        if event.effective_date > order.planned_date:
+        if event.effective_date > completion_date:
             raise ValueError("Production cost event cannot post after batch completion date")
         if event.amount.currency != journal.functional_currency:
             raise ValueError("Production cost event currency must equal functional currency")
@@ -316,104 +410,133 @@ def execute_production_order(
     if expected_idempotency & {row.idempotency_key for row in journal.entries}:
         raise ValueError(f"Production order idempotency key already used: {order.order_id}")
 
-    required: list[tuple[BOMComponent, Quantity]] = []
+    input_evidence_by_item = {
+        item.item_id: item for item in completion.input_consumption
+    }
+    component_ids = {component.item_id for component in order.components}
+    if set(input_evidence_by_item) != component_ids:
+        raise ValueError("Measured input evidence must cover exactly the production BOM components")
+    required: list[tuple[BOMComponent, Quantity, ProductionInputConsumption]] = []
     previewed_cost = Decimal("0")
     for component in order.components:
-        quantity = Quantity(
-            component.quantity_per_output_unit.amount * order.output_quantity.amount,
-            component.quantity_per_output_unit.unit,
+        input_evidence = input_evidence_by_item[component.item_id]
+        quantity = input_evidence.quantity
+        if quantity.unit != component.quantity_per_output_unit.unit:
+            raise ValueError(f"Measured input unit differs from BOM for component {component.item_id}")
+        standard_input = component.quantity_per_output_unit.amount * completion.output_quantity.amount
+        if quantity.amount > standard_input:
+            raise ValueError(
+                f"Actual input for {component.item_id} exceeds BOM standard; "
+                "record an approved yield/scrap variance before capitalizing the excess"
+            )
+        available = inventory.available(
+            component.item_id, order.location_id, quantity.unit, completion_date
         )
-        available = inventory.available(component.item_id, order.location_id, quantity.unit)
         if available.amount < quantity.amount:
             raise ValueError(
                 f"Insufficient component {component.item_id}: required {quantity.amount}, available {available.amount}"
             )
-        previewed_cost += inventory.preview_issue_cost(component.item_id, order.location_id, quantity).amount
-        required.append((component, quantity))
+        previewed_cost += inventory.preview_issue_cost(
+            component.item_id, order.location_id, quantity, completion_date
+        ).amount
+        required.append((component, quantity, input_evidence))
     # Validate output pool units and zero-cost policy before consuming any input.
-    inventory.available(order.product_id, order.location_id, order.output_quantity.unit)
+    inventory.available(order.product_id, order.location_id, completion.output_quantity.unit)
     if previewed_cost <= 0:
         raise ValueError("Zero-cost production batch cannot be capitalized in the monetary journal")
 
-    input_movements = tuple(
-        inventory.issue(
-            f"production:{order.order_id}:issue:{component.item_id}",
-            component.item_id, order.location_id, quantity, order.planned_date,
-            f"production-order:{order.order_id}:component:{component.item_id}",
+    inventory_snapshot = inventory._snapshot()
+    try:
+        input_movements = tuple(
+            inventory.issue(
+                f"production:{order.order_id}:issue:{component.item_id}",
+                component.item_id, order.location_id, quantity, completion_date,
+                f"production-order:{order.order_id}:component:{component.item_id}:{input_evidence.evidence_ref}",
+            )
+            for component, quantity, input_evidence in required
         )
-        for component, quantity in required
-    )
-    direct_material_cost = Money(
-        sum((movement.cost.amount for movement in input_movements), Decimal("0")),
-        inventory.functional_currency,
-    )
-    if direct_material_cost.amount != previewed_cost:
-        raise ValueError("FIFO issue cost changed between preflight and consumption")
-    conversion_cost = Money(
-        sum((event.amount.amount for event in cost_events), Decimal("0")),
-        inventory.functional_currency,
-    )
-    capitalized_cost = direct_material_cost + conversion_cost
+        direct_material_cost = Money(
+            sum((movement.cost.amount for movement in input_movements), Decimal("0")),
+            inventory.functional_currency,
+        )
+        if direct_material_cost.amount != previewed_cost:
+            raise ValueError("FIFO issue cost changed between preflight and consumption")
+        conversion_cost = Money(
+            sum((event.amount.amount for event in cost_events), Decimal("0")),
+            inventory.functional_currency,
+        )
+        capitalized_cost = direct_material_cost + conversion_cost
 
-    output_movement = inventory.receive(
-        f"production:{order.order_id}:output",
-        f"production:{order.order_id}:lot",
-        order.product_id,
-        order.location_id,
-        order.output_quantity,
-        capitalized_cost,
-        order.planned_date,
-        f"production-order:{order.order_id}:completed-output",
-    )
+        output_movement = inventory.receive(
+            f"production:{order.order_id}:output",
+            f"production:{order.order_id}:lot",
+            order.product_id,
+            order.location_id,
+            completion.output_quantity,
+            capitalized_cost,
+            completion_date,
+            f"production-order:{order.order_id}:completed-output:{completion.evidence_ref}",
+        )
 
-    entries: list[JournalEntry] = []
-    for movement in input_movements:
-        # InventoryLedger uses movement IDs as deterministic journal identities.
-        entry_id = f"inventory:{movement.movement_id}"
-        money = movement.cost
+        entries: list[JournalEntry] = []
+        for movement in input_movements:
+            # InventoryLedger uses movement IDs as deterministic journal identities.
+            entry_id = f"inventory:{movement.movement_id}"
+            money = movement.cost
+            entries.append(JournalEntry(
+                entry_id, movement.movement_date, recorded_at, journal.functional_currency,
+                (
+                    JournalLine(f"{entry_id}:dr", wip_account_id, PostingSide.DEBIT,
+                        money, money, order.entity_id, movement.source_ref,
+                        evidence_ids=(input_evidence_by_item[movement.item_id].evidence_ref,)),
+                    JournalLine(f"{entry_id}:cr", inventory_account_id, PostingSide.CREDIT,
+                        money, money, order.entity_id, movement.source_ref,
+                        evidence_ids=(input_evidence_by_item[movement.item_id].evidence_ref,)),
+                ),
+                f"production-consumption:{movement.movement_id}",
+                f"production-consumption:{movement.movement_id}",
+                f"Consume BOM component {movement.item_id} for {order.order_id}",
+            ))
+        for event in cost_events:
+            entry_id = f"production:{order.order_id}:cost:{event.event_id}"
+            amount = event.amount
+            entries.append(JournalEntry(
+                entry_id, event.effective_date, recorded_at, journal.functional_currency,
+                (
+                    JournalLine(f"{entry_id}:dr", wip_account_id, PostingSide.DEBIT,
+                        amount, amount, order.entity_id, event.source_ref, evidence_ids=(event.evidence_ref,)),
+                    JournalLine(f"{entry_id}:cr", account_map[event.cost_type], PostingSide.CREDIT,
+                        amount, amount, order.entity_id, event.source_ref, evidence_ids=(event.evidence_ref,)),
+                ),
+                f"production-cost:{event.event_id}", f"production-cost:{event.event_id}",
+                f"Capitalize {event.cost_type.value.lower()} cost for {order.order_id}",
+            ))
+        completion_id = f"production:{order.order_id}:capitalize"
         entries.append(JournalEntry(
-            entry_id, movement.movement_date, recorded_at, journal.functional_currency,
+            completion_id, completion_date, recorded_at, journal.functional_currency,
             (
-                JournalLine(f"{entry_id}:dr", wip_account_id, PostingSide.DEBIT,
-                    money, money, order.entity_id, movement.source_ref),
-                JournalLine(f"{entry_id}:cr", inventory_account_id, PostingSide.CREDIT,
-                    money, money, order.entity_id, movement.source_ref),
+                JournalLine(f"{completion_id}:dr", finished_goods_account_id, PostingSide.DEBIT,
+                    capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref,
+                    evidence_ids=(completion.evidence_ref,)),
+                JournalLine(f"{completion_id}:cr", wip_account_id, PostingSide.CREDIT,
+                    capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref,
+                    evidence_ids=(completion.evidence_ref,)),
             ),
-            f"production-consumption:{movement.movement_id}",
-            f"production-consumption:{movement.movement_id}",
-            f"Consume BOM component {movement.item_id} for {order.order_id}",
+            f"production-completion:{order.order_id}",
+            f"production-completion:{order.order_id}",
+            f"Capitalize finished output for {order.order_id}",
         ))
-    for event in cost_events:
-        entry_id = f"production:{order.order_id}:cost:{event.event_id}"
-        amount = event.amount
-        entries.append(JournalEntry(
-            entry_id, event.effective_date, recorded_at, journal.functional_currency,
-            (
-                JournalLine(f"{entry_id}:dr", wip_account_id, PostingSide.DEBIT,
-                    amount, amount, order.entity_id, event.source_ref, evidence_ids=(event.evidence_ref,)),
-                JournalLine(f"{entry_id}:cr", account_map[event.cost_type], PostingSide.CREDIT,
-                    amount, amount, order.entity_id, event.source_ref, evidence_ids=(event.evidence_ref,)),
-            ),
-            f"production-cost:{event.event_id}", f"production-cost:{event.event_id}",
-            f"Capitalize {event.cost_type.value.lower()} cost for {order.order_id}",
-        ))
-    completion_id = f"production:{order.order_id}:capitalize"
-    entries.append(JournalEntry(
-        completion_id, order.planned_date, recorded_at, journal.functional_currency,
-        (
-            JournalLine(f"{completion_id}:dr", finished_goods_account_id, PostingSide.DEBIT,
-                capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref),
-            JournalLine(f"{completion_id}:cr", wip_account_id, PostingSide.CREDIT,
-                capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref),
-        ),
-        f"production-completion:{order.order_id}",
-        f"production-completion:{order.order_id}",
-        f"Capitalize finished output for {order.order_id}",
-    ))
-    journal.post_many(entries)
+        journal.post_many(entries)
+        inventory._mark_journal_posted(
+            [movement.movement_id for movement in input_movements] + [output_movement.movement_id],
+        )
+    except Exception:
+        inventory._restore(inventory_snapshot)
+        raise
     return ProductionExecution(
         order.order_id, output_movement, input_movements, direct_material_cost,
-        conversion_cost, capitalized_cost, order.output_quantity, tuple(x.entry_id for x in entries),
+        conversion_cost, capitalized_cost, completion.output_quantity,
+        completion.evidence_ref, completion.completed_at, tuple(x.entry_id for x in entries),
     )
 
 
@@ -421,42 +544,54 @@ def execute_production_order(
 def post_grni_receipt(
     receipt: GoodsReceipt,
     matcher: GRNIMatcher,
+    inventory: InventoryLedger,
     journal: Journal,
     inventory_account_id: str,
     grni_account_id: str,
     entity_id: str,
     recorded_at: datetime,
 ) -> JournalEntry:
-    """Accrue received-but-not-invoiced goods: Dr inventory / Cr GRNI.
+    """Post the GRNI accrual through the same physical inventory movement.
 
-    For one physical receipt, use this journal bridge OR InventoryLedger.post_to_journal
-    with the GRNI offset account; never post both paths for the same receipt.
+    The accepted receipt must already exist in InventoryLedger. This prevents
+    the GRNI bridge from creating a GL inventory asset with no stock movement.
     """
     _aware(recorded_at, "recorded_at")
     po = matcher._orders.get(receipt.po_line_id)
     if po is None or matcher._receipts.get(receipt.receipt_id) != receipt:
         raise ValueError("Receipt must first be accepted by this GRNI matcher")
-    if po.entity_id != entity_id or journal.entity_id not in (None, entity_id):
+    if receipt.receipt_id in matcher._journalized_receipts:
+        raise ValueError(f"GRNI receipt already journalized: {receipt.receipt_id}")
+    if po.entity_id != entity_id or inventory.entity_id != entity_id or journal.entity_id not in (None, entity_id):
         raise ValueError("GRNI receipt entity mismatch")
     if po.unit_price.currency != journal.functional_currency:
         raise ValueError("GRNI reference posting requires PO currency equal to journal functional currency")
+    movement = next((row for row in inventory.movements if row.movement_id == receipt.receipt_id), None)
+    if movement is None:
+        raise ValueError("GRNI receipt must have a matching physical inventory movement")
+    if (
+        movement.movement_type.value != "RECEIPT"
+        or movement.item_id != po.item_id
+        or movement.quantity != receipt.received_quantity
+        or movement.movement_date != receipt.received_date
+        or movement.source_ref != receipt.evidence_ref
+    ):
+        raise ValueError("GRNI receipt does not match the physical inventory movement")
+    expected_cost = Money(
+        receipt.received_quantity.amount * po.unit_price.amount,
+        journal.functional_currency,
+    )
+    if movement.cost != expected_cost:
+        raise ValueError("GRNI PO valuation differs from the inventory receipt cost")
     _account_map(journal, inventory_account_id, AccountType.ASSET, NormalBalance.DEBIT, "Inventory account")
     _account_map(journal, grni_account_id, AccountType.LIABILITY, NormalBalance.CREDIT, "GRNI account")
-    amount = Money(receipt.received_quantity.amount * po.unit_price.amount, journal.functional_currency)
-    if amount.amount <= 0:
-        raise ValueError("Zero-value GRNI receipt cannot be posted")
-    entry_id = f"grni:receipt:{receipt.receipt_id}"
-    return journal.post(JournalEntry(
-        entry_id, receipt.received_date, recorded_at, journal.functional_currency,
-        (
-            JournalLine(f"{entry_id}:dr", inventory_account_id, PostingSide.DEBIT,
-                amount, amount, entity_id, receipt.evidence_ref),
-            JournalLine(f"{entry_id}:cr", grni_account_id, PostingSide.CREDIT,
-                amount, amount, entity_id, receipt.evidence_ref),
-        ),
-        f"grni-receipt:{receipt.receipt_id}", f"grni-receipt:{receipt.receipt_id}",
-        f"Accrue received goods {receipt.receipt_id}",
-    ))
+    posted = inventory.post_to_journal(
+        receipt.receipt_id, journal, inventory_account_id, grni_account_id, entity_id, recorded_at
+    )
+    if posted is None:
+        raise ValueError("GRNI receipt inventory movement did not produce a journal entry")
+    matcher._journalized_receipts.add(receipt.receipt_id)
+    return posted
 
 
 def post_grni_invoice(
@@ -479,11 +614,13 @@ def post_grni_invoice(
         raise ValueError("GRNI reference posting requires invoice currency equal to journal functional currency")
     _account_map(journal, grni_account_id, AccountType.LIABILITY, NormalBalance.CREDIT, "GRNI account")
     _account_map(journal, accounts_payable_account_id, AccountType.LIABILITY, NormalBalance.CREDIT, "AP account")
+    journal_entry_ids = {x.entry_id for x in journal.entries}
     posted_receipts = sum((
         matcher._orders[receipt.po_line_id].unit_price.amount * receipt.received_quantity.amount
         for receipt in matcher.receipts
         if receipt.po_line_id == invoice.po_line_id
-        and f"grni:receipt:{receipt.receipt_id}" in {x.entry_id for x in journal.entries}
+        and receipt.receipt_id in matcher._journalized_receipts
+        and f"inventory:{receipt.receipt_id}" in journal_entry_ids
     ), Decimal("0"))
     posted_invoices = sum((
         row.amount.amount for row in matcher.invoices

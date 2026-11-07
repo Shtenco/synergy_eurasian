@@ -11,12 +11,25 @@ _STATUS={
     "review":"UNDER_REVIEW",
     "rejected":"REJECTED",
     "approved_for_underwriting":"UNDER_REVIEW",
-    "funded":"AUTHORIZED",
-    "building":"AUTHORIZED",
-    "commissioned":"AUTHORIZED",
-    "operating":"AUTHORIZED",
-    "closed":"AUTHORIZED",
+    # Lifecycle states are not proof of a signed capital authorization.
+    "funded":"UNDER_REVIEW",
+    "building":"UNDER_REVIEW",
+    "commissioned":"UNDER_REVIEW",
+    "operating":"UNDER_REVIEW",
+    "closed":"UNDER_REVIEW",
 }
+
+
+def _decimal_text(value: Any, field: str, positive: bool = False) -> str:
+    if isinstance(value, (bool, float)):
+        raise ValueError(f"{field} must not use binary floating-point or bool")
+    try:
+        amount = Decimal(str(value))
+    except Exception as exc:
+        raise ValueError(f"{field} must be a decimal value") from exc
+    if not amount.is_finite() or (positive and amount <= 0):
+        raise ValueError(f"{field} must be finite" + (" and positive" if positive else ""))
+    return format(amount, "f")
 
 
 def federation_project_proposal_payload(project: dict[str, Any]) -> dict[str, Any]:
@@ -31,11 +44,14 @@ def federation_project_proposal_payload(project: dict[str, Any]) -> dict[str, An
     for key in ("expected_external_revenue","expected_operating_cashflow"):
         value=economics.get(key)
         if value is not None:
-            cashflows.append(str(Decimal(str(value))))
+            cashflows.append(_decimal_text(value, key))
     constraints=[]
     for dep in project.get("dependencies",[]):
+        secured = dep.get("secured", False)
+        if not isinstance(secured, bool):
+            raise ValueError("dependency secured must be an explicit boolean")
         constraints.append(
-            f"{dep.get('kind')}={dep.get('required_value')} {dep.get('unit')}; secured={bool(dep.get('secured'))}"
+            f"{dep.get('kind')}={dep.get('required_value')} {dep.get('unit')}; secured={str(secured).lower()}"
         )
     constraints.extend(project.get("risk",{}).get("stop_conditions",[]))
     evidence_ids=[
@@ -47,11 +63,12 @@ def federation_project_proposal_payload(project: dict[str, Any]) -> dict[str, An
         "project_id": str(project["proposal_id"]),
         "country": str(project["country"]),
         "sector": str(project["sector"]),
-        "capital_required": str(Decimal(str(capex["amount"]))),
+        "capital_required": _decimal_text(capex["amount"], "capex.amount", positive=True),
         "currency": str(capex["currency"]).upper(),
         "expected_external_cashflows": cashflows,
         "constraints": constraints,
         "evidence_package_ids": evidence_ids,
         "authorization_status": _STATUS[status],
+        "lifecycle_status": status,
         "optimizer_scenario_id": str(project.get("model_run_id")) if project.get("model_run_id") else None,
     }

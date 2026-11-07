@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from synergy_sues import (
     Account, AccountType, EconomicPeriod, EvidenceRecord, EvidenceStatus,
     FXRate, Journal, JournalEntry, JournalLine, Money, NormalBalance, Quantity,
-    BenefitAttribution, BenefitAttributionRegistry, BenefitEvent, FlowBoundary,
+    BenefitAttribution, BenefitAttributionRegistry, BenefitEvent, FlowBoundary, FlowEvidenceStatus,
     PhysicalFlow, summarize_physical_flows, IntercompanyRecord, IntercompanyRecordType,
     reconcile_intercompany, post_intercompany_eliminations, BankAllocation, BankStatement, BankStatementLine,
     reconcile_bank_account, TranslationPolicy, TrialBalanceAccount, translate_trial_balance,
@@ -67,6 +67,24 @@ def entry(entry_id="je1", key="idem1", amount="100"):
         ),
         "event:1", key, "Recognize external sale",
     )
+
+
+
+
+
+def post_opening_cash_balance(journal, amount="100"):
+    journal.add_account(account("opening-equity", "3000", AccountType.EQUITY, NormalBalance.CREDIT))
+    journal.post(JournalEntry(
+        "opening-cash", date(2026, 10, 31),
+        datetime(2026, 10, 31, 12, tzinfo=timezone.utc), "USD",
+        (
+            JournalLine("opening-cash-dr", "cash", "DEBIT", Money(amount, "USD"),
+                Money(amount, "USD"), "co1", "opening:bank-cash"),
+            JournalLine("opening-equity-cr", "opening-equity", "CREDIT", Money(amount, "USD"),
+                Money(amount, "USD"), "co1", "opening:equity"),
+        ),
+        "opening-cash-event", "opening-cash-idem", "Opening cash balance",
+    ))
 
 
 def new_journal():
@@ -324,6 +342,7 @@ def test_intercompany_reconciliation_reports_missing_reciprocal_side():
 
 def test_bank_reconciliation_matches_statement_lines_to_cash_journal():
     journal = new_journal()
+    post_opening_cash_balance(journal)
     journal.add_account(account("opex", "6000", AccountType.EXPENSE, NormalBalance.DEBIT))
     now = datetime(2026, 11, 6, 9, tzinfo=timezone.utc)
     sale = JournalEntry("bank-sale", date(2026, 11, 6), now, "USD",
@@ -352,6 +371,7 @@ def test_bank_reconciliation_matches_statement_lines_to_cash_journal():
 
 def test_bank_reconciliation_preserves_unmatched_cash_and_closing_difference():
     journal = new_journal()
+    post_opening_cash_balance(journal)
     now = datetime(2026, 11, 6, 9, tzinfo=timezone.utc)
     sale = JournalEntry("bank-sale", date(2026, 11, 6), now, "USD",
         (JournalLine("cash-in", "cash", "DEBIT", Money("45", "USD"), Money("45", "USD"), "co1", "bank:in"),
@@ -465,7 +485,10 @@ def test_trial_balance_translation_rejects_missing_historical_rate_and_future_ra
         reporting_date=date(2026, 11, 6),
         translation_adjustment_account_id="cta",
     )
-    equity = [TrialBalanceAccount("capital", AccountType.EQUITY, Money("0", "EUR"), Money("10", "EUR"))]
+    equity = [
+        TrialBalanceAccount("cash", AccountType.ASSET, Money("10", "EUR"), Money("0", "EUR")),
+        TrialBalanceAccount("capital", AccountType.EQUITY, Money("0", "EUR"), Money("10", "EUR")),
+    ]
     with pytest.raises(ValueError, match="Missing historical FX"):
         translate_trial_balance(equity, base, "USD")
 
@@ -530,6 +553,8 @@ def test_trade_subledger_foreign_currency_posting_uses_dated_fx_for_each_event()
     journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
     journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
     journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_account(account("fx-gain", "7100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("fx-loss", "8100", AccountType.EXPENSE, NormalBalance.DEBIT))
     journal.add_fx_rate(FXRate("eurusd-invoice", "EUR", "USD", "1.1",
         datetime(2026, 11, 1, 12, tzinfo=timezone.utc), "fx:invoice"))
     journal.add_fx_rate(FXRate("eurusd-settlement", "EUR", "USD", "1.2",
@@ -541,12 +566,13 @@ def test_trade_subledger_foreign_currency_posting_uses_dated_fx_for_each_event()
             Money("20", "EUR"), "cash", "bank:eur")],
     )
     result = subledger.post_to_journal(
-        journal, TradeAccountMap("ar", "revenue", "ap", "purchases"),
+        journal, TradeAccountMap("ar", "revenue", "ap", "purchases", "fx-gain", "fx-loss"),
         datetime(2026, 11, 6, 13, tzinfo=timezone.utc),
         {"invoice:eur": "eurusd-invoice", "bank:eur": "eurusd-settlement"},
     )
-    assert result["expected_ar_control_delta"] == "86.0"
-    assert result["actual_ar_control_delta"] == "86.0"
+    assert result["expected_ar_control_delta"] == "88.0"
+    assert result["actual_ar_control_delta"] == "88.0"
+    assert journal.trial_balance()["accounts"]["fx-gain"]["credit"] == "2.0"
     assert journal.trial_balance()["balanced"]
 
 
@@ -592,6 +618,8 @@ def test_trade_subledger_batch_is_atomic_when_later_fx_evidence_is_invalid():
     journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
     journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
     journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_account(account("fx-gain", "7100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("fx-loss", "8100", AccountType.EXPENSE, NormalBalance.DEBIT))
     journal.add_fx_rate(FXRate("valid-invoice-rate", "EUR", "USD", "1.1",
         datetime(2026, 11, 1, 12, tzinfo=timezone.utc), "fx:invoice"))
     journal.add_fx_rate(FXRate("future-settlement-rate", "EUR", "USD", "1.2",
@@ -604,7 +632,7 @@ def test_trade_subledger_batch_is_atomic_when_later_fx_evidence_is_invalid():
     )
     with pytest.raises(ValueError, match="post-date"):
         subledger.post_to_journal(
-            journal, TradeAccountMap("ar", "revenue", "ap", "purchases"),
+            journal, TradeAccountMap("ar", "revenue", "ap", "purchases", "fx-gain", "fx-loss"),
             datetime(2026, 11, 7, 13, tzinfo=timezone.utc),
             {"invoice:atomic": "valid-invoice-rate", "bank:atomic": "future-settlement-rate"},
         )
@@ -669,7 +697,7 @@ def test_fifo_inventory_rejects_insufficient_stock_without_mutation_and_mixed_un
 
 
 def test_fifo_inventory_movements_post_to_balanced_journal():
-    ledger = InventoryLedger("USD")
+    ledger = InventoryLedger("USD", entity_id="co1")
     receipt = ledger.receive("r1", "lot-1", "components", "factory",
         Quantity("10", "unit"), Money("100", "USD"), date(2026, 11, 1), "receipt:components")
     issue = ledger.issue("i1", "components", "factory", Quantity("4", "unit"),
@@ -690,3 +718,494 @@ def test_fifo_inventory_movements_post_to_balanced_journal():
     assert journal.trial_balance()["balanced"]
     assert journal.trial_balance()["total_debits"] == journal.trial_balance()["total_credits"] == "140"
     assert [x.movement_type for x in ledger.movements].count(InventoryMovementType.TRANSFER_OUT) == 1
+
+
+def test_calendar_date_contracts_reject_datetime_subclasses():
+    timestamp = datetime(2026, 11, 6, 12, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="calendar date"):
+        EconomicPeriod("bad-period", timestamp, date(2026, 11, 30))
+    with pytest.raises(ValueError, match="calendar date"):
+        EconomicPeriod("bad-period-value", date(2026, 11, 1), date(2026, 11, 30)).contains(timestamp)
+    with pytest.raises(ValueError, match="calendar date"):
+        BankStatementLine("bad-bank-line", timestamp, Money("1", "USD"), "bank:1", "statement:1")
+
+
+def test_fifo_inventory_never_consumes_lots_received_after_issue_date():
+    ledger = InventoryLedger("USD")
+    ledger.receive("future-receipt", "future-lot", "steel", "warehouse",
+        Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 5), "receipt:future")
+    with pytest.raises(ValueError, match="Insufficient inventory"):
+        ledger.issue("premature-issue", "steel", "warehouse", Quantity("1", "kg"),
+            date(2026, 11, 4), "production:premature")
+    # The rejected historical issue must not consume the later receipt.
+    assert ledger.summary()["pools"][0]["quantity"] == "10"
+    issue = ledger.issue("valid-issue", "steel", "warehouse", Quantity("1", "kg"),
+        date(2026, 11, 6), "production:valid")
+    assert issue.cost == Money("10", "USD")
+    assert ledger.summary()["pools"][0]["quantity"] == "9"
+
+
+def test_money_and_quantity_reject_binary_floats():
+    with pytest.raises(ValueError, match="binary floats"):
+        Money(0.1, "USD")
+    with pytest.raises(ValueError, match="binary floats"):
+        Quantity(1.25, "kg")
+    with pytest.raises(ValueError, match="binary floats"):
+        Money("1", "USD").scale(0.1)
+
+
+def test_journal_rejects_duplicate_source_event_even_with_new_entry_and_idempotency_ids():
+    journal = new_journal()
+    first = entry("source-event-first", "source-event-key-first")
+    journal.post(first)
+    duplicate_source = JournalEntry(
+        "source-event-second", first.effective_date, first.recorded_at, first.functional_currency,
+        first.lines, first.source_event_id, "source-event-key-second", "Replay same source event",
+    )
+    with pytest.raises(ValueError, match="Duplicate source_event_id"):
+        journal.post(duplicate_source)
+    assert len(journal.entries) == 1
+
+
+def test_journal_line_freezes_mutable_evidence_id_input():
+    evidence = ["meter:reading-1"]
+    line = JournalLine(
+        "evidence-line", "cash", "DEBIT", Money("1", "USD"), Money("1", "USD"),
+        "co1", "bank:1", evidence_ids=evidence,
+    )
+    evidence.append("attacker:injected")
+    assert line.evidence_ids == ("meter:reading-1",)
+
+
+def test_trade_subledger_requires_realized_fx_account_for_currency_difference():
+    journal = Journal("USD")
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
+    journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_fx_rate(FXRate("invoice-rate", "EUR", "USD", "1.1",
+        datetime(2026, 11, 1, tzinfo=timezone.utc), "fx:invoice"))
+    journal.add_fx_rate(FXRate("settlement-rate", "EUR", "USD", "1.2",
+        datetime(2026, 11, 6, tzinfo=timezone.utc), "fx:settlement"))
+    subledger = TradeSubledger(
+        [TradeDocument("fx-invoice", TradeSide.RECEIVABLE, "co1", "customer",
+            date(2026, 11, 1), date(2026, 11, 30), Money("100", "EUR"), "invoice:fx")],
+        [TradeSettlement("fx-settlement", "fx-invoice", date(2026, 11, 6),
+            Money("20", "EUR"), "cash", "bank:fx")],
+    )
+    with pytest.raises(ValueError, match="Realized FX gain account is required"):
+        subledger.post_to_journal(
+            journal, TradeAccountMap("ar", "revenue", "ap", "purchases"),
+            datetime(2026, 11, 6, 13, tzinfo=timezone.utc),
+            {"invoice:fx": "invoice-rate", "bank:fx": "settlement-rate"},
+        )
+
+
+def test_trade_documents_reject_datetime_in_calendar_date_fields():
+    with pytest.raises(ValueError, match="calendar date"):
+        TradeDocument("bad-date", TradeSide.RECEIVABLE, "co1", "customer",
+            datetime(2026, 11, 1, tzinfo=timezone.utc), date(2026, 11, 30),
+            Money("10", "USD"), "invoice:bad-date")
+
+
+def test_trade_payable_settlement_posts_realized_fx_loss_against_invoice_carrying_value():
+    journal = Journal("USD")
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
+    journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_account(account("fx-gain", "7100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("fx-loss", "8100", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_fx_rate(FXRate("ap-invoice-rate", "EUR", "USD", "1.1",
+        datetime(2026, 11, 1, 12, tzinfo=timezone.utc), "fx:ap-invoice"))
+    journal.add_fx_rate(FXRate("ap-settlement-rate", "EUR", "USD", "1.2",
+        datetime(2026, 11, 6, 12, tzinfo=timezone.utc), "fx:ap-settlement"))
+    subledger = TradeSubledger(
+        [TradeDocument("ap-eur", TradeSide.PAYABLE, "co1", "supplier",
+            date(2026, 11, 1), date(2026, 11, 30), Money("100", "EUR"), "invoice:ap-eur")],
+        [TradeSettlement("ap-settle-eur", "ap-eur", date(2026, 11, 6),
+            Money("20", "EUR"), "cash", "bank:ap-eur")],
+    )
+    result = subledger.post_to_journal(
+        journal, TradeAccountMap("ar", "revenue", "ap", "purchases", "fx-gain", "fx-loss"),
+        datetime(2026, 11, 6, 13, tzinfo=timezone.utc),
+        {"invoice:ap-eur": "ap-invoice-rate", "bank:ap-eur": "ap-settlement-rate"},
+    )
+    assert result["expected_ap_credit_control_delta"] == "88.0"
+    assert result["actual_ap_credit_control_delta"] == "88.0"
+    trial = journal.trial_balance()
+    assert trial["accounts"]["fx-loss"]["debit"] == "2.0"
+    assert trial["balanced"]
+
+
+def test_intercompany_elimination_date_must_fall_inside_canonical_period():
+    journal = Journal("USD")
+    journal.add_account(account("seller-revenue", "4100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("buyer-expense", "5100", AccountType.EXPENSE, NormalBalance.DEBIT))
+    rows = [
+        IntercompanyRecord("period-r", "period-tx", "seller", "buyer", "SELLER_REVENUE",
+            Money("10", "USD"), "2026-Q4", "erp:sale", "seller-revenue"),
+        IntercompanyRecord("period-e", "period-tx", "buyer", "seller", "BUYER_EXPENSE",
+            Money("10", "USD"), "2026-Q4", "erp:purchase", "buyer-expense"),
+    ]
+    with pytest.raises(ValueError, match="falls outside period"):
+        post_intercompany_eliminations(
+            journal, rows, {"2026-Q4": date(2027, 1, 15)},
+            datetime(2027, 1, 15, tzinfo=timezone.utc), "period-event", "period-idem",
+        )
+    assert journal.entries == ()
+
+
+def test_inventory_gl_posting_requires_owner_and_is_single_journal_only():
+    unbound = InventoryLedger("USD")
+    unbound.receive("unbound-receipt", "unbound-lot", "steel", "factory",
+        Quantity("1", "kg"), Money("10", "USD"), date(2026, 11, 1), "receipt:unbound")
+    journal = Journal("USD", entity_id="co1")
+    journal.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    with pytest.raises(ValueError, match="bound to an entity"):
+        unbound.post_to_journal("unbound-receipt", journal, "inventory", "grni", "co1",
+            datetime(2026, 11, 2, tzinfo=timezone.utc))
+
+    ledger = InventoryLedger("USD", entity_id="co1")
+    receipt = ledger.receive("owned-receipt", "owned-lot", "steel", "factory",
+        Quantity("1", "kg"), Money("10", "USD"), date(2026, 11, 1), "receipt:owned")
+    ledger.post_to_journal(receipt.movement_id, journal, "inventory", "grni", "co1",
+        datetime(2026, 11, 2, tzinfo=timezone.utc))
+    other_journal = Journal("USD", entity_id="co1")
+    other_journal.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    other_journal.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    with pytest.raises(ValueError, match="already journalized"):
+        ledger.post_to_journal(receipt.movement_id, other_journal, "inventory", "grni", "co1",
+            datetime(2026, 11, 2, tzinfo=timezone.utc))
+
+
+def test_inventory_ledger_rejects_cross_entity_journal_posting():
+    ledger = InventoryLedger("USD", entity_id="co1")
+    receipt = ledger.receive("cross-entity-receipt", "cross-entity-lot", "steel", "factory",
+        Quantity("1", "kg"), Money("10", "USD"), date(2026, 11, 1), "receipt:cross-entity")
+    journal = Journal("USD", entity_id="co2")
+    journal.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    with pytest.raises(ValueError, match="ownership mismatch"):
+        ledger.post_to_journal(receipt.movement_id, journal, "inventory", "grni", "co2",
+            datetime(2026, 11, 2, tzinfo=timezone.utc))
+
+
+def test_benefit_registry_rejects_duplicate_enterprise_period_metric_counterfactual_scope():
+    registry = BenefitAttributionRegistry()
+    registry.add_event(BenefitEvent(
+        "benefit-scope-a", "measurement-a", "enterprise-1", "2026-Q4",
+        "ENERGY_SAVING", Money("100", "USD"), "baseline-vs-control",
+        ["meter:site-a"], EvidenceStatus.VERIFIED,
+    ))
+    with pytest.raises(ValueError, match="measurement scope already registered"):
+        registry.add_event(BenefitEvent(
+            "benefit-scope-b", "measurement-b", "enterprise-1", "2026-Q4",
+            "ENERGY_SAVING", Money("100", "USD"), "baseline-vs-control",
+            ["meter:site-b"], EvidenceStatus.VERIFIED,
+        ))
+    # Distinct explicit scopes represent separate measured facilities.
+    registry.add_event(BenefitEvent(
+        "benefit-scope-c", "measurement-c", "enterprise-1", "2026-Q4",
+        "ENERGY_SAVING", Money("100", "USD"), "baseline-vs-control",
+        ["meter:site-b"], EvidenceStatus.VERIFIED, "facility:site-b",
+    ))
+
+
+def test_benefit_event_freezes_evidence_ids():
+    evidence = ["meter:one"]
+    event = BenefitEvent(
+        "benefit-immutable", "measurement-immutable", "enterprise-1", "2026-Q4",
+        "OUTPUT_GAIN", Money("10", "KZT"), "baseline-1", evidence, EvidenceStatus.OBSERVED,
+    )
+    evidence.append("attacker:injected")
+    assert event.evidence_ids == ("meter:one",)
+
+
+def test_physical_flow_summary_separates_scenario_from_observed_and_verified():
+    rows = [
+        PhysicalFlow("planned", "factory", "customer", "steel",
+            Quantity("10", "tonne"), "2026-Q4", evidence_status=FlowEvidenceStatus.PLANNED),
+        PhysicalFlow("scenario", "factory", "customer", "steel",
+            Quantity("100", "tonne"), "2026-Q4", evidence_status=FlowEvidenceStatus.SCENARIO),
+        PhysicalFlow("observed", "factory", "customer", "steel",
+            Quantity("8", "tonne"), "2026-Q4", evidence_id="delivery:8",
+            evidence_status=FlowEvidenceStatus.OBSERVED),
+        PhysicalFlow("verified", "factory", "customer", "steel",
+            Quantity("7", "tonne"), "2026-Q4", evidence_id="acceptance:7",
+            evidence_status=FlowEvidenceStatus.VERIFIED),
+    ]
+    summary = summarize_physical_flows(rows)
+    assert len(summary["flows"]) == 4
+    assert {row["evidence_status"] for row in summary["flows"]} == {
+        "PLANNED", "SCENARIO", "OBSERVED", "VERIFIED"
+    }
+    assert summary["scenario_and_unverified_flows_are_separated"]
+
+
+def test_observed_and_verified_physical_flows_require_evidence_ids():
+    with pytest.raises(ValueError, match="require evidence_id"):
+        PhysicalFlow("observed-no-proof", "factory", "customer", "steel",
+            Quantity("1", "tonne"), "2026-Q4", evidence_status=FlowEvidenceStatus.OBSERVED)
+
+
+def test_inventory_gl_bridge_rejects_semantically_invalid_offset_accounts():
+    ledger = InventoryLedger("USD", entity_id="co1")
+    receipt = ledger.receive("bad-offset-receipt", "bad-offset-lot", "steel", "factory",
+        Quantity("2", "kg"), Money("20", "USD"), date(2026, 11, 1), "receipt:bad-offset")
+    journal = Journal("USD", entity_id="co1")
+    journal.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    journal.add_account(account("cogs", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    with pytest.raises(ValueError, match="receipt offset"):
+        ledger.post_to_journal(receipt.movement_id, journal, "inventory", "cash", "co1",
+            datetime(2026, 11, 2, tzinfo=timezone.utc))
+    issue = ledger.issue("bad-offset-issue", "steel", "factory",
+        Quantity("1", "kg"), date(2026, 11, 2), "issue:bad-offset")
+    with pytest.raises(ValueError, match="issue offset"):
+        ledger.post_to_journal(issue.movement_id, journal, "inventory", "grni", "co1",
+            datetime(2026, 11, 3, tzinfo=timezone.utc))
+
+
+
+def test_calendar_date_contracts_reject_datetime_subclasses():
+    from datetime import datetime, timezone
+    instant = datetime(2026, 11, 6, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="calendar date"):
+        EconomicPeriod("bad", instant, date(2026, 11, 30))
+    with pytest.raises(ValueError, match="calendar date"):
+        EconomicPeriod("bad", date(2026, 11, 1), instant)
+    period = EconomicPeriod("good", date(2026, 11, 1), date(2026, 11, 30))
+    with pytest.raises(ValueError, match="calendar date"):
+        period.contains(instant)
+    with pytest.raises(ValueError, match="calendar date"):
+        EvidenceRecord("e-date", "source", EvidenceStatus.OBSERVED, instant,
+            instant, None)
+
+
+def test_inventory_fifo_cannot_consume_a_future_receipt():
+    ledger = InventoryLedger("USD", entity_id="co1")
+    ledger.receive("future", "future-lot", "steel", "factory",
+        Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 7), "receipt:future")
+    with pytest.raises(ValueError, match="Insufficient inventory"):
+        ledger.issue("early-issue", "steel", "factory", Quantity("1", "kg"),
+            date(2026, 11, 6), "production:early")
+    assert ledger.summary()["pools"][0]["quantity"] == "10"
+    assert ledger.movements[0].movement_id == "future"
+
+
+def test_inventory_transfer_cannot_move_a_future_receipt_back_in_time():
+    ledger = InventoryLedger("USD", entity_id="co1")
+    ledger.receive("future-transfer-source", "future-source-lot", "copper", "warehouse-a",
+        Quantity("5", "kg"), Money("50", "USD"), date(2026, 11, 7), "receipt:future-copper")
+    with pytest.raises(ValueError, match="Insufficient inventory"):
+        ledger.transfer("early-transfer", "copper", "warehouse-a", "warehouse-b",
+            Quantity("1", "kg"), date(2026, 11, 6), "transfer:early")
+    assert len(ledger.movements) == 1
+    assert ledger.summary()["pools"][0]["location_id"] == "warehouse-a"
+
+
+
+def test_money_and_quantity_reject_binary_float_inputs():
+    with pytest.raises(ValueError, match="float"):
+        Money(0.1, "USD")
+    with pytest.raises(ValueError, match="float"):
+        Quantity(0.1, "kg")
+    with pytest.raises(ValueError, match="float"):
+        Money("1", "USD").scale(0.1)
+
+
+def test_calendar_date_contracts_reject_datetime_subclasses():
+    with pytest.raises(ValueError, match="calendar date"):
+        EconomicPeriod("bad", datetime(2026, 11, 1, tzinfo=timezone.utc), date(2026, 11, 30))
+    period = EconomicPeriod("good", date(2026, 11, 1), date(2026, 11, 30))
+    with pytest.raises(ValueError, match="calendar date"):
+        period.contains(datetime(2026, 11, 6, tzinfo=timezone.utc))
+
+
+def test_fifo_inventory_excludes_future_receipts_from_historical_availability_and_issue():
+    ledger = InventoryLedger("USD")
+    ledger.receive("future-r", "future-lot", "steel", "factory",
+        Quantity("5", "kg"), Money("50", "USD"), date(2026, 11, 7), "receipt:future")
+    assert ledger.available("steel", "factory", "kg", date(2026, 11, 6)) == Quantity("0", "kg")
+    assert ledger.available("steel", "factory", "kg") == Quantity("5", "kg")
+    before = ledger.summary()
+    with pytest.raises(ValueError, match="Insufficient inventory"):
+        ledger.issue("early-issue", "steel", "factory", Quantity("1", "kg"),
+            date(2026, 11, 6), "production:early")
+    assert ledger.summary() == before
+
+
+
+def test_journal_reversal_cannot_be_effective_before_original_entry():
+    journal = new_journal()
+    original = journal.post(entry("dated-original", "dated-original-idem"))
+    with pytest.raises(ValueError, match="cannot precede the original"):
+        journal.reverse(
+            original.entry_id, "dated-reversal",
+            date(2026, 11, 5), datetime(2026, 11, 7, 8, tzinfo=timezone.utc),
+            "dated-reversal-event", "dated-reversal-idem", "Backdated reversal",
+        )
+    assert len(journal.entries) == 1
+
+
+
+def test_journal_rejects_future_effective_entry_at_construction():
+    now = datetime(2026, 11, 6, 23, 30, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="cannot be later than recorded_at"):
+        JournalEntry(
+            "future-entry", date(2026, 11, 7), now, "USD",
+            (
+                JournalLine("future-dr", "cash", "DEBIT", Money("1", "USD"), Money("1", "USD"), "co1", "bank:future"),
+                JournalLine("future-cr", "revenue", "CREDIT", Money("1", "USD"), Money("1", "USD"), "co1", "sale:future"),
+            ),
+            "future-event", "future-idem", "Future effective entry",
+        )
+
+
+def test_intercompany_cash_only_records_reject_noncanonical_periods():
+    from synergy_sues.consolidation import IntercompanyRecord, IntercompanyRecordType, reconcile_intercompany
+    record = IntercompanyRecord(
+        "cash-bad-period", "tx-cash-only", "seller", "buyer",
+        IntercompanyRecordType.SELLER_CASH_IN, Money("25", "USD"),
+        "2026-Q5", "bank:cash-transfer",
+    )
+    with pytest.raises(ValueError, match="Unsupported or non-canonical"):
+        reconcile_intercompany([record])
+
+
+def test_bank_reconciliation_does_not_rewrite_closed_period_with_late_backdated_entry():
+    journal = new_journal()
+    post_opening_cash_balance(journal)
+    late = JournalEntry(
+        "late-backdated-cash", date(2026, 11, 6),
+        datetime(2026, 12, 2, 9, tzinfo=timezone.utc), "USD",
+        (
+            JournalLine("late-cash", "cash", "DEBIT", Money("50", "USD"),
+                Money("50", "USD"), "co1", "bank:late"),
+            JournalLine("late-revenue", "revenue", "CREDIT", Money("50", "USD"),
+                Money("50", "USD"), "co1", "sale:late"),
+        ),
+        "evt-late", "idem-late", "Late backdated bank receipt",
+    )
+    journal.post(late)
+    period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
+    statement = BankStatement(
+        "stmt-late", "cash", "USD", period, Money("100", "USD"),
+        Money("150", "USD"), Money("100", "USD"),
+        (BankStatementLine("bank-line-late", date(2026, 11, 6),
+            Money("50", "USD"), "bank:late", "statement:late"),),
+    )
+    result = reconcile_bank_account(journal, statement, [])
+    assert result["ledger_closing_balance"] == "100"
+    assert result["bank_closing_balance"] == "150"
+    assert not result["fully_reconciled"]
+    assert result["late_recorded_journal_lines"][0]["journal_line_ref"] == "late-backdated-cash:late-cash"
+    assert result["bank_minus_ledger_closing_difference"] == "50"
+
+
+def test_translation_policy_rejects_datetime_and_freezes_historical_rates():
+    now = datetime(2026, 11, 6, 10, tzinfo=timezone.utc)
+    historical = {
+        "capital": FXRate("hist", "EUR", "USD", "1.0", now, "fx:historical")
+    }
+    policy = TranslationPolicy(
+        closing_rate=FXRate("close", "EUR", "USD", "1.1", now, "fx:close"),
+        average_rate=FXRate("average", "EUR", "USD", "1.05", now, "fx:average"),
+        historical_equity_rates=historical,
+        reporting_date=date(2026, 11, 6),
+        translation_adjustment_account_id="cta",
+    )
+    historical.clear()
+    assert "capital" in policy.historical_equity_rates
+    with pytest.raises(TypeError):
+        policy.historical_equity_rates["new-capital"] = FXRate(
+            "new", "EUR", "USD", "1.2", now, "fx:new"
+        )
+    with pytest.raises(ValueError, match="calendar date"):
+        TranslationPolicy(
+            closing_rate=policy.closing_rate,
+            average_rate=policy.average_rate,
+            historical_equity_rates={},
+            reporting_date=datetime(2026, 11, 6, 10, tzinfo=timezone.utc),
+            translation_adjustment_account_id="cta",
+        )
+
+
+
+def test_scenario_benefits_never_enter_verified_project_totals():
+    registry = BenefitAttributionRegistry()
+    registry.add_event(BenefitEvent(
+        "verified-benefit", "meter-verified", "enterprise-1", "2026-Q4",
+        "ENERGY_SAVING", Money("100", "USD"), "baseline-1",
+        ("meter:verified",), EvidenceStatus.VERIFIED,
+    ))
+    registry.add_event(BenefitEvent(
+        "scenario-benefit", "model-scenario", "enterprise-1", "2026-Q4",
+        "ENERGY_SAVING", Money("900", "USD"), "baseline-2",
+        ("scenario:model-1",), EvidenceStatus.SCENARIO,
+    ))
+    registry.add_claim(BenefitAttribution("claim-verified", "verified-benefit", "project-a", "1"))
+    registry.add_claim(BenefitAttribution("claim-scenario", "scenario-benefit", "project-a", "1"))
+    summary = registry.summary()
+    assert summary["attributed_amount_by_project_currency"] == [
+        {"project_id": "project-a", "currency": "USD", "amount": "100"}
+    ]
+    by_status = {
+        row["evidence_status"]: row["amount"]
+        for row in summary["attributed_amount_by_project_currency_and_status"]
+    }
+    assert by_status == {"SCENARIO": "900", "VERIFIED": "100"}
+    assert summary["scenario_amounts_are_excluded_from_verified_project_totals"]
+
+
+
+def test_currency_translation_refuses_to_plug_an_unbalanced_source_trial_balance():
+    now = datetime(2026, 11, 6, 10, tzinfo=timezone.utc)
+    policy = TranslationPolicy(
+        closing_rate=FXRate("close-source", "EUR", "USD", "1.1", now, "fx:close"),
+        average_rate=FXRate("average-source", "EUR", "USD", "1.05", now, "fx:average"),
+        historical_equity_rates={},
+        reporting_date=date(2026, 11, 6),
+        translation_adjustment_account_id="cta",
+    )
+    unbalanced = [
+        TrialBalanceAccount("cash", AccountType.ASSET, Money("100", "EUR"), Money("0", "EUR")),
+        TrialBalanceAccount("revenue", AccountType.REVENUE, Money("0", "EUR"), Money("90", "EUR")),
+    ]
+    with pytest.raises(ValueError, match="Source functional-currency trial balance is unbalanced"):
+        translate_trial_balance(unbalanced, policy, "USD")
+
+
+
+def test_bank_reconciliation_rejects_unverified_caller_supplied_opening_ledger_balance():
+    journal = new_journal()
+    now = datetime(2026, 11, 6, 9, tzinfo=timezone.utc)
+    sale = JournalEntry(
+        "sale-without-opening", date(2026, 11, 6), now, "USD",
+        (
+            JournalLine("cash-in", "cash", "DEBIT", Money("50", "USD"), Money("50", "USD"), "co1", "bank:in"),
+            JournalLine("rev", "revenue", "CREDIT", Money("50", "USD"), Money("50", "USD"), "co1", "sale:1"),
+        ),
+        "sale-without-opening-event", "sale-without-opening-idem", "Sale without ledger opening",
+    )
+    journal.post(sale)
+    period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
+    statement = BankStatement(
+        "stmt-unverified-opening", "cash", "USD", period,
+        Money("100", "USD"), Money("150", "USD"), Money("100", "USD"),
+        (BankStatementLine("bank-line", date(2026, 11, 6), Money("50", "USD"), "bank:1", "statement:1"),),
+    )
+    result = reconcile_bank_account(journal, statement, [
+        BankAllocation("allocation", "bank-line", "sale-without-opening", "cash-in",
+            Money("50", "USD"), "allocation:opening-test"),
+    ])
+    assert result["ledger_opening_balance"] == "0"
+    assert result["statement_asserted_opening_ledger_balance"] == "100"
+    assert result["opening_ledger_balance_difference"] == "100"
+    assert result["ledger_closing_balance"] == "50"
+    assert not result["fully_reconciled"]

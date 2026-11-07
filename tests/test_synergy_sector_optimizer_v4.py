@@ -54,7 +54,7 @@ def test_weights_must_sum_to_one():
 def test_optimizer_rejects_nan_weights_zero_normalizers_and_bad_project_fields():
     cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
     cfg["objective_weights"]["annual_net_residual_yield"] = float("nan")
-    with pytest.raises(ValueError, match="finite and non-negative"):
+    with pytest.raises(ValueError, match="finite"):
         optimize_portfolio(cfg, 100_000)
 
     cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
@@ -75,10 +75,44 @@ def test_optimizer_rejects_nan_weights_zero_normalizers_and_bad_project_fields()
 
 def test_optimizer_rejects_nonfinite_budget_and_overcommitted_sector_minimums():
     cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
-    with pytest.raises(ValueError, match="finite and positive"):
+    with pytest.raises(ValueError, match="finite"):
         optimize_portfolio(cfg, float("nan"))
 
     cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
     cfg["sector_min_investment_usd"]["FOOD"] = 1_000_000
     with pytest.raises(ValueError, match="exceeds available project capacity"):
         optimize_portfolio(cfg, 100_000)
+
+
+def test_sector_optimizer_rejects_booleans_and_numeric_strings():
+    cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
+    with pytest.raises(ValueError, match="not a boolean or string"):
+        optimize_portfolio(cfg, True)
+
+    bad = json.loads(json.dumps(cfg))
+    bad["objective_weights"]["annual_net_residual_yield"] = True
+    with pytest.raises(ValueError, match="not a boolean or string"):
+        optimize_portfolio(bad, 250_000)
+
+    bad = json.loads(json.dumps(cfg))
+    bad["normalization"]["annual_net_residual_yield"] = "1000"
+    with pytest.raises(ValueError, match="not a boolean or string"):
+        optimize_portfolio(bad, 250_000)
+
+    bad = json.loads(json.dumps(cfg))
+    bad["projects"][0]["max_investment_usd"] = "10000"
+    with pytest.raises(ValueError, match="not a boolean or string"):
+        optimize_portfolio(bad, 250_000)
+
+
+def test_sector_optimizer_rejects_incomplete_configuration_shapes():
+    cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
+    bad = json.loads(json.dumps(cfg))
+    bad["objective_weights"].pop("annual_net_residual_yield")
+    with pytest.raises(ValueError, match="exactly the modeled metrics"):
+        optimize_portfolio(bad, 250_000)
+
+    bad = json.loads(json.dumps(cfg))
+    bad["projects"] = [None]
+    with pytest.raises(ValueError, match="project objects"):
+        optimize_portfolio(bad, 250_000)

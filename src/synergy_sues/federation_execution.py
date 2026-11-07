@@ -15,7 +15,66 @@ from hashlib import sha256
 from typing import Any, Callable, Mapping
 
 from .federation_authorization import AuthorizationDecision, FederationAuthorizationPolicy
-from .federation_identity import SignedEventEnvelope, TrustedKeyRegistry, _canonical, _utc
+from .federation_identity import SignedEventEnvelope, TrustedKeyRegistry, _canonical, _event_hash, _utc
+
+
+class _HandlerCursor:
+    """Narrow cursor facade that never exposes the owning SQLite connection."""
+
+    __slots__ = ("__cursor",)
+
+    def __init__(self, cursor: sqlite3.Cursor) -> None:
+        self.__cursor = cursor
+
+    def fetchone(self):
+        return self.__cursor.fetchone()
+
+    def fetchmany(self, size: int | None = None):
+        return self.__cursor.fetchmany() if size is None else self.__cursor.fetchmany(size)
+
+    def fetchall(self):
+        return self.__cursor.fetchall()
+
+    @property
+    def rowcount(self) -> int:
+        return self.__cursor.rowcount
+
+    @property
+    def lastrowid(self):
+        return self.__cursor.lastrowid
+
+    @property
+    def description(self):
+        return self.__cursor.description
+
+    def __iter__(self):
+        return iter(self.__cursor)
+
+
+class _HandlerConnection:
+    """Expose SQL statements but not transaction or connection-management controls."""
+
+    __slots__ = ("__connection",)
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self.__connection = connection
+
+    def execute(self, sql: str, parameters=()):
+        return _HandlerCursor(self.__connection.execute(sql, parameters))
+
+    def executemany(self, sql: str, seq_of_parameters):
+        return _HandlerCursor(self.__connection.executemany(sql, seq_of_parameters))
+
+    def cursor(self):
+        return _HandlerCursor(self.__connection.cursor())
+
+    @property
+    def total_changes(self) -> int:
+        return self.__connection.total_changes
+
+    @property
+    def in_transaction(self) -> bool:
+        return self.__connection.in_transaction
 
 
 @dataclass(frozen=True)
@@ -34,13 +93,19 @@ class AuthorizedActionExecutor:
     Enqueue external work transactionally in an outbox and dispatch after commit.
     """
 
-    def __init__(self, database_path: str, busy_timeout_ms: int = 5000) -> None:
+    def __init__(
+        self, database_path: str, busy_timeout_ms: int = 5000,
+        require_scope_guard: bool = False,
+    ) -> None:
         if not isinstance(database_path, str) or not database_path.strip() or database_path == ":memory:":
             raise ValueError("authorized action executor requires a file-backed database")
         if isinstance(busy_timeout_ms, bool) or not isinstance(busy_timeout_ms, int) or busy_timeout_ms < 0:
             raise ValueError("busy_timeout_ms must be a non-negative integer")
+        if not isinstance(require_scope_guard, bool):
+            raise ValueError("require_scope_guard must be a boolean")
         self.database_path = database_path
         self.busy_timeout_ms = busy_timeout_ms
+        self.require_scope_guard = require_scope_guard
         with self._session() as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS execution_receipts (
@@ -55,9 +120,32 @@ class AuthorizedActionExecutor:
                     executed_at TEXT NOT NULL,
                     result_json TEXT NOT NULL,
                     decision_json TEXT NOT NULL,
+                    receipt_version INTEGER NOT NULL DEFAULT 1,
+                    request_envelope_json TEXT NOT NULL DEFAULT '{}',
+                    approval_envelopes_json TEXT NOT NULL DEFAULT '[]',
                     previous_hash TEXT NOT NULL,
                     receipt_hash TEXT NOT NULL UNIQUE
                 );
+                CREATE TABLE IF NOT EXISTS authority_scope_reservation_events (
+                    event_id TEXT PRIMARY KEY,
+                    request_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL CHECK(event_type IN ('RESERVED','RELEASED')),
+                    scope_id TEXT NOT NULL,
+                    tenant_id TEXT NOT NULL,
+                    period_key TEXT NOT NULL,
+                    currency TEXT NOT NULL,
+                    amount TEXT NOT NULL,
+                    source_ref TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS authority_scope_reservations_period
+                    ON authority_scope_reservation_events(scope_id,tenant_id,period_key,currency,request_id);
+                CREATE TRIGGER IF NOT EXISTS authority_scope_reservations_no_update
+                BEFORE UPDATE ON authority_scope_reservation_events
+                BEGIN SELECT RAISE(ABORT, 'authority scope reservation events are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS authority_scope_reservations_no_delete
+                BEFORE DELETE ON authority_scope_reservation_events
+                BEGIN SELECT RAISE(ABORT, 'authority scope reservation events are append-only'); END;
                 CREATE TABLE IF NOT EXISTS execution_outbox (
                     message_id TEXT PRIMARY KEY,
                     idempotency_key TEXT NOT NULL,
@@ -85,6 +173,13 @@ class AuthorizedActionExecutor:
                 BEFORE DELETE ON execution_receipts
                 BEGIN SELECT RAISE(ABORT, 'execution receipts are append-only'); END;
             """)
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(execution_receipts)").fetchall()}
+            if "receipt_version" not in columns:
+                db.execute("ALTER TABLE execution_receipts ADD COLUMN receipt_version INTEGER NOT NULL DEFAULT 1")
+            if "request_envelope_json" not in columns:
+                db.execute("ALTER TABLE execution_receipts ADD COLUMN request_envelope_json TEXT NOT NULL DEFAULT '{}'")
+            if "approval_envelopes_json" not in columns:
+                db.execute("ALTER TABLE execution_receipts ADD COLUMN approval_envelopes_json TEXT NOT NULL DEFAULT '[]'")
         if not self.verify():
             raise ValueError("execution receipt chain verification failed")
 
@@ -137,6 +232,12 @@ class AuthorizedActionExecutor:
         fields = ("sequence", "request_id", "request_event_id", "request_event_hash",
                   "action", "resource_type", "resource_id", "requester_identity_id",
                   "executed_at", "result_json", "decision_json", "previous_hash")
+        try:
+            version = int(row["receipt_version"])
+        except (KeyError, IndexError):
+            version = 1
+        if version >= 2:
+            fields = fields + ("receipt_version", "request_envelope_json", "approval_envelopes_json")
         return sha256(_canonical({field: row[field] for field in fields})).hexdigest()
 
     def execute(
@@ -145,28 +246,73 @@ class AuthorizedActionExecutor:
         approvals: Any,
         policy: FederationAuthorizationPolicy,
         registry: TrustedKeyRegistry,
-        handler: Callable[[sqlite3.Connection, SignedEventEnvelope, AuthorizationDecision], Any],
+        handler: Callable[[_HandlerConnection, SignedEventEnvelope, AuthorizationDecision], Any],
         received_at: datetime | str | None = None,
+        scope_guard: Callable[[_HandlerConnection, SignedEventEnvelope, AuthorizationDecision, datetime], bool] | None = None,
     ) -> ExecutionResult:
         if not callable(handler):
             raise ValueError("handler must be callable")
-        decision = policy.authorize(request, approvals, registry, received_at)
-        if not decision.allowed:
-            return ExecutionResult(False, "DENIED", decision)
+        if scope_guard is not None and not callable(scope_guard):
+            raise ValueError("scope_guard must be callable when supplied")
+        if self.require_scope_guard and scope_guard is None:
+            raise ValueError("this executor requires an atomic authority-scope guard for every execution")
+        if received_at is None:
+            now = datetime.now(timezone.utc)
+        elif isinstance(received_at, str):
+            now = _utc(received_at, "received_at")
+        elif isinstance(received_at, datetime) and received_at.tzinfo is not None and received_at.utcoffset() is not None:
+            now = received_at.astimezone(timezone.utc)
+        else:
+            raise ValueError("received_at must be an ISO timestamp or timezone-aware datetime")
+        received_stamp = now.isoformat()
 
-        payload = request.event["payload"]
+        def snapshot(envelope: SignedEventEnvelope) -> SignedEventEnvelope:
+            if not isinstance(envelope, SignedEventEnvelope):
+                raise ValueError("request and approvals must be signed event envelopes")
+            document = json.loads(_canonical(envelope.as_dict()))
+            return SignedEventEnvelope(**document)
+
+        # Separate immutable-by-convention snapshots isolate authorization,
+        # handler execution and receipt evidence from caller-owned mutable dicts.
+        receipt_request = snapshot(request)
+        authorization_request = snapshot(request)
+        approval_snapshots = tuple(snapshot(item) for item in approvals)
+        request_snapshot_json = _canonical(receipt_request.as_dict())
+        approval_snapshot_json = tuple(_canonical(item.as_dict()) for item in approval_snapshots)
+
+        decision = policy.authorize(authorization_request, approval_snapshots, registry, received_stamp)
+        if (_canonical(authorization_request.as_dict()) != request_snapshot_json
+                or tuple(_canonical(item.as_dict()) for item in approval_snapshots) != approval_snapshot_json):
+            raise ValueError("authorization mutated signed request or approval evidence")
+        verified_requester = registry.verify(receipt_request, received_stamp)
+        if _canonical(receipt_request.as_dict()) != request_snapshot_json:
+            raise ValueError("identity verification mutated signed request evidence")
+        if (verified_requester.identity_id != decision.requester_identity_id
+                or verified_requester.tenant_id != receipt_request.tenant_id):
+            raise ValueError("authorization decision requester does not match signed request identity")
+        payload = receipt_request.event["payload"]
         request_id = payload["request_id"]
         action = payload["action"]
         resource_type = payload["resource_type"]
         resource_id = payload["resource_id"]
-        request_event_id = request.event["event_id"]
-        request_event_hash = request.event["event_hash"]
-        requester = decision.requester_identity_id
-        now = _utc(received_at, "received_at") if isinstance(received_at, str) else (
-            received_at or datetime.now(timezone.utc))
-        if now.tzinfo is None or now.utcoffset() is None:
-            raise ValueError("received_at must be timezone-aware")
-        executed_at = now.astimezone(timezone.utc).isoformat()
+        if decision.request_id != request_id:
+            raise ValueError("authorization decision request_id does not match signed request")
+        request_event_id = receipt_request.event["event_id"]
+        request_event_hash = receipt_request.event["event_hash"]
+        if (
+            decision.request_event_id != request_event_id
+            or decision.request_event_hash != request_event_hash
+            or decision.action != action
+            or decision.resource_type != resource_type
+            or decision.resource_id != resource_id
+            or decision.tenant_id != receipt_request.tenant_id
+        ):
+            raise ValueError("authorization decision is not bound to this signed event and exact action/resource")
+        requester = verified_requester.identity_id
+        if not decision.allowed:
+            return ExecutionResult(False, "DENIED", decision)
+        handler_request = snapshot(receipt_request)
+        executed_at = received_stamp
 
         with self._session() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -203,12 +349,12 @@ class AuthorizedActionExecutor:
                     current_policy = db.execute(
                         "SELECT version,policy_hash FROM authorization_policy_changes "
                         "WHERE tenant_id=? ORDER BY version DESC LIMIT 1",
-                        (request.tenant_id,),
+                        (receipt_request.tenant_id,),
                     ).fetchone()
                     if current_policy is None:
                         current_version = 0
                         current_hash = sha256(_canonical({
-                            "tenant_id": request.tenant_id,
+                            "tenant_id": receipt_request.tenant_id,
                             "version": 0,
                             "rules": [],
                         })).hexdigest()
@@ -219,13 +365,55 @@ class AuthorizedActionExecutor:
                             or current_hash != decision.policy_hash):
                         raise ValueError("authorization policy snapshot changed before execution")
 
-                result = handler(db, request, decision)
+                # Handlers participate in the executor's transaction but cannot
+                # commit/rollback it, alter the append-only receipt/outbox controls,
+                # or remove the database triggers that protect those controls.
+                protected_tables = {
+                    "execution_receipts", "execution_outbox",
+                    "authority_scope_reservation_events",
+                }
+                def authorize_handler_sql(action, arg1, arg2, database_name, trigger_name):
+                    if action in (
+                        sqlite3.SQLITE_TRANSACTION, sqlite3.SQLITE_SAVEPOINT,
+                        sqlite3.SQLITE_ATTACH, sqlite3.SQLITE_DETACH,
+                        sqlite3.SQLITE_CREATE_TRIGGER, sqlite3.SQLITE_DROP_TRIGGER,
+                        sqlite3.SQLITE_CREATE_TEMP_TRIGGER, sqlite3.SQLITE_DROP_TEMP_TRIGGER,
+                    ):
+                        return sqlite3.SQLITE_DENY
+                    if action == sqlite3.SQLITE_PRAGMA and str(arg1).lower() in {"writable_schema", "foreign_keys", "journal_mode"}:
+                        return sqlite3.SQLITE_DENY
+                    if action == sqlite3.SQLITE_DROP_TABLE and arg1 in protected_tables:
+                        return sqlite3.SQLITE_DENY
+                    if action == sqlite3.SQLITE_ALTER_TABLE and arg2 in protected_tables:
+                        return sqlite3.SQLITE_DENY
+                    if action == sqlite3.SQLITE_UPDATE and arg1 in protected_tables:
+                        return sqlite3.SQLITE_DENY
+                    if action == sqlite3.SQLITE_DELETE and arg1 in protected_tables:
+                        return sqlite3.SQLITE_DENY
+                    return sqlite3.SQLITE_OK
+
+                db.set_authorizer(authorize_handler_sql)
+                try:
+                    handler_connection = _HandlerConnection(db)
+                    if scope_guard is not None:
+                        guard_approved = scope_guard(handler_connection, handler_request, decision, now)
+                        if guard_approved is not True:
+                            raise ValueError("scope_guard must return literal True to approve execution")
+                    result = handler(handler_connection, handler_request, decision)
+                finally:
+                    db.set_authorizer(None)
                 result_json = _canonical(result).decode("utf-8")
                 decision_document = {
                     "allowed": decision.allowed,
                     "reason": decision.reason,
                     "request_id": decision.request_id,
                     "requester_identity_id": decision.requester_identity_id,
+                    "request_event_id": decision.request_event_id,
+                    "request_event_hash": decision.request_event_hash,
+                    "action": decision.action,
+                    "resource_type": decision.resource_type,
+                    "resource_id": decision.resource_id,
+                    "tenant_id": decision.tenant_id,
                     "matched_rule_ids": list(decision.matched_rule_ids),
                     "approval_identity_ids": list(decision.approval_identity_ids),
                     "approval_event_refs": [list(item) for item in decision.approval_event_refs],
@@ -238,6 +426,12 @@ class AuthorizedActionExecutor:
                 ).fetchone()
                 sequence = 1 if prior is None else int(prior["sequence"]) + 1
                 previous_hash = "" if prior is None else str(prior["receipt_hash"])
+                approved_refs = set(decision.approval_event_refs)
+                approved_envelopes = {
+                    (approval.event["event_id"], approval.event["event_hash"]): approval.as_dict()
+                    for approval in approval_snapshots
+                    if (approval.event["event_id"], approval.event["event_hash"]) in approved_refs
+                }
                 row = {
                     "sequence": sequence,
                     "request_id": request_id,
@@ -250,17 +444,24 @@ class AuthorizedActionExecutor:
                     "executed_at": executed_at,
                     "result_json": result_json,
                     "decision_json": decision_json,
+                    "receipt_version": 2,
+                    "request_envelope_json": request_snapshot_json.decode("utf-8"),
+                    "approval_envelopes_json": _canonical([
+                        approved_envelopes[key] for key in sorted(approved_envelopes)
+                    ]).decode("utf-8"),
                     "previous_hash": previous_hash,
                 }
                 receipt_hash = self._receipt_hash(row)
                 db.execute("""INSERT INTO execution_receipts
                     (sequence,request_id,request_event_id,request_event_hash,action,
                      resource_type,resource_id,requester_identity_id,executed_at,
-                     result_json,decision_json,previous_hash,receipt_hash)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     result_json,decision_json,receipt_version,request_envelope_json,
+                     approval_envelopes_json,previous_hash,receipt_hash)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (sequence, request_id, request_event_id, request_event_hash, action,
                      resource_type, resource_id, requester, executed_at, result_json,
-                     decision_json, previous_hash, receipt_hash))
+                     decision_json, 2, row["request_envelope_json"], row["approval_envelopes_json"],
+                     previous_hash, receipt_hash))
                 db.commit()
                 return ExecutionResult(True, "EXECUTED", decision, result)
             except Exception:
@@ -286,6 +487,46 @@ class AuthorizedActionExecutor:
                     return False
             except (TypeError, ValueError):
                 return False
+            if int(row["receipt_version"]) >= 2:
+                try:
+                    request_document = json.loads(row["request_envelope_json"])
+                    approvals_document = json.loads(row["approval_envelopes_json"])
+                    if (_canonical(request_document).decode("utf-8") != row["request_envelope_json"]
+                            or _canonical(approvals_document).decode("utf-8") != row["approval_envelopes_json"]
+                            or not isinstance(approvals_document, list)):
+                        return False
+                    decision_document = json.loads(row["decision_json"])
+                    signed_request = SignedEventEnvelope(**request_document)
+                    if (
+                        decision_document.get("request_event_id") != row["request_event_id"]
+                        or decision_document.get("request_event_hash") != row["request_event_hash"]
+                        or decision_document.get("action") != row["action"]
+                        or decision_document.get("resource_type") != row["resource_type"]
+                        or decision_document.get("resource_id") != row["resource_id"]
+                        or decision_document.get("requester_identity_id") != row["requester_identity_id"]
+                        or decision_document.get("tenant_id") != signed_request.tenant_id
+                    ):
+                        return False
+                    if (_event_hash(signed_request.event) != row["request_event_hash"]
+                            or signed_request.event["event_id"] != row["request_event_id"]
+                            or signed_request.identity_id != row["requester_identity_id"]
+                            or signed_request.event["payload"].get("request_id") != row["request_id"]
+                            or signed_request.event["payload"].get("action") != row["action"]
+                            or signed_request.event["payload"].get("resource_type") != row["resource_type"]
+                            or signed_request.event["payload"].get("resource_id") != row["resource_id"]):
+                        return False
+                    approval_refs = sorted(
+                        (item["event"]["event_id"], item["event"]["event_hash"])
+                        for item in approvals_document
+                    )
+                    if approval_refs != sorted(tuple(x) for x in decision.get("approval_event_refs", [])):
+                        return False
+                    for item in approvals_document:
+                        signed_approval = SignedEventEnvelope(**item)
+                        if _event_hash(signed_approval.event) != signed_approval.event["event_hash"]:
+                            return False
+                except (KeyError, TypeError, ValueError):
+                    return False
             digest = self._receipt_hash(row)
             if digest != row["receipt_hash"]:
                 return False

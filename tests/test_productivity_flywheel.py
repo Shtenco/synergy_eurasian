@@ -1,4 +1,6 @@
 from pathlib import Path
+import copy
+import pytest
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,3 +38,57 @@ def test_combined_stress_cases_reveal_gap_and_required_recovery():
     assert abs(severe["stressed_residual_usd"] - (-242701.38)) < 0.02
     assert mild["required_additional_productivity_uplift_for_break_even"] > 0
     assert severe["required_additional_productivity_uplift_for_break_even"] > mild["required_additional_productivity_uplift_for_break_even"]
+
+
+def test_productivity_flywheel_rejects_nonfinite_negative_and_zero_denominator_inputs():
+    base = load_config()
+
+    bad = copy.deepcopy(base)
+    bad["baseline"]["gross_cashflow_usd"] = float("nan")
+    with pytest.raises(ValueError, match="finite"):
+        calculate(bad)
+
+    bad = copy.deepcopy(base)
+    bad["baseline"]["gross_cashflow_usd"] = 10**10000
+    with pytest.raises(ValueError, match="finite"):
+        calculate(bad)
+
+    bad = copy.deepcopy(base)
+    bad["baseline"]["replacement_capex_usd"] = 0
+    with pytest.raises(ValueError, match="must be positive"):
+        calculate(bad)
+
+    bad = copy.deepcopy(base)
+    bad["baseline"]["initial_operating_cashflow_uplift"] = -1.0
+    with pytest.raises(ValueError, match="greater than -100%"):
+        calculate(bad)
+
+    bad = copy.deepcopy(base)
+    bad["residual_fund_allocation"]["productive_automation_and_capacity"] = -0.1
+    with pytest.raises(ValueError, match="shares must be in"):
+        calculate(bad)
+
+    bad = copy.deepcopy(base)
+    bad["additional_productivity_uplift_scenarios"][0] = float("inf")
+    with pytest.raises(ValueError, match="finite"):
+        calculate(bad)
+
+    bad = copy.deepcopy(base)
+    bad["stress_scenarios"][0]["cashflow_shock"] = 1.0
+    with pytest.raises(ValueError, match="cashflow shock"):
+        calculate(bad)
+
+
+
+def test_productivity_flywheel_rejects_finite_inputs_that_overflow_outputs():
+    base = load_config()
+    bad = copy.deepcopy(base)
+    bad["baseline"]["gross_cashflow_usd"] = 1e308
+    bad["baseline"]["initial_operating_cashflow_uplift"] = 1e308
+    with pytest.raises(ValueError, match="repaired_gross_cashflow"):
+        calculate(bad)
+
+    bad = copy.deepcopy(base)
+    bad["stress_scenarios"][0]["replacement_inflation"] = 1e308
+    with pytest.raises(ValueError, match="stressed replacement capex"):
+        calculate(bad)

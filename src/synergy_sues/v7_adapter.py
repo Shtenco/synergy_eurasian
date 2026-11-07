@@ -10,9 +10,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from hashlib import sha256
 import json
+import weakref
 from typing import Any, Callable, Iterable, Mapping
 
-from .contracts import EvidenceStatus, Money
+from .contracts import EvidenceStatus, Money, _decimal
 
 
 _EVENT_FIELDS = (
@@ -94,6 +95,26 @@ class SUESSourceEvent:
     payload_json: str
 
 
+# In-process provenance gate: only the exact object instances emitted by the
+# verified adapter may cross into the projector registry. Structural dataclass
+# construction or copying must not confer verified-source status.
+_VERIFIED_SOURCE_EVENT_REFS: dict[int, weakref.ReferenceType] = {}
+
+
+def _mark_source_event_verified(event: SUESSourceEvent) -> None:
+    identity = id(event)
+    def discard(reference, identity=identity):
+        current = _VERIFIED_SOURCE_EVENT_REFS.get(identity)
+        if current is reference:
+            _VERIFIED_SOURCE_EVENT_REFS.pop(identity, None)
+    _VERIFIED_SOURCE_EVENT_REFS[identity] = weakref.ref(event, discard)
+
+
+def is_verified_source_event(event: Any) -> bool:
+    reference = _VERIFIED_SOURCE_EVENT_REFS.get(id(event))
+    return reference is not None and reference() is event
+
+
 def adapt_v7_event_store(event_store: Any) -> tuple[SUESSourceEvent, ...]:
     """Verify a complete V7 EventStore and preserve its event chain without posting.
 
@@ -157,12 +178,14 @@ def adapt_v7_event_store(event_store: Any) -> tuple[SUESSourceEvent, ...]:
         if idempotency_key and idempotency_key in idempotency_keys:
             raise ValueError(f"Duplicate V7 idempotency_key: {idempotency_key}")
 
-        adapted.append(SUESSourceEvent(
+        adapted_event = SUESSourceEvent(
             event_id, digest, expected_previous, aggregate_type, aggregate_id,
             sequence, str(row["event_type"]), _timestamp(row["effective_at"], "effective_at"),
             _timestamp(row["recorded_at"], "recorded_at"), str(row["source_ref"]),
             evidence_ids, str(idempotency_key), _canonical(row["payload"]),
-        ))
+        )
+        _mark_source_event_verified(adapted_event)
+        adapted.append(adapted_event)
         event_ids.add(event_id)
         if idempotency_key:
             idempotency_keys.add(idempotency_key)
@@ -227,19 +250,20 @@ def adapt_v7_realization_chain(
     settlement_rows, collection_rows, cost_rows = (
         list(settlements), list(collection_attributions), list(costs)
     )
-    report = evaluator(
-        output_rows, delivery_rows, allocation_rows, invoice_rows,
-        settlement_rows, collection_rows, cost_rows, as_of,
-    )
-    if not isinstance(report, dict):
-        raise ValueError("V7 realization evaluator must return a report object")
-    report_json = _canonical(report)
+    def unique_index(rows: list[Any], field: str, label: str) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for item in rows:
+            identifier = str(_value(item, field, ""))
+            if not identifier or identifier in result:
+                raise ValueError(f"{label} contains a missing or duplicate {field}: {identifier}")
+            result[identifier] = item
+        return result
 
-    output_map = {str(_value(x, "output_id")): x for x in output_rows}
-    delivery_map = {str(_value(x, "delivery_id")): x for x in delivery_rows}
-    invoice_map = {str(_value(x, "document_id")): x for x in invoice_rows}
-    settlement_map = {str(_value(x, "settlement_id")): x for x in settlement_rows}
-    allocation_map = {str(_value(x, "allocation_id")): x for x in allocation_rows}
+    output_map = unique_index(output_rows, "output_id", "outputs")
+    delivery_map = unique_index(delivery_rows, "delivery_id", "deliveries")
+    invoice_map = unique_index(invoice_rows, "document_id", "invoices")
+    settlement_map = unique_index(settlement_rows, "settlement_id", "settlements")
+    allocation_map = unique_index(allocation_rows, "allocation_id", "invoice allocations")
 
     links: list[SUESRealizationLink] = []
 
@@ -248,17 +272,32 @@ def adapt_v7_realization_chain(
             entity: str = "", project: str = "", benefit: str = "", period: str = "",
             quantity_field: str | None = None, unit_field: str = "",
             amount_field: str | None = None, currency_field: str = "",
-            status_field: str = "") -> None:
+            status_field: str = "", numeric_fields: tuple[str, ...] = ()) -> None:
         data = _record_dict(row)
+        for numeric_field in numeric_fields:
+            if data.get(numeric_field) is not None:
+                _decimal(data[numeric_field], f"{record_type} {numeric_field}")
         record_id = str(data.get(id_field, ""))
         if not record_id:
             raise ValueError(f"{record_type} is missing {id_field}")
         effective = _date(data.get(date_field), date_field) if date_field else None
         source_ref = str(data.get(source_field, ""))
+        if not source_ref:
+            raise ValueError(f"{record_type} source_ref is required")
         evidence = tuple(str(data[x]) for x in evidence_fields if data.get(x))
         related_ids = tuple(str(data[x]) for x in related if data.get(x))
-        quantity = Decimal(str(data[quantity_field])) if quantity_field and data.get(quantity_field) is not None else None
-        amount = Money(Decimal(str(data[amount_field])), str(data[currency_field])) if amount_field and data.get(amount_field) is not None else None
+        quantity = (
+            _decimal(data[quantity_field], f"{record_type} quantity")
+            if quantity_field and data.get(quantity_field) is not None else None
+        )
+        if quantity is not None and quantity <= 0:
+            raise ValueError(f"{record_type} quantity must be finite and positive")
+        amount = (
+            Money(_decimal(data[amount_field], f"{record_type} amount"), str(data[currency_field]))
+            if amount_field and data.get(amount_field) is not None else None
+        )
+        if amount is not None and amount.amount <= 0:
+            raise ValueError(f"{record_type} amount must be positive")
         status = _source_class(data.get(status_field)) if status_field else None
         payload = _canonical(data)
         links.append(SUESRealizationLink(
@@ -274,7 +313,8 @@ def adapt_v7_realization_chain(
     for row in output_rows:
         add(row, "OUTPUT_OBSERVATION", "output_id", None, "evidence_id", ("evidence_id",), (),
             "enterprise_id", "project_id", "benefit_stream_id", "period",
-            "observed_quantity", "unit", status_field="source_class")
+            "observed_quantity", "unit", status_field="source_class",
+            numeric_fields=("baseline_quantity",))
     for row in delivery_rows:
         output = output_map.get(str(_value(row, "output_id")))
         if output is None:
@@ -282,6 +322,13 @@ def adapt_v7_realization_chain(
         add(row, "DELIVERY_ACCEPTANCE", "delivery_id", "accepted_date", "acceptance_ref",
             ("acceptance_ref",), ("output_id",),
             quantity_field="accepted_quantity", unit_field="unit", status_field="source_class")
+        links[-1] = SUESRealizationLink(**{
+            **links[-1].__dict__,
+            "entity_id": str(_value(output, "enterprise_id", "")),
+            "project_id": str(_value(output, "project_id", "")),
+            "benefit_stream_id": str(_value(output, "benefit_stream_id", "")),
+            "period_id": str(_value(output, "period", "")),
+        })
     for row in invoice_rows:
         add(row, "TRADE_DOCUMENT", "document_id", "issue_date", "source_ref",
             ("source_ref",), ("counterparty_id",),
@@ -290,6 +337,9 @@ def adapt_v7_realization_chain(
         delivery = delivery_map.get(str(_value(row, "delivery_id")))
         if delivery is None:
             raise ValueError(f"Invoice allocation references unknown delivery: {_value(row, 'allocation_id')}")
+        invoice_id = str(_value(row, "invoice_document_id", ""))
+        if invoice_id not in invoice_map:
+            raise ValueError(f"Invoice allocation references unknown invoice: {_value(row, 'allocation_id')}")
         output = output_map.get(str(_value(delivery, "output_id")))
         add(row, "INVOICE_DELIVERY_ALLOCATION", "allocation_id", None, "source_ref",
             ("source_ref",), ("delivery_id", "invoice_document_id"),
@@ -311,7 +361,9 @@ def adapt_v7_realization_chain(
     for row in collection_rows:
         settlement = settlement_map.get(str(_value(row, "settlement_id")))
         allocation = allocation_map.get(str(_value(row, "invoice_allocation_id")))
-        effective = _value(settlement, "settlement_date") if settlement is not None else None
+        if settlement is None or allocation is None:
+            raise ValueError(f"Collection attribution references an unknown settlement/allocation: {_value(row, 'attribution_id')}")
+        effective = _value(settlement, "settlement_date")
         add(row, "COLLECTION_ATTRIBUTION", "attribution_id", None, "source_ref",
             ("source_ref",), ("settlement_id", "invoice_allocation_id"),
             amount_field="amount", currency_field="currency")
@@ -319,10 +371,32 @@ def adapt_v7_realization_chain(
             links[-1] = SUESRealizationLink(**{
                 **links[-1].__dict__, "effective_date": _date(effective, "settlement_date")
             })
+        if allocation is not None:
+            linked_delivery = delivery_map.get(str(_value(allocation, "delivery_id")))
+            linked_output = output_map.get(str(_value(linked_delivery, "output_id"))) if linked_delivery is not None else None
+            if linked_output is not None:
+                links[-1] = SUESRealizationLink(**{
+                    **links[-1].__dict__,
+                    "entity_id": str(_value(linked_output, "enterprise_id", "")),
+                    "project_id": str(_value(linked_output, "project_id", "")),
+                    "benefit_stream_id": str(_value(linked_output, "benefit_stream_id", "")),
+                    "period_id": str(_value(linked_output, "period", "")),
+                })
     for row in cost_rows:
         add(row, "COST_OBSERVATION", "cost_id", None, "evidence_id", ("evidence_id",), (),
             "enterprise_id", "project_id", "benefit_stream_id", "period",
             amount_field="amount", currency_field="currency", status_field="source_class")
+
+    # Do not invoke the evaluator until all source identities, references,
+    # dates and numeric contracts have passed validation. A failing input must
+    # not trigger evaluator-side effects before the bridge rejects it.
+    report = evaluator(
+        output_rows, delivery_rows, allocation_rows, invoice_rows,
+        settlement_rows, collection_rows, cost_rows, as_of,
+    )
+    if not isinstance(report, dict):
+        raise ValueError("V7 realization evaluator must return a report object")
+    report_json = _canonical(report)
 
     # Preserve the complete source set. The V7 evaluator owns as-of semantics;
     # dropping source rows here would make the bridge incomplete and non-replayable.

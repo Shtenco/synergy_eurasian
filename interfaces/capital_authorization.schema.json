@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/capital_authorization.schema.json",
+  "title": "SYNERGY CapitalAuthorization",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["authorization_id", "proposal_id", "entity_id", "amount", "currency", "approved_by", "approved_at", "approval_event_id", "approval_event_hash", "evidence_package_id", "status"],
+  "properties": {
+    "authorization_id": {"type": "string", "minLength": 3},
+    "proposal_id": {"type": "string", "minLength": 1},
+    "entity_id": {"type": "string", "minLength": 1},
+    "amount": {"type": "string", "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$", "not": {"pattern": "^0+(?:\\.0+)?$"}},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "approved_by": {"type": "string", "minLength": 1},
+    "approved_at": {"type": "string", "format": "date-time"},
+    "approval_event_id": {"type": "string", "minLength": 1},
+    "approval_event_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "evidence_package_id": {"type": "string", "minLength": 1},
+    "not_before": {"type": ["string", "null"], "format": "date-time"},
+    "expires_at": {"type": ["string", "null"], "format": "date-time"},
+    "status": {"enum": ["ACTIVE", "REVOKED", "EXPIRED", "REJECTED"]}
+  }
+}

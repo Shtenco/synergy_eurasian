@@ -1,11 +1,15 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone, timedelta
 import json
 import sqlite3
 
 import pytest
 
-from synergy_sues.event_transport import DurableEventStore
+from synergy_sues.event_transport import DurableEventStore, signed_event_authenticator
+from synergy_sues.federation_identity import (
+    ALGORITHM, FederationIdentity, TrustedKeyRegistry, TrustedSigningKey,
+    generate_ed25519_keypair, sign_event,
+)
 from synergy_sues.v7_adapter import adapt_v7_event_store
 
 
@@ -37,6 +41,12 @@ def event(event_id="evt-1", sequence=1, previous_hash="", idem="idem-1"):
 
 def utc(hour=9, minute=0, second=0):
     return datetime(2026, 11, 6, hour, minute, second, tzinfo=timezone.utc)
+
+
+def trusted_authenticator(_message):
+    # Test seam only; production adapters must verify SignedEventEnvelope
+    # against a configured TrustedKeyRegistry.
+    return True
 
 
 def test_event_and_outbox_are_durable_and_atomic_across_restart(tmp_path):
@@ -129,8 +139,8 @@ def test_inbox_handler_effect_and_receipt_commit_atomically_and_deduplicate(tmp_
             (incoming["event_id"],),
         )
 
-    assert receiver.consume_inbox("graph-projector", message, apply, received_at=utc())
-    assert not receiver.consume_inbox("graph-projector", message, apply, received_at=utc(9, 1))
+    assert receiver.consume_inbox("graph-projector", message, apply, received_at=utc(), authenticator=trusted_authenticator)
+    assert not receiver.consume_inbox("graph-projector", message, apply, received_at=utc(9, 1), authenticator=trusted_authenticator)
     with sqlite3.connect(receiver.database_path) as db:
         assert db.execute("SELECT COUNT(*) FROM applied").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM inbox").fetchone()[0] == 1
@@ -153,7 +163,7 @@ def test_inbox_handler_failure_rolls_back_effect_and_receipt(tmp_path):
         raise RuntimeError("consumer failed")
 
     with pytest.raises(RuntimeError, match="consumer failed"):
-        receiver.consume_inbox("consumer", message, fail_after_write, received_at=utc())
+        receiver.consume_inbox("consumer", message, fail_after_write, received_at=utc(), authenticator=trusted_authenticator)
     assert not receiver.inbox_contains("consumer", claimed.message_id)
     with sqlite3.connect(receiver.database_path) as db:
         assert db.execute("SELECT COUNT(*) FROM applied").fetchone()[0] == 0
@@ -171,12 +181,12 @@ def test_inbox_rejects_tampered_payload_and_message_id_hash_reuse(tmp_path):
     handler = lambda db, incoming: None
     tampered = {**message, "payload_json": message["payload_json"].replace("project-1", "changed")}
     with pytest.raises(ValueError, match="hash verification"):
-        receiver.consume_inbox("consumer", tampered, handler, received_at=utc())
+        receiver.consume_inbox("consumer", tampered, handler, received_at=utc(), authenticator=trusted_authenticator)
 
-    assert receiver.consume_inbox("consumer", message, handler, received_at=utc())
+    assert receiver.consume_inbox("consumer", message, handler, received_at=utc(), authenticator=trusted_authenticator)
     conflicting = {**message, "event_hash": "f" * 64}
     with pytest.raises(ValueError, match="identity does not match"):
-        receiver.consume_inbox("consumer", conflicting, handler, received_at=utc())
+        receiver.consume_inbox("consumer", conflicting, handler, received_at=utc(), authenticator=trusted_authenticator)
 
 
 def test_inbox_message_id_reuse_with_another_valid_event_hash_is_rejected(tmp_path):
@@ -190,9 +200,9 @@ def test_inbox_message_id_reuse_with_another_valid_event_hash_is_rejected(tmp_pa
     two = next(x for x in messages if x.event_id == second.event_id)
     message_one = {"message_id": "forced-id", "event_id": one.event_id, "event_hash": one.event_hash, "payload_json": one.payload_json}
     message_two = {"message_id": "forced-id", "event_id": two.event_id, "event_hash": two.event_hash, "payload_json": two.payload_json}
-    assert receiver.consume_inbox("consumer", message_one, handler, received_at=utc())
+    assert receiver.consume_inbox("consumer", message_one, handler, received_at=utc(), authenticator=trusted_authenticator)
     with pytest.raises(ValueError, match="reused with a different event hash"):
-        receiver.consume_inbox("consumer", message_two, handler, received_at=utc(9, 3))
+        receiver.consume_inbox("consumer", message_two, handler, received_at=utc(9, 3), authenticator=trusted_authenticator)
 
 
 def test_event_store_requires_file_backed_database(tmp_path):
@@ -210,3 +220,283 @@ def test_durable_store_remains_compatible_with_v7_sues_event_adapter(tmp_path):
     assert adapted[0].payload_json == json.dumps(
         stored.payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
     )
+
+
+def test_inbox_deduplicates_by_event_id_and_rejects_conflicting_event_hash(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "sender-event-id.db"))
+    receiver = DurableEventStore(str(tmp_path / "receiver-event-id.db"))
+    original = sender.append(event(), now=utc())
+    message = {
+        "message_id": "message-original", "event_id": original.event_id,
+        "event_hash": original.event_hash,
+        "payload_json": json.dumps({
+            **original.unsigned(), "event_hash": original.event_hash
+        }, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False),
+    }
+    applied = []
+    assert receiver.consume_inbox("consumer", message,
+        lambda db, incoming: applied.append(incoming["event_id"]), received_at=utc(), authenticator=trusted_authenticator)
+    duplicate_message = {**message, "message_id": "message-redelivered"}
+    assert not receiver.consume_inbox("consumer", duplicate_message,
+        lambda db, incoming: applied.append("duplicate"), received_at=utc(9, 1), authenticator=trusted_authenticator)
+    assert applied == [original.event_id]
+
+    conflicting_source = replace(
+        event(), payload={"node_id": "tampered", "node_type": "PROJECT"},
+        source_ref="source:conflicting-same-event-id",
+    )
+    conflicting_sender = DurableEventStore(str(tmp_path / "sender-conflicting.db"))
+    conflicting = conflicting_sender.append(conflicting_source, now=utc())
+    conflicting_message = {
+        "message_id": "message-conflicting", "event_id": conflicting.event_id,
+        "event_hash": conflicting.event_hash,
+        "payload_json": json.dumps({
+            **conflicting.unsigned(), "event_hash": conflicting.event_hash
+        }, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False),
+    }
+    assert conflicting.event_id == original.event_id
+    assert conflicting.event_hash != original.event_hash
+    with pytest.raises(ValueError, match="event ID reused with a different event hash"):
+        receiver.consume_inbox("consumer", conflicting_message, lambda *_: None, received_at=utc(9, 2), authenticator=trusted_authenticator)
+    assert len(applied) == 1
+
+
+def test_inbox_handler_cannot_mutate_receipt_identity_and_receipts_are_append_only(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "sender-handler-mutation.db"))
+    receiver = DurableEventStore(str(tmp_path / "receiver-handler-mutation.db"))
+    stored = sender.append(event(), now=utc())
+    message = {
+        "message_id": "message-safe", "event_id": stored.event_id,
+        "event_hash": stored.event_hash, "payload_json": json.dumps(
+            {**stored.unsigned(), "event_hash": stored.event_hash},
+            sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False),
+    }
+
+    def mutate(db, incoming):
+        incoming["event_id"] = "forged-event-id"
+        incoming["payload_json"] = "{}"
+
+    assert receiver.consume_inbox("consumer", message, mutate, received_at=utc(), authenticator=trusted_authenticator)
+    assert not receiver.consume_inbox("consumer", {**message, "message_id": "message-replay"},
+        lambda *_: None, received_at=utc(9, 1), authenticator=trusted_authenticator)
+    with sqlite3.connect(receiver.database_path) as db:
+        row = db.execute("SELECT event_id,event_hash FROM inbox").fetchone()
+        assert row == (stored.event_id, stored.event_hash)
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            db.execute("UPDATE inbox SET event_id='forged' WHERE consumer='consumer'")
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            db.execute("DELETE FROM inbox WHERE consumer='consumer'")
+
+
+
+def test_inbox_requires_authentication_and_rejects_false_or_mutating_authenticators(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "sender-auth.db"))
+    receiver = DurableEventStore(str(tmp_path / "receiver-auth.db"))
+    stored = sender.append(event(), now=utc())
+    claimed = sender.claim_outbox(now=utc())[0]
+    message = {
+        "message_id": claimed.message_id,
+        "event_id": claimed.event_id,
+        "event_hash": claimed.event_hash,
+        "payload_json": claimed.payload_json,
+    }
+    handler = lambda *_: None
+    with pytest.raises(ValueError, match="trusted signed-message authenticator"):
+        receiver.consume_inbox("consumer", message, handler, received_at=utc())
+    with pytest.raises(ValueError, match="authentication failed"):
+        receiver.consume_inbox(
+            "consumer", message, handler, received_at=utc(),
+            authenticator=lambda _: False,
+        )
+
+    def mutating_authenticator(snapshot):
+        snapshot["event_hash"] = "f" * 64
+        return True
+
+    with pytest.raises(ValueError, match="mutated the signed message"):
+        receiver.consume_inbox(
+            "consumer", message, handler, received_at=utc(),
+            authenticator=mutating_authenticator,
+        )
+    assert not receiver.inbox_contains("consumer", claimed.message_id)
+    assert receiver.verify()
+
+
+
+def test_inbox_authenticates_signed_publisher_with_trusted_key_registry(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "sender-signed.db"))
+    receiver = DurableEventStore(str(tmp_path / "receiver-signed.db"))
+    stored = sender.append(event(), now=utc())
+    claimed = sender.claim_outbox(now=utc())[0]
+    private_key, public_key = generate_ed25519_keypair()
+    registry = TrustedKeyRegistry()
+    registry.register_identity(FederationIdentity(
+        "org:publisher", "tenant:publisher", "ORGANIZATION"
+    ))
+    registry.register_key(TrustedSigningKey(
+        "org:publisher", "tenant:publisher", "publisher-key",
+        ALGORITHM, public_key, "2026-01-01T00:00:00+00:00",
+    ))
+    signed = sign_event(
+        stored, "org:publisher", "tenant:publisher", "publisher-key",
+        private_key, "2026-11-06T09:01:00+00:00",
+    )
+    message = {
+        "message_id": claimed.message_id,
+        "event_id": claimed.event_id,
+        "event_hash": claimed.event_hash,
+        "payload_json": claimed.payload_json,
+        "signed_envelope": signed.as_dict(),
+    }
+
+    authenticator = signed_event_authenticator(
+        registry, received_at="2026-11-06T09:02:00+00:00"
+    )
+    applied = []
+    assert receiver.consume_inbox(
+        "signed-consumer", message,
+        lambda db, incoming: applied.append(incoming["event_id"]),
+        received_at=utc(9, 2), authenticator=authenticator,
+    )
+    assert applied == [stored.event_id]
+    assert receiver.verify_inbox(authenticator)
+
+    mismatched_event = {
+        **signed.event,
+        "payload": {"node_id": "forged", "node_type": "PROJECT"},
+    }
+    mismatched_message = {
+        **message,
+        "message_id": "message-signed-mismatch",
+        "payload_json": json.dumps(
+            mismatched_event, sort_keys=True, separators=(",", ":"),
+            ensure_ascii=False, allow_nan=False,
+        ),
+    }
+    with pytest.raises(ValueError, match="authentication failed"):
+        receiver.consume_inbox(
+            "signed-consumer", mismatched_message, lambda *_: None,
+            received_at=utc(9, 2), authenticator=authenticator,
+        )
+
+
+def test_inbox_retains_publisher_envelope_for_later_signature_reverification(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "sender-retained.db"))
+    receiver = DurableEventStore(str(tmp_path / "receiver-retained.db"))
+    sender.append(event(), now=utc())
+    claimed = sender.claim_outbox(now=utc())[0]
+    message = {
+        "message_id": claimed.message_id,
+        "event_id": claimed.event_id,
+        "event_hash": claimed.event_hash,
+        "payload_json": claimed.payload_json,
+        "publisher_identity_id": "org:trusted-publisher",
+        "publisher_signature": "signature:trusted",
+    }
+
+    def verify_publisher(snapshot):
+        return (
+            snapshot.get("publisher_identity_id") == "org:trusted-publisher"
+            and snapshot.get("publisher_signature") == "signature:trusted"
+        )
+
+    assert receiver.consume_inbox(
+        "audit-projector", message, lambda *_: None,
+        received_at=utc(), authenticator=verify_publisher,
+    )
+    assert receiver.verify_inbox(verify_publisher)
+
+    with sqlite3.connect(receiver.database_path) as db:
+        db.execute("DROP TRIGGER inbox_no_update")
+        tampered = dict(message)
+        tampered["publisher_signature"] = "signature:forged"
+        db.execute(
+            "UPDATE inbox SET message_json=? WHERE consumer=? AND message_id=?",
+            (json.dumps(tampered, sort_keys=True, separators=(",", ":")),
+             "audit-projector", message["message_id"]),
+        )
+    assert receiver.verify()  # Event content hash is intact; this alone cannot authenticate a publisher.
+    assert not receiver.verify_inbox(verify_publisher)
+
+
+
+def test_retained_inbox_envelope_is_reverified_against_stored_identity(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "sender-retained.db"))
+    receiver = DurableEventStore(str(tmp_path / "receiver-retained.db"))
+    stored = sender.append(event(), now=utc())
+    claimed = sender.claim_outbox(now=utc())[0]
+    private_key, public_key = generate_ed25519_keypair()
+    registry = TrustedKeyRegistry()
+    registry.register_identity(FederationIdentity(
+        "org:retained", "tenant:retained", "ORGANIZATION"
+    ))
+    registry.register_key(TrustedSigningKey(
+        "org:retained", "tenant:retained", "key-1", ALGORITHM,
+        public_key, "2026-01-01T00:00:00+00:00",
+    ))
+    signed = sign_event(
+        stored, "org:retained", "tenant:retained", "key-1",
+        private_key, "2026-11-06T09:01:00+00:00",
+    )
+    message = {
+        "message_id": claimed.message_id,
+        "event_id": claimed.event_id,
+        "event_hash": claimed.event_hash,
+        "payload_json": claimed.payload_json,
+        "signed_envelope": signed.as_dict(),
+    }
+    authenticator = signed_event_authenticator(
+        registry, received_at="2026-11-06T09:02:00+00:00"
+    )
+    assert receiver.consume_inbox(
+        "consumer", message, lambda *_: None,
+        received_at=utc(9, 2), authenticator=authenticator,
+    )
+    assert receiver.verify_inbox(authenticator)
+    with sqlite3.connect(receiver.database_path) as db:
+        db.execute("DROP TRIGGER inbox_no_update")
+        row = db.execute(
+            "SELECT message_json FROM inbox WHERE consumer='consumer'"
+        ).fetchone()
+        tampered = json.loads(row[0])
+        tampered["event_id"] = "forged-event-id"
+        db.execute(
+            "UPDATE inbox SET message_json=? WHERE consumer='consumer'",
+            (json.dumps(tampered, sort_keys=True, separators=(",", ":")),),
+        )
+    assert not receiver.verify_inbox(authenticator)
+
+
+def test_legacy_inbox_duplicate_is_not_silently_treated_as_authenticated(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "legacy-sender.db"))
+    sender.append(event(), now=utc())
+    claimed = sender.claim_outbox(now=utc())[0]
+    message = {
+        "message_id": claimed.message_id,
+        "event_id": claimed.event_id,
+        "event_hash": claimed.event_hash,
+        "payload_json": claimed.payload_json,
+    }
+    receiver_path = str(tmp_path / "legacy-receiver.db")
+    with sqlite3.connect(receiver_path) as db:
+        db.execute("""CREATE TABLE inbox (
+            consumer TEXT NOT NULL, message_id TEXT NOT NULL, event_id TEXT NOT NULL,
+            event_hash TEXT NOT NULL, received_at TEXT NOT NULL,
+            PRIMARY KEY(consumer,message_id)
+        )""")
+        db.execute(
+            "CREATE UNIQUE INDEX inbox_consumer_event_unique ON inbox(consumer,event_id)"
+        )
+        db.execute(
+            "INSERT INTO inbox VALUES(?,?,?,?,?)",
+            ("legacy-consumer", message["message_id"], message["event_id"],
+             message["event_hash"], utc().isoformat()),
+        )
+
+    receiver = DurableEventStore(receiver_path)
+    with pytest.raises(ValueError, match="Legacy inbox receipt lacks retained publisher proof"):
+        receiver.consume_inbox(
+            "legacy-consumer", message, lambda *_: None,
+            received_at=utc(), authenticator=trusted_authenticator,
+        )
+    assert not receiver.verify_inbox(trusted_authenticator)

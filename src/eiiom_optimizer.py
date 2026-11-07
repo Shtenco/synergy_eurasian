@@ -97,11 +97,91 @@ TARGETS = {
 }
 
 
+def _finite_scalar(value: object, field: str, minimum: float | None = None,
+                   maximum: float | None = None) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field} must be a numeric JSON value")
+    result = float(value)
+    if not np.isfinite(result):
+        raise ValueError(f"{field} must be finite")
+    if minimum is not None and result < minimum:
+        raise ValueError(f"{field} must be >= {minimum}")
+    if maximum is not None and result > maximum:
+        raise ValueError(f"{field} must be <= {maximum}")
+    return result
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"Non-standard JSON numeric constant is forbidden: {value}")
+
+
 def load_config(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(
+        path.read_text(encoding="utf-8"), parse_constant=_reject_json_constant
+    )
+
+
+def _validate_config(config: dict) -> None:
+    if not isinstance(config, dict):
+        raise ValueError("EIIOM config must be an object")
+    stages = config.get("stages")
+    if not isinstance(stages, dict) or tuple(stages) != tuple(TARGETS):
+        raise ValueError("EIIOM stages must be exactly the ordered 2026-30, 2031-40, 2041-45 milestones")
+    for stage, row in stages.items():
+        if not isinstance(row, dict):
+            raise ValueError(f"Stage {stage} must be an object")
+        _finite_scalar(row.get("budget_bn_usd"), f"stages.{stage}.budget_bn_usd", 0.0)
+        if _finite_scalar(row.get("budget_bn_usd"), f"stages.{stage}.budget_bn_usd") <= 0:
+            raise ValueError(f"Stage {stage} budget must be positive")
+        _finite_scalar(row.get("time_weight"), f"stages.{stage}.time_weight", 0.0)
+
+    yields = config.get("annual_gva_equivalent_yield")
+    if not isinstance(yields, dict) or set(yields) != set(SECTORS):
+        raise ValueError("annual_gva_equivalent_yield must define every modeled sector exactly")
+    for sector, value in yields.items():
+        _finite_scalar(value, f"annual_gva_equivalent_yield.{sector}", 0.0)
+
+    tech = config.get("technology_curves")
+    required_curves = ("compute_it_mw_per_bn", "dc_shell_mw_per_bn", "power_mw_per_bn", "grid_mw_per_bn")
+    if not isinstance(tech, dict):
+        raise ValueError("technology_curves must be an object")
+    for curve in required_curves:
+        values = tech.get(curve)
+        if not isinstance(values, dict) or set(values) != set(stages):
+            raise ValueError(f"technology_curves.{curve} must define every stage exactly")
+        for stage, value in values.items():
+            _finite_scalar(value, f"technology_curves.{curve}.{stage}", 0.0)
+    _finite_scalar(tech.get("power_overhead_multiplier"), "power_overhead_multiplier", 0.0)
+
+    headroom = config.get("existing_headroom_mw")
+    if not isinstance(headroom, dict):
+        raise ValueError("existing_headroom_mw must be an object")
+    for resource in ("power", "grid"):
+        values = headroom.get(resource)
+        if not isinstance(values, dict) or set(values) != set(COUNTRIES):
+            raise ValueError(f"existing_headroom_mw.{resource} must define every country exactly")
+        for country, value in values.items():
+            _finite_scalar(value, f"existing_headroom_mw.{resource}.{country}", 0.0)
+
+    policy = config.get("policy_constraints")
+    if not isinstance(policy, dict):
+        raise ValueError("policy_constraints must be an object")
+    for key in ("max_country_compute_share", "max_country_dc_share"):
+        _finite_scalar(policy.get(key), f"policy_constraints.{key}", 0.0, 1.0)
+    for key in (
+        "minimum_stem_bn", "minimum_food_processing_bn", "minimum_water_irrigation_bn",
+        "minimum_logistics_bn", "minimum_advanced_materials_bn", "minimum_mineral_refining_bn",
+        "minimum_construction_tech_bn", "minimum_agro_genomics_bn", "minimum_seed_production_bn",
+    ):
+        _finite_scalar(policy.get(key), f"policy_constraints.{key}", 0.0)
+
+    escrow = config.get("productive_escrow")
+    if not isinstance(escrow, dict) or escrow.get("implemented_in_this_repo") is not False:
+        raise ValueError("Productive escrow must remain explicitly disabled in this repository")
 
 
 def solve(config: dict) -> dict:
+    _validate_config(config)
     stages = list(config["stages"])
     yields = config["annual_gva_equivalent_yield"]
     tech = config["technology_curves"]
@@ -251,16 +331,207 @@ def solve(config: dict) -> dict:
 
 
 def validate_invariants(config: dict, solution: dict, tol: float = 1e-5) -> None:
-    expected = sum(v["budget_bn_usd"] for v in config["stages"].values())
-    assert abs(solution["total_capex_bn_usd"] - expected) <= tol
-    assert solution["compute_it_mw"] <= solution["dc_shell_mw"] + tol
-    if solution["compute_it_mw"] > tol:
-        limit = config["policy_constraints"]["max_country_compute_share"]
-        assert max(solution["compute_mw_by_country"].values()) / solution["compute_it_mw"] <= limit + tol
-    if solution["dc_shell_mw"] > tol:
-        limit = config["policy_constraints"]["max_country_dc_share"]
-        assert max(solution["dc_mw_by_country"].values()) / solution["dc_shell_mw"] <= limit + tol
-    assert config["productive_escrow"]["implemented_in_this_repo"] is False
+    """Independently re-check the returned allocation; never rely on assert."""
+    _validate_config(config)
+    if (isinstance(tol, bool) or not isinstance(tol, (int, float))
+            or not np.isfinite(tol) or tol <= 0 or tol > 1e-3):
+        raise ValueError("Invariant tolerance must be finite, positive and no greater than 1e-3")
+    if solution.get("status") != "optimal":
+        raise ValueError("Only an optimal solution can pass invariant validation")
+    if config.get("productive_escrow", {}).get("implemented_in_this_repo") is not False:
+        raise ValueError("Productive escrow minting must remain disabled in this repository")
+
+    stages = list(config["stages"])
+    expected_by_stage = {
+        stage: float(config["stages"][stage]["budget_bn_usd"]) for stage in stages
+    }
+    if any(not np.isfinite(v) or v <= 0 for v in expected_by_stage.values()):
+        raise ValueError("Every stage budget must be finite and positive")
+    expected_total = sum(expected_by_stage.values())
+    yields = config["annual_gva_equivalent_yield"]
+
+    capex_by_stage = defaultdict(float)
+    capex_by_country = defaultdict(float)
+    capex_by_sector = defaultdict(float)
+    capex_by_sector_stage = defaultdict(float)
+    compute_by_country = defaultdict(float)
+    dc_by_country = defaultdict(float)
+    power_by_country = defaultdict(float)
+    grid_by_country = defaultdict(float)
+    gva_equiv = 0.0
+    objective_recomputed = 0.0
+    yields = config["annual_gva_equivalent_yield"]
+
+    allocation = solution.get("allocation")
+    if not isinstance(allocation, list):
+        raise ValueError("Solution allocation must be a list")
+    for item in allocation:
+        if not isinstance(item, dict):
+            raise ValueError("Every allocation row must be an object")
+        country, sector, stage = item.get("country"), item.get("sector"), item.get("stage")
+        if country not in COUNTRIES or sector not in SECTORS or stage not in stages:
+            raise ValueError("Allocation row contains an unknown country, sector or stage")
+        amount = item.get("capex_bn_usd")
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not np.isfinite(amount) or amount < -tol:
+            raise ValueError("Allocation CAPEX must be finite and non-negative")
+        amount = max(0.0, float(amount))
+        capex_by_stage[stage] += amount
+        capex_by_country[country] += amount
+        capex_by_sector[sector] += amount
+        capex_by_sector_stage[(sector, stage)] += amount
+        gva_equiv += amount * float(yields[sector]) * SUIT[country][sector]
+        objective_recomputed -= (
+            amount * float(yields[sector]) * SUIT[country][sector]
+            * float(config["stages"][stage]["time_weight"])
+        )
+        if sector == "Compute":
+            compute_by_country[country] += amount * float(config["technology_curves"]["compute_it_mw_per_bn"][stage])
+        if sector == "DataCenterInfra":
+            dc_by_country[country] += amount * float(config["technology_curves"]["dc_shell_mw_per_bn"][stage])
+        if sector == "PowerGen":
+            power_by_country[country] += amount * float(config["technology_curves"]["power_mw_per_bn"][stage])
+        if sector == "Grid":
+            grid_by_country[country] += amount * float(config["technology_curves"]["grid_mw_per_bn"][stage])
+
+    for stage, budget in expected_by_stage.items():
+        if abs(capex_by_stage[stage] - budget) > tol:
+            raise ValueError(f"Stage {stage} allocation does not equal its budget envelope")
+    if abs(sum(capex_by_stage.values()) - expected_total) > tol:
+        raise ValueError("Total CAPEX does not equal the stage budget envelopes")
+
+    for country in COUNTRIES:
+        if capex_by_country[country] < COUNTRY_MIN[country] * expected_total - tol:
+            raise ValueError(f"Country {country} allocation is below its minimum share")
+        if capex_by_country[country] > COUNTRY_MAX[country] * expected_total + tol:
+            raise ValueError(f"Country {country} allocation exceeds its maximum share")
+
+    for stage, budget in expected_by_stage.items():
+        for sector in SECTORS:
+            if capex_by_sector_stage[(sector, stage)] > MAX_STAGE_SHARE[sector] * budget + tol:
+                raise ValueError(f"Sector {sector} exceeds its stage allocation cap in {stage}")
+
+    tech = config["technology_curves"]
+    head_power = config["existing_headroom_mw"]["power"]
+    head_grid = config["existing_headroom_mw"]["grid"]
+    overhead = float(tech["power_overhead_multiplier"])
+    max_compute_share = float(config["policy_constraints"]["max_country_compute_share"])
+    max_dc_share = float(config["policy_constraints"]["max_country_dc_share"])
+    total_compute = sum(compute_by_country.values())
+    total_dc = sum(dc_by_country.values())
+    if total_compute > total_dc + tol:
+        raise ValueError("Compute IT load exceeds data-center shell capacity")
+    if total_compute > tol and max(compute_by_country.values()) / total_compute > max_compute_share + tol:
+        raise ValueError("Country compute concentration exceeds policy limit")
+    if total_dc > tol and max(dc_by_country.values()) / total_dc > max_dc_share + tol:
+        raise ValueError("Country data-center concentration exceeds policy limit")
+
+    for country in COUNTRIES:
+        if compute_by_country[country] > dc_by_country[country] + tol:
+            raise ValueError(f"Country {country} compute load exceeds its own data-center shell capacity")
+        power_demand = sum(
+            float(item["capex_bn_usd"]) * overhead
+            * float(tech["compute_it_mw_per_bn"][item["stage"]])
+            for item in allocation if item["country"] == country and item["sector"] == "Compute"
+        )
+        grid_demand = power_demand
+        if power_demand > float(head_power[country]) + power_by_country[country] + tol:
+            raise ValueError(f"Country {country} compute load exceeds available power")
+        if grid_demand > float(head_grid[country]) + grid_by_country[country] + tol:
+            raise ValueError(f"Country {country} compute load exceeds available grid capacity")
+
+    # Recheck cumulative cross-sector dependencies and milestone targets.
+    for k, milestone in enumerate(stages):
+        ts = stages[:k + 1]
+        cumulative = {
+            sector: sum(capex_by_sector_stage[(sector, t)] for t in ts)
+            for sector in SECTORS
+        }
+        target = TARGETS[milestone]
+        checks = [
+            (cumulative["AICloud"], 2.0 + 1.2 * cumulative["Compute"], "AICloud/Compute dependency"),
+            (cumulative["IndustrialAI"], 3.0 + 1.8 * cumulative["AICloud"] + 0.5 * cumulative["Robotics"], "IndustrialAI dependency"),
+            (cumulative["SemiDesign"], 3.0 + 0.5 * cumulative["Compute"], "SemiDesign dependency"),
+            (0.25 * cumulative["Robotics"], cumulative["MachineTools"], "Robotics/MachineTools dependency"),
+            (cumulative["Robotics"], 2.0 + 2.0 * cumulative["MachineTools"] + 1.5 * cumulative["PowerElectronics"], "Robotics capacity dependency"),
+            (0.12 * (cumulative["UrbanRenovation"] + cumulative["RuralHousing"]), cumulative["ConstructionTech"], "ConstructionTech dependency"),
+            (0.7 * cumulative["AgroGenomics"], cumulative["SeedProduction"], "SeedProduction dependency"),
+            (cumulative["PrecisionAg"], 3.0 + 2.5 * cumulative["AICloud"], "PrecisionAg dependency"),
+            (cumulative["AgroRobotics"], 3.0 + 1.5 * cumulative["Robotics"] + cumulative["MachineTools"], "AgroRobotics dependency"),
+        ]
+        for value, upper, label in checks:
+            if value > upper + tol:
+                raise ValueError(f"Cumulative {label} constraint is violated")
+        target_checks = (
+            ("UrbanRenovation", RENOVATION_EFF, target["reno"]),
+            ("RuralHousing", RURAL_HOUSING_EFF, target["rural_h"]),
+            ("PrecisionAg", PRECISION_AG_EFF, target["precision"]),
+            ("AgroRobotics", AGRO_ROBOTICS_EFF, target["agro_robot"]),
+            ("RuralAIClusters", CLUSTER_EFF, target["clusters"]),
+        )
+        for sector, efficiency, required in target_checks:
+            delivered = sum(
+                capex_by_sector_stage[(sector, t)] * efficiency[t] for t in ts
+            )
+            if delivered < required - tol:
+                raise ValueError(f"Cumulative {sector} milestone target is not met")
+
+    global_caps = (
+        ("PrecisionAg", PRECISION_AG_EFF, 60.0),
+        ("AgroRobotics", AGRO_ROBOTICS_EFF, 15.0),
+        ("RuralAIClusters", CLUSTER_EFF, 220.0),
+    )
+    for sector, efficiency, cap in global_caps:
+        delivered = sum(
+            capex_by_sector_stage[(sector, stage)] * efficiency[stage]
+            for stage in stages
+        )
+        if delivered > cap + tol:
+            raise ValueError(f"Global {sector} effective-output cap is exceeded")
+
+    floors = {
+        "STEM": "minimum_stem_bn", "FoodProcessing": "minimum_food_processing_bn",
+        "WaterIrrigation": "minimum_water_irrigation_bn", "Logistics": "minimum_logistics_bn",
+        "AdvancedMaterials": "minimum_advanced_materials_bn", "MineralRefining": "minimum_mineral_refining_bn",
+        "ConstructionTech": "minimum_construction_tech_bn", "AgroGenomics": "minimum_agro_genomics_bn",
+        "SeedProduction": "minimum_seed_production_bn",
+    }
+    for sector, key in floors.items():
+        if capex_by_sector[sector] < float(config["policy_constraints"][key]) - tol:
+            raise ValueError(f"Sector {sector} is below its configured minimum allocation")
+
+    recomputed_maps = {
+        "capex_by_stage": capex_by_stage,
+        "capex_by_country": capex_by_country,
+        "capex_by_sector": capex_by_sector,
+        "compute_mw_by_country": compute_by_country,
+        "dc_mw_by_country": dc_by_country,
+    }
+    for map_name, expected_map in recomputed_maps.items():
+        actual_map = solution.get(map_name)
+        if not isinstance(actual_map, dict):
+            raise ValueError(f"Solution metric {map_name} must be an object")
+        keys = set(actual_map) | set(expected_map)
+        for key in keys:
+            actual_value = actual_map.get(key, 0.0)
+            expected_value = expected_map.get(key, 0.0)
+            if (isinstance(actual_value, bool) or not isinstance(actual_value, (int, float))
+                    or not np.isfinite(actual_value)
+                    or abs(float(actual_value) - float(expected_value)) > tol):
+                raise ValueError(f"Solution map {map_name} does not reconcile for {key}")
+
+    expected_metrics = {
+        "total_capex_bn_usd": expected_total,
+        "compute_it_mw": total_compute,
+        "dc_shell_mw": total_dc,
+        "annual_gva_equivalent_2045_bn_usd": gva_equiv,
+        "objective_minimized": objective_recomputed,
+    }
+    for key, expected_value in expected_metrics.items():
+        actual = solution.get(key)
+        if isinstance(actual, bool) or not isinstance(actual, (int, float)) or not np.isfinite(actual):
+            raise ValueError(f"Solution metric {key} must be finite")
+        if abs(float(actual) - expected_value) > tol:
+            raise ValueError(f"Solution metric {key} does not reconcile to allocation")
 
 
 def export(solution: dict, output_dir: Path) -> None:

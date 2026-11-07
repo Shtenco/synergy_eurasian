@@ -1,5 +1,7 @@
 from pathlib import Path
 import json
+import copy
+import pytest
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,3 +49,60 @@ def test_modelled_gva_is_not_exposed_as_cash_field():
     solution = solve(config)
     forbidden = {"cash", "revenue", "free_cash_flow", "profit"}
     assert not forbidden.intersection(solution.keys())
+
+
+
+def test_eiiom_invariant_validation_rejects_tampered_solution_without_asserts():
+    config = load_config(ROOT / "config" / "base_scenario.json")
+    solution = solve(config)
+
+    bad_metric = copy.deepcopy(solution)
+    bad_metric["total_capex_bn_usd"] += 1.0
+    with pytest.raises(ValueError, match="does not reconcile"):
+        validate_invariants(config, bad_metric)
+
+    bad_objective = copy.deepcopy(solution)
+    bad_objective["objective_minimized"] += 100.0
+    with pytest.raises(ValueError, match="objective_minimized does not reconcile"):
+        validate_invariants(config, bad_objective)
+
+    bad_allocation = copy.deepcopy(solution)
+    bad_allocation["allocation"][0]["capex_bn_usd"] += 1.0
+    with pytest.raises(ValueError, match="Stage .* budget"):
+        validate_invariants(config, bad_allocation)
+
+    bad_escrow = copy.deepcopy(config)
+    bad_escrow["productive_escrow"]["implemented_in_this_repo"] = True
+    with pytest.raises(ValueError, match="must remain disabled"):
+        validate_invariants(bad_escrow, solution)
+
+
+def test_eiiom_validator_rejects_unreasonably_large_tolerance():
+    config = load_config(ROOT / "config" / "base_scenario.json")
+    solution = solve(config)
+    with pytest.raises(ValueError, match="no greater than 1e-3"):
+        validate_invariants(config, solution, tol=1e9)
+
+
+
+def test_eiiom_rejects_nonstandard_json_constants_and_malformed_model_contracts(tmp_path):
+    bad_json = tmp_path / "nan.json"
+    bad_json.write_text('{"value": NaN}', encoding="utf-8")
+    with pytest.raises(ValueError, match="Non-standard JSON"):
+        load_config(bad_json)
+
+    config = load_config(ROOT / "config" / "base_scenario.json")
+    bad_budget = copy.deepcopy(config)
+    bad_budget["stages"]["2026-30"]["budget_bn_usd"] = float("nan")
+    with pytest.raises(ValueError, match="must be finite"):
+        solve(bad_budget)
+
+    bad_yields = copy.deepcopy(config)
+    del bad_yields["annual_gva_equivalent_yield"]["Compute"]
+    with pytest.raises(ValueError, match="define every modeled sector"):
+        solve(bad_yields)
+
+    bad_escrow = copy.deepcopy(config)
+    bad_escrow["productive_escrow"]["implemented_in_this_repo"] = True
+    with pytest.raises(ValueError, match="must remain explicitly disabled"):
+        solve(bad_escrow)

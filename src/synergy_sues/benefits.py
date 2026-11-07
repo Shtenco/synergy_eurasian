@@ -19,6 +19,7 @@ class BenefitEvent:
     counterfactual_id: str
     evidence_ids: tuple[str, ...]
     evidence_status: EvidenceStatus
+    measurement_scope_id: str = ""
 
     def __post_init__(self) -> None:
         if not all((self.benefit_event_id, self.measurement_id, self.enterprise_id,
@@ -26,8 +27,20 @@ class BenefitEvent:
             raise ValueError("Benefit event identity, measurement and counterfactual are required")
         if not isinstance(self.evidence_status, EvidenceStatus):
             object.__setattr__(self, "evidence_status", EvidenceStatus(self.evidence_status))
+        if isinstance(self.evidence_ids, (str, bytes)) or not isinstance(self.evidence_ids, (tuple, list)):
+            raise ValueError("Benefit evidence_ids must be a tuple or list of strings")
+        if not isinstance(self.evidence_ids, tuple):
+            object.__setattr__(self, "evidence_ids", tuple(self.evidence_ids))
+        if not isinstance(self.measurement_scope_id, str):
+            raise ValueError("measurement_scope_id must be a string")
+        if self.measurement_scope_id and not self.measurement_scope_id.strip():
+            raise ValueError("measurement_scope_id cannot be whitespace")
         if not self.evidence_ids:
             raise ValueError("Benefit event requires at least one evidence ID")
+        if any(not isinstance(item, str) or not item for item in self.evidence_ids):
+            raise ValueError("Benefit evidence IDs must be non-empty strings")
+        if len(self.evidence_ids) != len(set(self.evidence_ids)):
+            raise ValueError("Benefit evidence IDs must be unique")
         if self.amount.amount < 0:
             raise ValueError("Benefit amount must be non-negative")
 
@@ -54,6 +67,7 @@ class BenefitAttributionRegistry:
     def __init__(self) -> None:
         self._events: dict[str, BenefitEvent] = {}
         self._measurement_ids: set[str] = set()
+        self._measurement_keys: set[tuple[str, str, str, str, str]] = set()
         self._claims: dict[str, BenefitAttribution] = {}
 
     def add_event(self, event: BenefitEvent) -> None:
@@ -61,8 +75,17 @@ class BenefitAttributionRegistry:
             raise ValueError(f"Duplicate benefit_event_id: {event.benefit_event_id}")
         if event.measurement_id in self._measurement_ids:
             raise ValueError(f"Measurement already registered: {event.measurement_id}")
+        measurement_key = (
+            event.enterprise_id, event.period_id, event.metric_code,
+            event.counterfactual_id, event.measurement_scope_id,
+        )
+        if measurement_key in self._measurement_keys:
+            raise ValueError(
+                "Enterprise/period/metric/counterfactual measurement scope already registered"
+            )
         self._events[event.benefit_event_id] = event
         self._measurement_ids.add(event.measurement_id)
+        self._measurement_keys.add(measurement_key)
 
     def add_claim(self, claim: BenefitAttribution) -> None:
         if claim.claim_id in self._claims:
@@ -79,7 +102,10 @@ class BenefitAttributionRegistry:
         self._claims[claim.claim_id] = claim
 
     def summary(self) -> dict:
-        by_project: dict[tuple[str, str], Decimal] = {}
+        # Keep the compatibility aggregate strictly VERIFIED. All other
+        # evidence classes remain visible in a separate status-dimensional view.
+        verified_by_project: dict[tuple[str, str], Decimal] = {}
+        by_project_status: dict[tuple[str, str, str], Decimal] = {}
         by_status: dict[str, dict[str, Decimal]] = {}
         event_rows = []
         for event_id, event in self._events.items():
@@ -89,8 +115,16 @@ class BenefitAttributionRegistry:
             status_bucket = by_status.setdefault(status, {})
             status_bucket[event.amount.currency] = status_bucket.get(event.amount.currency, Decimal("0")) + event.amount.amount
             for claim in claims:
-                key = (claim.project_id, event.amount.currency)
-                by_project[key] = by_project.get(key, Decimal("0")) + event.amount.amount * claim.attribution_weight
+                allocated_amount = event.amount.amount * claim.attribution_weight
+                status_key = (claim.project_id, event.amount.currency, status)
+                by_project_status[status_key] = (
+                    by_project_status.get(status_key, Decimal("0")) + allocated_amount
+                )
+                if event.evidence_status == EvidenceStatus.VERIFIED:
+                    verified_key = (claim.project_id, event.amount.currency)
+                    verified_by_project[verified_key] = (
+                        verified_by_project.get(verified_key, Decimal("0")) + allocated_amount
+                    )
             event_rows.append({
                 "benefit_event_id": event_id,
                 "measurement_id": event.measurement_id,
@@ -105,8 +139,22 @@ class BenefitAttributionRegistry:
             "events": event_rows,
             "attributed_amount_by_project_currency": [
                 {"project_id": project, "currency": currency, "amount": str(amount)}
-                for (project, currency), amount in sorted(by_project.items())
+                for (project, currency), amount in sorted(verified_by_project.items())
             ],
+            "verified_attributed_amount_by_project_currency": [
+                {"project_id": project, "currency": currency, "amount": str(amount)}
+                for (project, currency), amount in sorted(verified_by_project.items())
+            ],
+            "attributed_amount_by_project_currency_and_status": [
+                {
+                    "project_id": project,
+                    "currency": currency,
+                    "evidence_status": status,
+                    "amount": str(amount),
+                }
+                for (project, currency, status), amount in sorted(by_project_status.items())
+            ],
+            "scenario_amounts_are_excluded_from_verified_project_totals": True,
             "gross_amount_by_evidence_status_currency": {
                 status: {currency: str(amount) for currency, amount in values.items()}
                 for status, values in by_status.items()

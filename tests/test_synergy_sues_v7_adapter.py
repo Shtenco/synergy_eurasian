@@ -106,8 +106,8 @@ class Output:
     benefit_stream_id: str = "stream-1"
     period: str = "2026-11"
     product_id: str = "part"
-    observed_quantity: float = 100.0
-    baseline_quantity: float = 80.0
+    observed_quantity: str = "100"
+    baseline_quantity: str = "80"
     unit: str = "unit"
     evidence_method: str = "PRE_POST"
     evidence_id: str = "meter:out-1"
@@ -120,7 +120,7 @@ class Delivery:
     output_id: str = "out-1"
     customer_id: str = "customer-1"
     accepted_date: str = "2026-11-05"
-    accepted_quantity: float = 60.0
+    accepted_quantity: str = "60"
     unit: str = "unit"
     acceptance_ref: str = "acceptance:1"
     source_class: str = "VERIFIED"
@@ -131,9 +131,9 @@ class Allocation:
     allocation_id: str = "alloc-1"
     delivery_id: str = "delivery-1"
     invoice_document_id: str = "invoice-1"
-    invoiced_quantity: float = 60.0
+    invoiced_quantity: str = "60"
     unit: str = "unit"
-    invoiced_amount: float = 600.0
+    invoiced_amount: str = "600"
     currency: str = "USD"
     source_ref: str = "invoice-allocation:1"
 
@@ -147,7 +147,7 @@ class Invoice:
     issue_date: str = "2026-11-05"
     due_date: str = "2026-12-05"
     currency: str = "USD"
-    original_amount: float = 600.0
+    original_amount: str = "600"
     source_ref: str = "invoice:1"
     contract_ref: str = "contract:1"
 
@@ -157,7 +157,7 @@ class Settlement:
     settlement_id: str = "settlement-1"
     document_id: str = "invoice-1"
     settlement_date: str = "2026-11-06"
-    amount: float = 400.0
+    amount: str = "400"
     currency: str = "USD"
     cash_account_id: str = "bank:usd"
     source_ref: str = "bank-statement:line-1"
@@ -168,7 +168,7 @@ class Collection:
     attribution_id: str = "collection-1"
     settlement_id: str = "settlement-1"
     invoice_allocation_id: str = "alloc-1"
-    amount: float = 400.0
+    amount: str = "400"
     currency: str = "USD"
     source_ref: str = "remittance:1"
 
@@ -181,7 +181,7 @@ class Cost:
     benefit_stream_id: str = "stream-1"
     period: str = "2026-11"
     cost_type: str = "DIRECT_COST"
-    amount: float = 250.0
+    amount: str = "250"
     currency: str = "USD"
     evidence_id: str = "supplier-invoice:steel"
     source_class: str = "VERIFIED"
@@ -202,8 +202,16 @@ def test_v7_realization_adapter_preserves_output_to_cash_lineage_without_gl_post
     by_type = {row.record_type: row for row in bridge.links}
     assert by_type["OUTPUT_OBSERVATION"].quantity == 100
     assert by_type["DELIVERY_ACCEPTANCE"].related_record_ids == ("out-1",)
+    assert by_type["DELIVERY_ACCEPTANCE"].entity_id == "co-1"
+    assert by_type["DELIVERY_ACCEPTANCE"].project_id == "factory-1"
+    assert by_type["DELIVERY_ACCEPTANCE"].benefit_stream_id == "stream-1"
+    assert by_type["DELIVERY_ACCEPTANCE"].period_id == "2026-11"
     assert by_type["INVOICE_DELIVERY_ALLOCATION"].project_id == "factory-1"
     assert by_type["COLLECTION_ATTRIBUTION"].effective_date == date(2026, 11, 6)
+    assert by_type["COLLECTION_ATTRIBUTION"].entity_id == "co-1"
+    assert by_type["COLLECTION_ATTRIBUTION"].project_id == "factory-1"
+    assert by_type["COLLECTION_ATTRIBUTION"].benefit_stream_id == "stream-1"
+    assert by_type["COLLECTION_ATTRIBUTION"].period_id == "2026-11"
     assert by_type["COLLECTION_ATTRIBUTION"].related_record_ids == ("settlement-1", "alloc-1")
     assert by_type["COLLECTION_ATTRIBUTION"].amount.amount == 400
     assert by_type["COST_OBSERVATION"].evidence_status.value == "VERIFIED"
@@ -227,7 +235,7 @@ def test_realization_adapter_preserves_future_source_rows_for_complete_replay():
     future_delivery = Delivery(
         delivery_id="delivery-future",
         accepted_date="2026-12-01",
-        accepted_quantity=10.0,
+        accepted_quantity="10",
     )
     bridge = adapt_v7_realization_chain(
         lambda *args: {"as_of": args[-1], "future_rows_preserved": True},
@@ -269,3 +277,37 @@ def test_v7_bridge_json_schema_validates_event_link_and_bridge_contracts():
     }
     for sample in (source_event, link, bridge):
         validator.validate(sample)
+
+
+def test_realization_adapter_rejects_duplicate_source_ids_and_nonfinite_quantities():
+    evaluator_calls = []
+    with pytest.raises(ValueError, match="duplicate output_id"):
+        adapt_v7_realization_chain(
+            lambda *args: evaluator_calls.append(args), [Output(), Output()], [], [], [Invoice()],
+            [], [], [], "2026-11-06",
+        )
+    assert evaluator_calls == []
+    with pytest.raises(ValueError, match="float"):
+        adapt_v7_realization_chain(
+            lambda *args: {}, [Output(observed_quantity=0.1)], [], [], [Invoice()],
+            [], [], [], "2026-11-06",
+        )
+    with pytest.raises(ValueError, match="must be finite"):
+        adapt_v7_realization_chain(
+            lambda *args: {}, [Output(observed_quantity="NaN")], [], [], [Invoice()],
+            [], [], [], "2026-11-06",
+        )
+    with pytest.raises(ValueError, match="float"):
+        adapt_v7_realization_chain(
+            lambda *args: {}, [Output(baseline_quantity=0.1)], [], [], [Invoice()],
+            [], [], [], "2026-11-06",
+        )
+
+
+def test_realization_adapter_rejects_allocation_to_unknown_invoice():
+    orphan = Allocation(invoice_document_id="missing-invoice")
+    with pytest.raises(ValueError, match="unknown invoice"):
+        adapt_v7_realization_chain(
+            lambda *args: {}, [Output()], [Delivery()], [orphan], [Invoice()],
+            [Settlement()], [Collection()], [Cost()], "2026-11-06",
+        )

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from datetime import datetime, timezone
 import sqlite3
@@ -92,9 +92,16 @@ def test_executor_consumes_request_once_and_commits_receipt_with_effect(tmp_path
     with sqlite3.connect(tmp_path / "executor.db") as db:
         assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 1
     assert len(executor.receipts()) == 1
-    decision_record = json.loads(executor.receipts()[0]["decision_json"])
+    receipt = executor.receipts()[0]
+    decision_record = json.loads(receipt["decision_json"])
     assert decision_record["approval_identity_ids"] == ["org:approver"]
     assert decision_record["approval_event_refs"] == [[approval.event["event_id"], approval.event["event_hash"]]]
+    request_evidence = json.loads(receipt["request_envelope_json"])
+    approval_evidence = json.loads(receipt["approval_envelopes_json"])
+    assert request_evidence["signature_b64"] == request.signature_b64
+    assert len(approval_evidence) == 1
+    assert approval_evidence[0]["signature_b64"] == approval.signature_b64
+    assert receipt["receipt_version"] == 2
     assert executor.verify()
 
 
@@ -246,3 +253,199 @@ def test_outbox_payload_is_immutable_while_delivery_state_can_advance(tmp_path):
             db.execute("UPDATE execution_outbox SET payload_json='{}'")
         db.execute("UPDATE execution_outbox SET status='DELIVERED', attempts=1")
         assert db.execute("SELECT status,attempts FROM execution_outbox").fetchone() == ("DELIVERED", 1)
+
+
+def test_executor_isolates_signed_snapshot_from_caller_mutation(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="caller-mutation")
+    original_resource = request.event["payload"]["resource_id"]
+
+    class MutatingRegistry(TrustedKeyRegistry):
+        def verify(self, envelope, received_at=None):
+            identity = super().verify(envelope, received_at)
+            request.event["payload"]["resource_id"] = "ledger:attacker-mutated"
+            return identity
+
+    mutating_registry = MutatingRegistry()
+    # Copy the trusted identities/keys into the test registry.
+    # Reuse the original registry's verification implementation and trust state
+    # while mutating only the caller-owned envelope.
+    mutating_registry._identities = registry._identities
+    mutating_registry._keys = registry._keys
+    executor = AuthorizedActionExecutor(str(tmp_path / "snapshot-executor.db"))
+
+    def handler(db, signed_request, decision):
+        db.execute("CREATE TABLE observed_resources (resource_id TEXT)")
+        db.execute("INSERT INTO observed_resources VALUES(?)",
+            (signed_request.event["payload"]["resource_id"],))
+        return {"resource_id": signed_request.event["payload"]["resource_id"]}
+
+    result = executor.execute(request, [approval], policy, mutating_registry, handler, now())
+    assert result.executed
+    assert request.event["payload"]["resource_id"] == "ledger:attacker-mutated"
+    assert result.result["resource_id"] == original_resource
+    receipt = executor.receipts()[0]
+    assert json.loads(receipt["request_envelope_json"])["event"]["payload"]["resource_id"] == original_resource
+    assert executor.verify()
+
+
+def test_executor_rejects_policy_mutation_of_signed_authorization_snapshot(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="policy-mutation")
+
+    class MutatingPolicy:
+        def authorize(self, signed_request, approvals, trusted_registry, received_at):
+            decision = policy.authorize(signed_request, approvals, trusted_registry, received_at)
+            signed_request.event["payload"]["resource_id"] = "ledger:forged"
+            return decision
+
+    executor = AuthorizedActionExecutor(str(tmp_path / "policy-mutation.db"))
+    called = []
+    with pytest.raises(ValueError, match="mutated signed request"):
+        executor.execute(request, [approval], MutatingPolicy(), registry,
+            lambda *_: called.append(True), now())
+    assert called == []
+    assert executor.receipts() == ()
+
+
+def test_executor_rejects_authorization_decision_reused_for_another_action(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="decision-scope-reuse")
+
+    class ReusedScopePolicy:
+        def authorize(self, signed_request, approvals, trusted_registry, received_at):
+            decision = policy.authorize(signed_request, approvals, trusted_registry, received_at)
+            return replace(decision, action="TOKEN_MINT")
+
+    executor = AuthorizedActionExecutor(str(tmp_path / "decision-scope-reuse.db"))
+    called = []
+    with pytest.raises(ValueError, match="not bound to this signed event"):
+        executor.execute(request, [approval], ReusedScopePolicy(), registry,
+            lambda *_: called.append(True), now())
+    assert called == []
+    assert executor.receipts() == ()
+
+
+def test_handler_cannot_commit_or_rollback_executor_transaction(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="handler-commit-escape")
+    path = str(tmp_path / "handler-commit-escape.db")
+    executor = AuthorizedActionExecutor(path)
+
+    def committing_handler(db, request, decision):
+        db.execute("CREATE TABLE IF NOT EXISTS protected_effects (value TEXT)")
+        db.execute("INSERT INTO protected_effects VALUES('must-rollback')")
+        db.commit()
+
+    with pytest.raises(AttributeError):
+        executor.execute(request, [approval], policy, registry, committing_handler, now())
+    assert executor.receipts() == ()
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='protected_effects'").fetchone()[0] == 0
+
+
+def test_handler_cannot_issue_sql_transaction_control_or_drop_receipt_triggers(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="handler-sql-escape")
+    path = str(tmp_path / "handler-sql-escape.db")
+    executor = AuthorizedActionExecutor(path)
+
+    def committing_handler(db, request, decision):
+        db.execute("CREATE TABLE IF NOT EXISTS protected_effects (value TEXT)")
+        db.execute("INSERT INTO protected_effects VALUES('must-rollback')")
+        db.execute("COMMIT")
+
+    with pytest.raises(sqlite3.DatabaseError):
+        executor.execute(request, [approval], policy, registry, committing_handler, now())
+    assert executor.receipts() == ()
+    with sqlite3.connect(path) as db:
+        # The entire handler DDL is rolled back, so the table must not exist.
+        assert db.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='protected_effects'"
+        ).fetchone()[0] == 0
+
+
+def test_handler_cannot_drop_executor_receipt_triggers(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="handler-drop-trigger")
+    path = str(tmp_path / "handler-drop-trigger.db")
+    executor = AuthorizedActionExecutor(path)
+
+    def trigger_dropping_handler(db, request, decision):
+        db.execute("DROP TRIGGER execution_receipts_no_update")
+
+    with pytest.raises(sqlite3.DatabaseError):
+        executor.execute(request, [approval], policy, registry, trigger_dropping_handler, now())
+    assert executor.receipts() == ()
+    with sqlite3.connect(path) as db:
+        exists = db.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name='execution_receipts_no_update'"
+        ).fetchone()[0]
+        assert exists == 1
+
+
+def test_handler_cannot_install_temp_trigger_on_receipt_table(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="handler-temp-trigger")
+    executor = AuthorizedActionExecutor(str(tmp_path / "handler-temp-trigger.db"))
+
+    def temp_trigger_handler(db, request, decision):
+        db.execute(
+            "CREATE TEMP TRIGGER receipt_hijack AFTER INSERT ON execution_receipts "
+            "BEGIN SELECT RAISE(ABORT, 'receipt hijack'); END"
+        )
+
+    with pytest.raises(sqlite3.DatabaseError):
+        executor.execute(request, [approval], policy, registry, temp_trigger_handler, now())
+    assert executor.receipts() == ()
+
+
+def test_executor_can_require_scope_guard_inside_the_same_transaction(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="required-scope-guard")
+    executor = AuthorizedActionExecutor(
+        str(tmp_path / "required-scope-guard.db"), require_scope_guard=True
+    )
+    with pytest.raises(ValueError, match="requires an atomic authority-scope guard"):
+        executor.execute(request, [approval], policy, registry, insert_effect, now())
+
+    calls = []
+    def scope_guard(db, signed_request, decision, execution_time):
+        calls.append((signed_request.event["event_id"], execution_time))
+        db.execute(
+            "INSERT INTO authority_scope_reservation_events "
+            "(event_id,request_id,event_type,scope_id,tenant_id,period_key,currency,amount,source_ref,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?)",
+            ("reserve:guarded", "req-1", "RESERVED", "scope:treasury",
+             "tenant:one", "2026-11", "USD", "10", signed_request.event["event_hash"], now()),
+        )
+        return True
+
+    result = executor.execute(
+        request, [approval], policy, registry, insert_effect, now(), scope_guard=scope_guard
+    )
+    assert result.executed
+    assert calls == [(request.event["event_id"], datetime.fromisoformat(now()))]
+    with sqlite3.connect(tmp_path / "required-scope-guard.db") as db:
+        assert db.execute(
+            "SELECT COUNT(*) FROM authority_scope_reservation_events WHERE event_type='RESERVED'"
+        ).fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 1
+
+
+def test_executor_rejects_scope_guard_without_literal_true(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="scope-guard-false")
+    executor = AuthorizedActionExecutor(
+        str(tmp_path / "scope-guard-false.db"), require_scope_guard=True
+    )
+    with pytest.raises(ValueError, match="must return literal True"):
+        executor.execute(
+            request, [approval], policy, registry, insert_effect, now(),
+            scope_guard=lambda *_: None,
+        )
+    assert executor.receipts() == ()
+    with sqlite3.connect(tmp_path / "scope-guard-false.db") as db:
+        assert db.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='protected_effects'"
+        ).fetchone()[0] == 0

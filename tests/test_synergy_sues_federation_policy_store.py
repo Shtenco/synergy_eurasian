@@ -11,7 +11,7 @@ from synergy_sues.federation_identity import (
     generate_ed25519_keypair, sign_event,
 )
 from synergy_sues.federation_authorization import AuthorizationRule
-from synergy_sues.federation_policy_store import SQLiteAuthorizationPolicyStore
+from synergy_sues.federation_policy_store import PolicyAuditPersistenceError, SQLiteAuthorizationPolicyStore
 from synergy_sues.federation_execution import AuthorizedActionExecutor
 from synergy_sues.federation_execution import AuthorizedActionExecutor
 
@@ -409,3 +409,35 @@ def test_rejected_policy_admin_attempt_is_audited_and_audit_chain_is_tamper_evid
         db.execute("DROP TRIGGER authorization_policy_admin_attempts_no_update")
         db.execute("UPDATE authorization_policy_admin_attempts SET reason='hidden'")
     assert not store.verify()
+
+
+def test_rejected_policy_change_fails_closed_when_audit_persistence_fails(tmp_path, monkeypatch):
+    store, registry, keys = setup(tmp_path)
+    request, approvals = make_change(tmp_path, keys, suffix="audit-failure")
+    monkeypatch.setattr(
+        store, "_record_rejected_attempt",
+        lambda *_: (_ for _ in ()).throw(OSError("audit database unavailable")),
+    )
+    with pytest.raises(PolicyAuditPersistenceError, match="audit could not be persisted"):
+        store.apply_change(request, approvals[:1], registry, "2026-11-06T10:02:00+00:00")
+    assert store.snapshot("tenant:one").version == 0
+
+
+
+def test_policy_store_uses_verified_snapshots_when_caller_mutates_request(tmp_path):
+    store, registry, keys = setup(tmp_path)
+    request, approvals = make_change(tmp_path, keys, suffix="snapshot")
+    real_verify = registry.verify
+
+    def mutate_original_after_verification(envelope, received_at=None):
+        identity = real_verify(envelope, received_at)
+        request.event["payload"]["operation"] = "REVOKE_ALL"
+        return identity
+
+    registry.verify = mutate_original_after_verification
+    result = store.apply_change(
+        request, approvals, registry, "2026-11-06T10:02:00+00:00",
+    )
+    assert result.applied is True
+    assert store.snapshot("tenant:one").version == 1
+    assert request.event["payload"]["operation"] == "REVOKE_ALL"

@@ -28,28 +28,62 @@ def load_config(path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _number(value: Any, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field} must be a numeric value, not a boolean or string")
+    try:
+        result = float(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be finite") from exc
+    if not math.isfinite(result):
+        raise ValueError(f"{field} must be finite")
+    return result
+
+
 def _validate(cfg: dict[str, Any], budget: float) -> None:
-    if not math.isfinite(float(budget)) or budget <= 0:
+    if not isinstance(cfg, dict):
+        raise ValueError("Sector optimizer config must be an object")
+    try:
+        budget = _number(budget, "investment budget")
+    except ValueError as exc:
+        if "boolean or string" in str(exc):
+            raise
+        raise ValueError("Investment budget must be finite and positive.") from exc
+    if budget <= 0:
         raise ValueError("Investment budget must be finite and positive.")
-    weights = cfg["objective_weights"]
+    weights = cfg.get("objective_weights")
+    if not isinstance(weights, dict) or set(weights) != set(METRICS):
+        raise ValueError("objective_weights must define exactly the modeled metrics")
     weight_values = {}
     for key in METRICS:
-        value = float(weights[key])
-        if not math.isfinite(value) or value < 0:
+        try:
+            value = _number(weights[key], f"objective_weights.{key}")
+        except ValueError as exc:
+            if "boolean or string" in str(exc):
+                raise
+            raise ValueError(f"Objective weight {key} must be finite and non-negative.") from exc
+        if value < 0:
             raise ValueError(f"Objective weight {key} must be finite and non-negative.")
         weight_values[key] = value
     if abs(sum(weight_values.values()) - 1.0) > 1e-9:
         raise ValueError("Objective weights must sum to 1.0.")
 
-    norms = cfg["normalization"]
+    norms = cfg.get("normalization")
+    if not isinstance(norms, dict) or set(norms) != set(METRICS):
+        raise ValueError("normalization must define exactly the modeled metrics")
     for key in METRICS:
-        value = float(norms[key])
-        if not math.isfinite(value) or value <= 0:
+        try:
+            value = _number(norms[key], f"normalization.{key}")
+        except ValueError as exc:
+            if "boolean or string" in str(exc):
+                raise
+            raise ValueError(f"Normalization value {key} must be finite and strictly positive.") from exc
+        if value <= 0:
             raise ValueError(f"Normalization value {key} must be finite and strictly positive.")
 
-    projects = cfg["projects"]
-    if not projects:
-        raise ValueError("At least one project is required.")
+    projects = cfg.get("projects")
+    if not isinstance(projects, list) or not projects or any(not isinstance(p, dict) for p in projects):
+        raise ValueError("projects must be a non-empty array of project objects")
     ids = [p.get("project_id") for p in projects]
     if any(not isinstance(project_id, str) or not project_id.strip() for project_id in ids):
         raise ValueError("Every project requires a non-empty project_id.")
@@ -68,14 +102,12 @@ def _validate(cfg: dict[str, Any], budget: float) -> None:
             "labor_hours_released_per_1000", "criticality_weight",
         )
         for field in numeric_fields:
-            value = float(p[field])
-            if not math.isfinite(value):
-                raise ValueError(f"Project {p['project_id']} field {field} must be finite.")
-        if float(p["max_investment_usd"]) < 0:
+            value = _number(p[field], f"project {p['project_id']} field {field}")
+        if _number(p["max_investment_usd"], "max_investment_usd") < 0:
             raise ValueError("Project investment limits cannot be negative.")
-        if float(p["annual_net_residual_yield"]) < 0:
+        if _number(p["annual_net_residual_yield"], "annual_net_residual_yield") < 0:
             raise ValueError("Net residual yield cannot be negative.")
-        if float(p["criticality_weight"]) <= 0:
+        if _number(p["criticality_weight"], "criticality_weight") <= 0:
             raise ValueError("Project criticality_weight must be positive.")
         for field in ("deployment_lag_months", "diffusion_reach_enterprises"):
             value = p[field]
@@ -83,23 +115,27 @@ def _validate(cfg: dict[str, Any], budget: float) -> None:
                 raise ValueError(f"Project {p['project_id']} field {field} must be a non-negative integer.")
 
     sector_caps = cfg.get("sector_max_share_of_budget", {})
+    if not isinstance(sector_caps, dict):
+        raise ValueError("sector_max_share_of_budget must be an object")
     for sector, raw_share in sector_caps.items():
-        share = float(raw_share)
-        if sector not in sectors or not math.isfinite(share) or not 0 <= share <= 1:
+        share = _number(raw_share, f"sector_max_share_of_budget.{sector}")
+        if sector not in sectors or not 0 <= share <= 1:
             raise ValueError(f"Invalid sector maximum budget share for {sector}.")
 
     shared_cap = cfg.get("shared_projects_max_share_of_budget")
     if shared_cap is not None:
-        shared_cap = float(shared_cap)
-        if not math.isfinite(shared_cap) or not 0 <= shared_cap <= 1:
+        shared_cap = _number(shared_cap, "shared_projects_max_share_of_budget")
+        if not 0 <= shared_cap <= 1:
             raise ValueError("Shared project budget share must be between 0 and 1.")
 
     minimums = cfg.get("sector_min_investment_usd", {})
+    if not isinstance(minimums, dict):
+        raise ValueError("sector_min_investment_usd must be an object")
     total_minimum = 0.0
     for sector, raw_minimum in minimums.items():
-        minimum = float(raw_minimum)
-        capacity = sum(float(p["max_investment_usd"]) for p in projects if p["sector"] == sector)
-        if not math.isfinite(minimum) or minimum < 0:
+        minimum = _number(raw_minimum, f"sector_min_investment_usd.{sector}")
+        capacity = sum(_number(p["max_investment_usd"], "max_investment_usd") for p in projects if p["sector"] == sector)
+        if minimum < 0:
             raise ValueError(f"Sector minimum for {sector} must be finite and non-negative.")
         if sector not in sectors or minimum > capacity + 1e-9:
             raise ValueError(f"Sector minimum for {sector} exceeds available project capacity.")

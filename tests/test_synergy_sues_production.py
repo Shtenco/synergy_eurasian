@@ -8,10 +8,10 @@ from jsonschema import Draft202012Validator
 
 from synergy_sues.contracts import Money, Quantity
 from synergy_sues.inventory import InventoryLedger
-from synergy_sues.journal import Account, AccountType, Journal, NormalBalance
+from synergy_sues.journal import Account, AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide
 from synergy_sues.production import (
     BOMComponent, GRNIMatcher, GoodsReceipt, ProductionOrder,
-    ProductionCostEvent, ProductionCostType, PurchaseOrderLine, SupplierInvoiceLine, execute_production_order,
+    ProductionCompletionEvidence, ProductionInputConsumption, ProductionCostEvent, ProductionCostType, PurchaseOrderLine, SupplierInvoiceLine, execute_production_order,
     post_grni_invoice, post_grni_receipt,
 )
 
@@ -35,6 +35,18 @@ def production_journal():
     return journal
 
 
+
+def completion(order_id, amount, inputs):
+    measured_inputs = tuple(
+        ProductionInputConsumption(item_id, Quantity(quantity, unit), evidence_ref)
+        for item_id, (quantity, unit, evidence_ref) in inputs.items()
+    )
+    return ProductionCompletionEvidence(
+        order_id, Quantity(amount, "unit"), NOW,
+        f"evidence:completion:{order_id}", measured_inputs,
+    )
+
+
 def test_grni_three_way_match_and_journal_clearance():
     journal = production_journal()
     matcher = GRNIMatcher([
@@ -48,7 +60,10 @@ def test_grni_three_way_match_and_journal_clearance():
         SupplierInvoiceLine("inv-1", "po-1", Quantity("4", "kg"),
             Money("20", "USD"), date(2026, 11, 5), "supplier-invoice:1")
     )
-    post_grni_receipt(receipt, matcher, journal, "raw", "grni", "co1", NOW)
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("gr-1", "gr-1-lot", "steel", "warehouse",
+        Quantity("6", "kg"), Money("30", "USD"), date(2026, 11, 3), "warehouse:gr-1")
+    post_grni_receipt(receipt, matcher, inventory, journal, "raw", "grni", "co1", NOW)
     post_grni_invoice(invoice, matcher, journal, "grni", "ap", "co1", NOW)
 
     report = matcher.report("po-1")
@@ -82,7 +97,7 @@ def test_grni_rejects_over_receipt_unreceived_invoice_and_price_variance():
 
 def test_bom_execution_reconciles_material_wip_and_finished_goods():
     journal = production_journal()
-    inventory = InventoryLedger("USD")
+    inventory = InventoryLedger("USD", entity_id="co1")
     receipt = inventory.receive("raw-receipt", "steel-lot", "steel", "factory",
         Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 1), "receipt:steel")
     inventory.post_to_journal("raw-receipt", journal, "raw", "grni", "co1", NOW)
@@ -93,7 +108,7 @@ def test_bom_execution_reconciles_material_wip_and_finished_goods():
         date(2026, 11, 6), "production-order:batch-1",
     )
     result = execute_production_order(order, inventory, journal,
-        "raw", "wip", "finished", NOW)
+        "raw", "wip", "finished", NOW, completion=completion("batch-1", "2", {"steel": ("4", "kg", "meter:steel-batch-1")}))
 
     assert result.direct_material_cost == Money("40", "USD")
     assert result.output_movement.quantity == Quantity("2", "unit")
@@ -106,12 +121,12 @@ def test_bom_execution_reconciles_material_wip_and_finished_goods():
     assert journal.trial_balance()["balanced"]
     assert journal.trial_balance()["total_debits"] == journal.trial_balance()["total_credits"] == "180"
     with pytest.raises(ValueError, match="already executed"):
-        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW)
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, completion=completion("batch-1", "2", {"steel": ("4", "kg", "meter:steel-batch-1")}))
 
 
 def test_production_preflight_prevents_partial_material_consumption():
     journal = production_journal()
-    inventory = InventoryLedger("USD")
+    inventory = InventoryLedger("USD", entity_id="co1")
     inventory.receive("r1", "lot-1", "steel", "factory",
         Quantity("3", "kg"), Money("30", "USD"), date(2026, 11, 1), "receipt:steel")
     before = inventory.summary()
@@ -124,7 +139,7 @@ def test_production_preflight_prevents_partial_material_consumption():
         date(2026, 11, 6), "production-order:short",
     )
     with pytest.raises(ValueError, match="Insufficient component copper"):
-        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW)
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, completion=completion("batch-short", "2", {"steel": ("2", "kg", "meter:steel-short"), "copper": ("2", "kg", "meter:copper-short")}))
     assert inventory.summary() == before
     assert journal.entries == ()
 
@@ -132,7 +147,7 @@ def test_production_preflight_prevents_partial_material_consumption():
 
 def test_zero_cost_bom_is_rejected_before_inventory_mutation():
     journal = production_journal()
-    inventory = InventoryLedger("USD")
+    inventory = InventoryLedger("USD", entity_id="co1")
     inventory.receive("free-input", "free-lot", "sample", "factory",
         Quantity("2", "kg"), Money("0", "USD"), date(2026, 11, 1), "receipt:free")
     before = inventory.summary()
@@ -142,7 +157,7 @@ def test_zero_cost_bom_is_rejected_before_inventory_mutation():
         date(2026, 11, 6), "production-order:free",
     )
     with pytest.raises(ValueError, match="Zero-cost production batch"):
-        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW)
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, completion=completion("batch-free", "1", {"sample": ("1", "kg", "meter:sample-free")}))
     assert inventory.summary() == before
     assert journal.entries == ()
 
@@ -150,7 +165,7 @@ def test_zero_cost_bom_is_rejected_before_inventory_mutation():
 
 def test_evidence_backed_labor_and_energy_costs_are_capitalized_into_finished_goods():
     journal = production_journal()
-    inventory = InventoryLedger("USD")
+    inventory = InventoryLedger("USD", entity_id="co1")
     inventory.receive("raw-receipt-costed", "steel-lot-costed", "steel", "factory",
         Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 1), "receipt:steel-costed")
     inventory.post_to_journal("raw-receipt-costed", journal, "raw", "grni", "co1", NOW)
@@ -168,6 +183,7 @@ def test_evidence_backed_labor_and_energy_costs_are_capitalized_into_finished_go
     result = execute_production_order(
         order, inventory, journal, "raw", "wip", "finished", NOW,
         costs, {ProductionCostType.LABOR: "labor_payable", ProductionCostType.ENERGY: "energy_payable"},
+        completion=completion("batch-costed", "2", {"steel": ("4", "kg", "meter:steel-costed")}),
     )
     assert result.direct_material_cost == Money("40", "USD")
     assert result.conversion_cost == Money("30", "USD")
@@ -179,7 +195,7 @@ def test_evidence_backed_labor_and_energy_costs_are_capitalized_into_finished_go
 
 def test_production_cost_events_require_mapping_before_inventory_is_consumed():
     journal = production_journal()
-    inventory = InventoryLedger("USD")
+    inventory = InventoryLedger("USD", entity_id="co1")
     inventory.receive("raw-receipt-unmapped", "steel-lot-unmapped", "steel", "factory",
         Quantity("2", "kg"), Money("20", "USD"), date(2026, 11, 1), "receipt:steel-unmapped")
     before = inventory.summary()
@@ -191,7 +207,8 @@ def test_production_cost_events_require_mapping_before_inventory_is_consumed():
     event = ProductionCostEvent("labor-unmapped", "batch-unmapped", "co1", ProductionCostType.LABOR,
         Money("5", "USD"), date(2026, 11, 6), "payroll:unmapped", "evidence:unmapped")
     with pytest.raises(ValueError, match="Missing credit account mapping"):
-        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, (event,), {})
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, (event,), {},
+        completion=completion("batch-unmapped", "1", {"steel": ("1", "kg", "meter:steel-unmapped")}))
     assert inventory.summary() == before
     assert journal.entries == ()
 
@@ -218,9 +235,313 @@ def test_production_json_schema_validates_all_procurement_and_production_contrac
         {"event_id": "labor-1", "order_id": "batch", "entity_id": "co1", "cost_type": "LABOR",
          "amount": {"amount": "5", "currency": "USD"}, "effective_date": "2026-11-06",
          "source_ref": "payroll:1", "evidence_ref": "timesheet:1"},
+        {"order_id": "batch", "output_quantity": {"amount": "1", "unit": "unit"},
+         "completed_at": "2026-11-06T12:00:00Z", "evidence_ref": "production:completion:1",
+         "input_consumption": [{"item_id": "steel", "quantity": {"amount": "2", "unit": "kg"},
+             "evidence_ref": "meter:steel:1"}]},
         {"order_id": "batch", "direct_material_cost": {"amount": "10", "currency": "USD"},
          "conversion_cost": {"amount": "5", "currency": "USD"}, "capitalized_cost": {"amount": "15", "currency": "USD"},
-         "output_quantity": {"amount": "1", "unit": "unit"}, "journal_entry_ids": ["entry:1"]},
+         "output_quantity": {"amount": "1", "unit": "unit"}, "completion_evidence_ref": "production:completion:1",
+         "completed_at": "2026-11-06T12:00:00Z", "journal_entry_ids": ["entry:1"]},
     ]
     for sample in samples:
         validator.validate(sample)
+
+
+def test_grni_invoice_cannot_predate_the_receipt_supporting_it():
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-date", "co1", "supplier", "steel",
+            Quantity("5", "kg"), Money("2", "USD"), date(2026, 11, 1), "po:date")
+    ])
+    matcher.record_receipt(GoodsReceipt(
+        "receipt-date", "po-date", Quantity("3", "kg"),
+        date(2026, 11, 5), "warehouse:receipt-date",
+    ))
+    with pytest.raises(ValueError, match="precedes the physical receipt"):
+        matcher.record_invoice(SupplierInvoiceLine(
+            "invoice-date", "po-date", Quantity("2", "kg"),
+            Money("4", "USD"), date(2026, 11, 4), "supplier:invoice-date",
+        ))
+    assert matcher.report("po-date")["invoiced_quantity"] == "0"
+
+
+def test_production_books_measured_output_not_planned_quantity():
+    journal = production_journal()
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("measured-input", "measured-lot", "steel", "factory",
+        Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 1), "receipt:measured")
+    order = ProductionOrder(
+        "batch-measured", "co1", "part", Quantity("4", "unit"), "factory",
+        (BOMComponent("steel", Quantity("2", "kg")),),
+        date(2026, 11, 6), "production:measured",
+    )
+    result = execute_production_order(
+        order, inventory, journal, "raw", "wip", "finished", NOW,
+        completion=completion("batch-measured", "1", {"steel": ("2", "kg", "meter:steel-measured")}),
+    )
+    assert result.output_quantity == Quantity("1", "unit")
+    assert result.output_movement.quantity == Quantity("1", "unit")
+    assert result.completion_evidence_ref == "evidence:completion:batch-measured"
+    pools = {row["item_id"]: row for row in inventory.summary()["pools"]}
+    assert pools["steel"]["quantity"] == "8"
+    assert pools["part"]["quantity"] == "1"
+    assert result.direct_material_cost == Money("20", "USD")
+
+
+def test_production_execution_requires_completion_evidence_and_rejects_overproduction():
+    journal = production_journal()
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("input", "input-lot", "steel", "factory",
+        Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 1), "receipt:input")
+    order = ProductionOrder(
+        "batch-no-evidence", "co1", "part", Quantity("2", "unit"), "factory",
+        (BOMComponent("steel", Quantity("1", "kg")),),
+        date(2026, 11, 6), "production:no-evidence",
+    )
+    with pytest.raises(ValueError, match="completion evidence is required"):
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW)
+    with pytest.raises(ValueError, match="exceeds the authorized order"):
+        execute_production_order(
+            order, inventory, journal, "raw", "wip", "finished", NOW,
+            completion=completion("batch-no-evidence", "3", {"steel": ("3", "kg", "meter:steel-overrun")}),
+        )
+    assert inventory.summary()["pools"][0]["quantity"] == "10"
+    assert journal.entries == ()
+
+
+def test_production_rolls_back_inventory_when_atomic_journal_batch_rejects():
+    journal = production_journal()
+    collision_event_id = "production-consumption:production:batch-atomic:issue:steel"
+    journal.post(JournalEntry(
+        "unrelated-seed", date(2026, 11, 6), NOW, "USD",
+        (
+            JournalLine("seed-dr", "raw", PostingSide.DEBIT, Money("1", "USD"), Money("1", "USD"), "co1", "seed:raw"),
+            JournalLine("seed-cr", "grni", PostingSide.CREDIT, Money("1", "USD"), Money("1", "USD"), "co1", "seed:grni"),
+        ),
+        collision_event_id, "unrelated-seed-idem", "Seed conflicting source event",
+    ))
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("atomic-input", "atomic-lot", "steel", "factory",
+        Quantity("5", "kg"), Money("50", "USD"), date(2026, 11, 1), "receipt:atomic")
+    before_summary = inventory.summary()
+    before_movements = inventory.movements
+    order = ProductionOrder(
+        "batch-atomic", "co1", "part", Quantity("2", "unit"), "factory",
+        (BOMComponent("steel", Quantity("1", "kg")),),
+        date(2026, 11, 6), "production:atomic",
+    )
+    with pytest.raises(ValueError, match="Duplicate source_event_id"):
+        execute_production_order(
+            order, inventory, journal, "raw", "wip", "finished", NOW,
+            completion=completion("batch-atomic", "2", {"steel": ("2", "kg", "meter:steel-atomic")}),
+        )
+    assert inventory.summary() == before_summary
+    assert inventory.movements == before_movements
+    assert len(journal.entries) == 1
+
+
+def test_production_completion_requires_measured_inputs_for_every_bom_component():
+    journal = production_journal()
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("input-evidence", "input-evidence-lot", "steel", "factory",
+        Quantity("5", "kg"), Money("50", "USD"), date(2026, 11, 1), "receipt:input-evidence")
+    order = ProductionOrder(
+        "batch-input-evidence", "co1", "part", Quantity("1", "unit"), "factory",
+        (BOMComponent("steel", Quantity("1", "kg")),),
+        date(2026, 11, 6), "production:input-evidence",
+    )
+    with pytest.raises(ValueError, match="measured input consumption"):
+        ProductionCompletionEvidence(
+            "batch-input-evidence", Quantity("1", "unit"), NOW,
+            "evidence:completion:missing-input", (),
+        )
+    assert inventory.summary()["pools"][0]["quantity"] == "5"
+    assert journal.entries == ()
+
+
+def test_maintenance_depreciation_and_overhead_are_not_capitalized_without_policy():
+    for cost_type in (
+        ProductionCostType.MAINTENANCE,
+        ProductionCostType.DEPRECIATION,
+        ProductionCostType.OTHER_OVERHEAD,
+    ):
+        journal = production_journal()
+        inventory = InventoryLedger("USD", entity_id="co1")
+        inventory.receive(f"input-{cost_type.value}", f"lot-{cost_type.value}", "steel", "factory",
+            Quantity("2", "kg"), Money("20", "USD"), date(2026, 11, 1), f"receipt:{cost_type.value}")
+        order = ProductionOrder(
+            f"batch-{cost_type.value}", "co1", "part", Quantity("1", "unit"), "factory",
+            (BOMComponent("steel", Quantity("1", "kg")),),
+            date(2026, 11, 6), f"production:{cost_type.value}",
+        )
+        event = ProductionCostEvent(
+            f"cost-{cost_type.value}", order.order_id, "co1", cost_type,
+            Money("5", "USD"), date(2026, 11, 6), f"cost:{cost_type.value}",
+            f"evidence:{cost_type.value}",
+        )
+        with pytest.raises(ValueError, match="without an explicit approved accounting policy"):
+            execute_production_order(
+                order, inventory, journal, "raw", "wip", "finished", NOW,
+                (event,), {cost_type: "labor_payable"},
+                completion=completion(order.order_id, "1", {
+                    "steel": ("1", "kg", f"meter:{cost_type.value}")
+                }),
+            )
+        assert inventory.summary()["pools"][0]["quantity"] == "2"
+        assert journal.entries == ()
+
+
+def test_grni_receipt_cannot_create_gl_inventory_without_matching_stock_movement():
+    journal = production_journal()
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-stock", "co1", "supplier", "steel",
+            Quantity("5", "kg"), Money("2", "USD"), date(2026, 11, 1), "po:stock")
+    ])
+    receipt = matcher.record_receipt(
+        GoodsReceipt("gr-stock", "po-stock", Quantity("2", "kg"),
+            date(2026, 11, 3), "warehouse:gr-stock")
+    )
+    inventory = InventoryLedger("USD", entity_id="co1")
+    with pytest.raises(ValueError, match="matching physical inventory movement"):
+        post_grni_receipt(receipt, matcher, inventory, journal, "raw", "grni", "co1", NOW)
+    assert journal.entries == ()
+
+
+def test_grni_receipt_cannot_be_posted_twice_through_inventory_bridge():
+    journal = production_journal()
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-dup", "co1", "supplier", "steel",
+            Quantity("5", "kg"), Money("2", "USD"), date(2026, 11, 1), "po:dup")
+    ])
+    receipt = matcher.record_receipt(
+        GoodsReceipt("gr-dup", "po-dup", Quantity("2", "kg"),
+            date(2026, 11, 3), "warehouse:gr-dup")
+    )
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("gr-dup", "gr-dup-lot", "steel", "warehouse",
+        Quantity("2", "kg"), Money("4", "USD"), date(2026, 11, 3), "warehouse:gr-dup")
+    post_grni_receipt(receipt, matcher, inventory, journal, "raw", "grni", "co1", NOW)
+    with pytest.raises(ValueError, match="already journalized"):
+        post_grni_receipt(receipt, matcher, inventory, journal, "raw", "grni", "co1", NOW)
+
+
+def test_grni_rejects_invoice_before_supporting_physical_receipt():
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-temporal", "co1", "supplier", "steel",
+            Quantity("10", "kg"), Money("5", "USD"), date(2026, 11, 1), "po:temporal")
+    ])
+    matcher.record_receipt(GoodsReceipt(
+        "receipt-later", "po-temporal", Quantity("5", "kg"),
+        date(2026, 11, 10), "warehouse:receipt-later",
+    ))
+    with pytest.raises(ValueError, match="precedes the physical receipt"):
+        matcher.record_invoice(SupplierInvoiceLine(
+            "invoice-earlier", "po-temporal", Quantity("5", "kg"),
+            Money("25", "USD"), date(2026, 11, 5), "invoice:earlier",
+        ))
+    assert matcher.invoices == ()
+
+
+def test_production_completion_books_measured_output_not_planned_output():
+    journal = production_journal()
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("steel-receipt", "steel-lot", "steel", "factory",
+        Quantity("20", "kg"), Money("200", "USD"), date(2026, 11, 1), "receipt:steel")
+    order = ProductionOrder(
+        "batch-partial", "co1", "part", Quantity("10", "unit"), "factory",
+        (BOMComponent("steel", Quantity("2", "kg")),),
+        date(2026, 11, 5), "production:batch-partial",
+    )
+    completion = ProductionCompletionEvidence(
+        "batch-partial", Quantity("6", "unit"),
+        datetime(2026, 11, 6, 10, tzinfo=timezone.utc),
+        "quality:accepted-6",
+        (ProductionInputConsumption("steel", Quantity("12", "kg"), "scale:steel-12kg"),),
+    )
+    result = execute_production_order(
+        order, inventory, journal, "raw", "wip", "finished", NOW,
+        completion=completion,
+    )
+    assert result.output_quantity == Quantity("6", "unit")
+    assert result.output_movement.quantity == Quantity("6", "unit")
+    assert inventory.available("part", "factory", "unit") == Quantity("6", "unit")
+    assert inventory.available("steel", "factory", "kg") == Quantity("8", "kg")
+
+
+
+def test_backdated_invoice_cannot_make_later_invoice_unmatched_to_receipts():
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-timeline", "co1", "supplier", "steel",
+            Quantity("10", "kg"), Money("2", "USD"), date(2026, 11, 1), "po:timeline")
+    ])
+    matcher.record_receipt(GoodsReceipt(
+        "receipt-early", "po-timeline", Quantity("2", "kg"),
+        date(2026, 11, 3), "warehouse:early",
+    ))
+    matcher.record_receipt(GoodsReceipt(
+        "receipt-late", "po-timeline", Quantity("2", "kg"),
+        date(2026, 11, 6), "warehouse:late",
+    ))
+    matcher.record_invoice(SupplierInvoiceLine(
+        "invoice-later", "po-timeline", Quantity("2", "kg"),
+        Money("4", "USD"), date(2026, 11, 5), "supplier:later",
+    ))
+    with pytest.raises(ValueError, match="cumulative invoiced quantity"):
+        matcher.record_invoice(SupplierInvoiceLine(
+            "invoice-backdated", "po-timeline", Quantity("2", "kg"),
+            Money("4", "USD"), date(2026, 11, 4), "supplier:backdated",
+        ))
+    assert [row.invoice_line_id for row in matcher.invoices] == ["invoice-later"]
+
+
+
+def test_production_rejects_unapproved_bom_overconsumption_without_mutation():
+    journal = production_journal()
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("yield-input", "yield-lot", "steel", "factory",
+        Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 1), "receipt:yield")
+    before = inventory.summary()
+    order = ProductionOrder(
+        "batch-yield", "co1", "part", Quantity("1", "unit"), "factory",
+        (BOMComponent("steel", Quantity("2", "kg")),),
+        date(2026, 11, 6), "production:yield",
+    )
+    with pytest.raises(ValueError, match="exceeds BOM standard"):
+        execute_production_order(
+            order, inventory, journal, "raw", "wip", "finished", NOW,
+            completion=completion("batch-yield", "1", {
+                "steel": ("3", "kg", "meter:steel-yield")
+            }),
+        )
+    assert inventory.summary() == before
+    assert inventory.movements[0].movement_id == "yield-input"
+    assert journal.entries == ()
+
+
+def test_grni_invoice_cannot_clear_forged_journal_entry_with_receipt_id():
+    journal = production_journal()
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-forged", "co1", "supplier", "steel",
+            Quantity("2", "kg"), Money("5", "USD"), date(2026, 11, 1), "po:forged")
+    ])
+    receipt = matcher.record_receipt(GoodsReceipt(
+        "receipt-forged", "po-forged", Quantity("2", "kg"),
+        date(2026, 11, 3), "warehouse:receipt-forged",
+    ))
+    invoice = matcher.record_invoice(SupplierInvoiceLine(
+        "invoice-forged", "po-forged", Quantity("2", "kg"),
+        Money("10", "USD"), date(2026, 11, 4), "supplier:invoice-forged",
+    ))
+    fake_entry_id = f"inventory:{receipt.receipt_id}"
+    journal.post(JournalEntry(
+        fake_entry_id, receipt.received_date, NOW, "USD",
+        (
+            JournalLine(f"{fake_entry_id}:dr", "raw", "DEBIT",
+                Money("10", "USD"), Money("10", "USD"), "co1", "fake:source"),
+            JournalLine(f"{fake_entry_id}:cr", "grni", "CREDIT",
+                Money("10", "USD"), Money("10", "USD"), "co1", "fake:source"),
+        ),
+        "not-the-inventory-event", "not-the-inventory-idempotency", "Forged receipt posting",
+    ))
+    with pytest.raises(ValueError, match="cannot clear more GRNI"):
+        post_grni_invoice(invoice, matcher, journal, "grni", "ap", "co1", NOW)

@@ -9,6 +9,7 @@ consensus or a production governance service.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from copy import deepcopy
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
@@ -53,6 +54,10 @@ class PolicyChangeResult:
     change_id: str
     version: int
     policy_hash: str
+
+
+class PolicyAuditPersistenceError(RuntimeError):
+    """Raised when a rejected policy change cannot be durably audited."""
 
 
 class SQLiteAuthorizationPolicyStore:
@@ -282,7 +287,7 @@ class SQLiteAuthorizationPolicyStore:
             raise ValueError("received_at must be timezone-aware")
         now = now.astimezone(timezone.utc)
         verified: dict[str, SignedEventEnvelope] = {}
-        seen_event_ids: set[str] = set()
+        seen_event_ids: dict[str, str] = {}
         veto = False
         for approval in approvals:
             approver = registry.verify(approval, received_at)
@@ -297,9 +302,14 @@ class SQLiteAuthorizationPolicyStore:
             }
             if set(approval_payload) != approval_fields:
                 raise ValueError("policy approval payload has missing or unsupported fields")
-            if approval.event["event_id"] in seen_event_ids:
+            approval_event_id = approval.event["event_id"]
+            approval_event_hash = approval.event["event_hash"]
+            previous_hash = seen_event_ids.get(approval_event_id)
+            if previous_hash is not None:
+                if previous_hash != approval_event_hash:
+                    raise ValueError("policy approval event ID reused with a different event hash")
                 continue
-            seen_event_ids.add(approval.event["event_id"])
+            seen_event_ids[approval_event_id] = approval_event_hash
             exact_binding = (
                 approval_payload["change_id"] == change_id
                 and approval_payload["tenant_id"] == tenant_id
@@ -383,9 +393,7 @@ class SQLiteAuthorizationPolicyStore:
                      previous_hash, digest))
                 db.commit()
         except Exception:
-            # Never replace the original authorization failure with an audit
-            # write failure. Operational monitoring must alert on audit I/O loss.
-            return
+            raise
 
     def apply_change(
         self,
@@ -395,10 +403,20 @@ class SQLiteAuthorizationPolicyStore:
         received_at: datetime | str | None = None,
     ) -> PolicyChangeResult:
         """Validate, apply or persist a rejected administrative attempt."""
+        if not isinstance(request, SignedEventEnvelope):
+            raise ValueError("request must be a SignedEventEnvelope")
+        request = deepcopy(request)
+        approvals = tuple(deepcopy(item) for item in approvals)
         try:
             return self._apply_change(request, approvals, registry, received_at)
         except Exception as exc:
-            self._record_rejected_attempt(request, exc)
+            try:
+                self._record_rejected_attempt(request, exc)
+            except Exception as audit_error:
+                raise PolicyAuditPersistenceError(
+                    "Policy change was rejected, but the rejection audit could not be persisted; "
+                    "administrative policy operations are blocked until audit storage is healthy"
+                ) from audit_error
             raise
 
     def _apply_change(
@@ -520,6 +538,10 @@ class SQLiteAuthorizationPolicyStore:
         registry: TrustedKeyRegistry,
         received_at: datetime | str | None = None,
     ) -> AuthorizationDecision:
+        if not isinstance(request, SignedEventEnvelope):
+            raise ValueError("request must be a SignedEventEnvelope")
+        request = deepcopy(request)
+        approvals = tuple(deepcopy(item) for item in approvals)
         requester = registry.verify(request, received_at)
         if not self.verify(registry):
             raise ValueError("authorization policy history or historical signature verification failed")
@@ -555,7 +577,7 @@ class SQLiteAuthorizationPolicyStore:
                     return False
                 request_envelope = self._decode_envelope(request)
                 if registry is not None:
-                    registry.verify(request_envelope, received_at=request_envelope.signed_at)
+                    registry.verify_historical(request_envelope, verified_at=request_envelope.signed_at)
                 change_event = request_envelope.event
                 _event_hash(change_event)
                 change_payload = change_event.get("payload")
@@ -578,7 +600,7 @@ class SQLiteAuthorizationPolicyStore:
                 for approval_document in approvals:
                     approval_envelope = self._decode_envelope(approval_document)
                     if registry is not None:
-                        registry.verify(approval_envelope, received_at=approval_envelope.signed_at)
+                        registry.verify_historical(approval_envelope, verified_at=approval_envelope.signed_at)
                     approval_event = approval_envelope.event
                     _event_hash(approval_event)
                     approval_payload = approval_event.get("payload")

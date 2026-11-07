@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from copy import deepcopy
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Iterable
 
-from .contracts import Money, Quantity, _aware
+from .contracts import Money, Quantity, _aware, _calendar_date
 from .journal import AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide
 
 
@@ -64,8 +65,7 @@ class InventoryMovement:
             raise ValueError("Inventory movement identity and source are required")
         if not isinstance(self.movement_type, InventoryMovementType):
             object.__setattr__(self, "movement_type", InventoryMovementType(self.movement_type))
-        if not isinstance(self.movement_date, date):
-            raise ValueError("Inventory movement date must be a date")
+        _calendar_date(self.movement_date, "inventory movement date")
         if self.quantity.amount <= 0:
             raise ValueError("Inventory movement quantity must be positive")
         if self.cost.amount < 0:
@@ -99,16 +99,37 @@ class InventoryMovement:
 class InventoryLedger:
     """FIFO inventory quantity/value subledger; costs are stored in entity functional currency."""
 
-    def __init__(self, functional_currency: str) -> None:
+    def __init__(self, functional_currency: str, entity_id: str | None = None) -> None:
         self.functional_currency = Money("0", functional_currency).currency
+        if entity_id is not None and (not isinstance(entity_id, str) or not entity_id.strip()):
+            raise ValueError("inventory ledger entity_id must be a non-empty string")
+        self.entity_id = entity_id
         self._lots: dict[tuple[str, str], list[_InventoryLot]] = {}
         self._pool_units: dict[tuple[str, str], str] = {}
         self._lot_ids: set[str] = set()
         self._movements: dict[str, InventoryMovement] = {}
+        self._journal_posted_movements: set[str] = set()
 
     @property
     def movements(self) -> tuple[InventoryMovement, ...]:
         return tuple(self._movements.values())
+
+    def _snapshot(self):
+        """Capture the complete in-memory subledger state for a compound operation."""
+        return deepcopy((
+            self._lots, self._pool_units, self._lot_ids, self._movements,
+            self._journal_posted_movements,
+        ))
+
+    def _restore(self, snapshot) -> None:
+        (
+            self._lots, self._pool_units, self._lot_ids, self._movements,
+            self._journal_posted_movements,
+        ) = deepcopy(snapshot)
+
+    def _mark_journal_posted(self, movement_ids: Iterable[str]) -> None:
+        # Caller validates entity ownership and journal batch before committing.
+        self._journal_posted_movements.update(movement_ids)
 
     def _check_pool(self, item_id: str, location_id: str, unit: str) -> tuple[str, str]:
         key = (item_id, location_id)
@@ -147,8 +168,7 @@ class InventoryLedger:
             raise ValueError("Inventory receipt quantity must be positive")
         if functional_cost.currency != self.functional_currency or functional_cost.amount < 0:
             raise ValueError("Inventory receipt cost must be non-negative and in functional currency")
-        if not isinstance(received_date, date):
-            raise ValueError("received_date must be a date")
+        _calendar_date(received_date, "received_date")
         movement = InventoryMovement(
             receipt_id, InventoryMovementType.RECEIPT, item_id, location_id,
             quantity, functional_cost, received_date, source_ref, lot_id=lot_id,
@@ -160,15 +180,32 @@ class InventoryLedger:
         self._lot_ids.add(lot_id)
         return self._add_movement(movement)
 
-    def available(self, item_id: str, location_id: str, unit: str) -> Quantity:
+    def available(
+        self, item_id: str, location_id: str, unit: str,
+        as_of_date: date | None = None,
+    ) -> Quantity:
+        """Return remaining stock, optionally excluding lots received after a date."""
+        if as_of_date is not None:
+            _calendar_date(as_of_date, "inventory availability date")
         key = self._check_pool(item_id, location_id, unit)
-        amount = sum((lot.remaining_quantity.amount for lot in self._lots.get(key, [])), Decimal("0"))
+        amount = sum((
+            lot.remaining_quantity.amount for lot in self._lots.get(key, [])
+            if as_of_date is None or lot.received_date <= as_of_date
+        ), Decimal("0"))
         return Quantity(amount, unit)
 
-    def preview_issue_cost(self, item_id: str, location_id: str, quantity: Quantity) -> Money:
-        """Return FIFO issue cost without mutating lots or recording a movement."""
+    def preview_issue_cost(
+        self, item_id: str, location_id: str, quantity: Quantity,
+        as_of_date: date | None = None,
+    ) -> Money:
+        """Return FIFO issue cost using only lots received on/before the issue date."""
+        if as_of_date is not None:
+            _calendar_date(as_of_date, "inventory valuation date")
         key = self._check_pool(item_id, location_id, quantity.unit)
-        lots = self._lots.get(key, [])
+        lots = [
+            lot for lot in self._lots.get(key, [])
+            if as_of_date is None or lot.received_date <= as_of_date
+        ]
         available = sum((lot.remaining_quantity.amount for lot in lots), Decimal("0"))
         if quantity.amount <= 0 or available < quantity.amount:
             raise ValueError(f"Insufficient inventory: requested {quantity.amount}, available {available}")
@@ -186,9 +223,17 @@ class InventoryLedger:
             remaining -= take
         return Money(total_cost, self.functional_currency)
 
-    def _consume_fifo(self, item_id: str, location_id: str, quantity: Quantity) -> list[tuple[Quantity, Money, _InventoryLot]]:
+    def _consume_fifo(
+        self, item_id: str, location_id: str, quantity: Quantity,
+        as_of_date: date | None = None,
+    ) -> list[tuple[Quantity, Money, _InventoryLot]]:
+        if as_of_date is not None:
+            _calendar_date(as_of_date, "inventory consumption date")
         key = self._check_pool(item_id, location_id, quantity.unit)
-        lots = self._lots.get(key, [])
+        lots = [
+            lot for lot in self._lots.get(key, [])
+            if as_of_date is None or lot.received_date <= as_of_date
+        ]
         available = sum((lot.remaining_quantity.amount for lot in lots), Decimal("0"))
         if available < quantity.amount:
             raise ValueError(f"Insufficient inventory: requested {quantity.amount}, available {available}")
@@ -224,11 +269,12 @@ class InventoryLedger:
     ) -> InventoryMovement:
         if not all((issue_id, item_id, location_id, source_ref)):
             raise ValueError("Inventory issue identity and source are required")
-        if not isinstance(issue_date, date) or quantity.amount <= 0:
-            raise ValueError("Inventory issue date and positive quantity are required")
+        _calendar_date(issue_date, "inventory issue date")
+        if quantity.amount <= 0:
+            raise ValueError("Inventory issue quantity must be positive")
         if issue_id in self._movements:
             raise ValueError(f"Duplicate inventory movement_id: {issue_id}")
-        consumed = self._consume_fifo(item_id, location_id, quantity)
+        consumed = self._consume_fifo(item_id, location_id, quantity, issue_date)
         total_cost = sum((money.amount for _, money, _ in consumed), Decimal("0"))
         lot_allocations = tuple(
             InventoryLotAllocation(lot.lot_id, taken_quantity, taken_cost, lot.source_ref)
@@ -251,11 +297,12 @@ class InventoryLedger:
     ) -> InventoryMovement:
         if not all((writeoff_id, item_id, location_id, source_ref)):
             raise ValueError("Inventory writeoff identity and source are required")
-        if not isinstance(writeoff_date, date) or quantity.amount <= 0:
-            raise ValueError("Inventory writeoff date and positive quantity are required")
+        _calendar_date(writeoff_date, "inventory writeoff date")
+        if quantity.amount <= 0:
+            raise ValueError("Inventory writeoff quantity must be positive")
         if writeoff_id in self._movements:
             raise ValueError(f"Duplicate inventory movement_id: {writeoff_id}")
-        consumed = self._consume_fifo(item_id, location_id, quantity)
+        consumed = self._consume_fifo(item_id, location_id, quantity, writeoff_date)
         total_cost = sum((money.amount for _, money, _ in consumed), Decimal("0"))
         lot_allocations = tuple(
             InventoryLotAllocation(lot.lot_id, taken_quantity, taken_cost, lot.source_ref)
@@ -281,15 +328,19 @@ class InventoryLedger:
             raise ValueError("Inventory transfer identity and endpoints are required")
         if source_location_id == destination_location_id:
             raise ValueError("Inventory transfer locations must differ")
-        if not isinstance(transfer_date, date) or quantity.amount <= 0:
-            raise ValueError("Inventory transfer date and positive quantity are required")
+        _calendar_date(transfer_date, "inventory transfer date")
+        if quantity.amount <= 0:
+            raise ValueError("Inventory transfer quantity must be positive")
         out_id, in_id = f"{transfer_id}:OUT", f"{transfer_id}:IN"
         if out_id in self._movements or in_id in self._movements:
             raise ValueError(f"Duplicate inventory transfer_id: {transfer_id}")
         # Preflight all source lots and destination lot IDs before mutating stock.
         destination_key = self._check_pool(item_id, destination_location_id, quantity.unit)
         source_key = self._check_pool(item_id, source_location_id, quantity.unit)
-        source_lots = self._lots.get(source_key, [])
+        source_lots = [
+            lot for lot in self._lots.get(source_key, [])
+            if lot.received_date <= transfer_date
+        ]
         available = sum((lot.remaining_quantity.amount for lot in source_lots), Decimal("0"))
         if available < quantity.amount:
             raise ValueError(f"Insufficient inventory: requested {quantity.amount}, available {available}")
@@ -305,7 +356,7 @@ class InventoryLedger:
         candidate_lot_ids = [f"{transfer_id}:LOT:{index}" for index in range(1, lots_needed + 1)]
         if any(lot_id in self._lot_ids for lot_id in candidate_lot_ids):
             raise ValueError(f"Duplicate destination lot ID for transfer: {transfer_id}")
-        source_consumed = self._consume_fifo(item_id, source_location_id, quantity)
+        source_consumed = self._consume_fifo(item_id, source_location_id, quantity, transfer_date)
         total_cost = sum((money.amount for _, money, _ in source_consumed), Decimal("0"))
         transfer_allocations = []
         for index, (taken_quantity, taken_cost, source_lot) in enumerate(source_consumed, start=1):
@@ -367,15 +418,36 @@ class InventoryLedger:
             raise ValueError(f"Unknown inventory movement: {movement_id}")
         if movement.movement_type in {InventoryMovementType.TRANSFER_IN, InventoryMovementType.TRANSFER_OUT}:
             return None
+        if self.entity_id is None:
+            raise ValueError("Inventory ledger must be bound to an entity before GL posting")
+        if entity_id != self.entity_id or journal.entity_id not in (None, self.entity_id):
+            raise ValueError("Inventory ledger, journal and posting entity ownership mismatch")
+        if movement_id in self._journal_posted_movements:
+            raise ValueError(f"Inventory movement already journalized: {movement_id}")
         _aware(recorded_at, "recorded_at")
+        if movement.movement_date > recorded_at.astimezone(timezone.utc).date():
+            raise ValueError("Inventory movement cannot be journalized before its effective date")
         if journal.functional_currency != self.functional_currency:
             raise ValueError("Inventory and journal functional currencies must match")
         accounts = {row.account_id: row for row in journal.accounts}
         inventory_account = accounts.get(inventory_account_id)
         if inventory_account is None or inventory_account.account_type != AccountType.ASSET or inventory_account.normal_balance != NormalBalance.DEBIT:
             raise ValueError("Inventory account must be a debit-normal asset account")
-        if offset_account_id not in accounts or offset_account_id == inventory_account_id:
+        offset_account = accounts.get(offset_account_id)
+        if offset_account is None or offset_account_id == inventory_account_id:
             raise ValueError("Inventory offset account must exist and differ from inventory account")
+        if movement.movement_type == InventoryMovementType.RECEIPT:
+            if (offset_account.normal_balance != NormalBalance.CREDIT
+                    or offset_account.account_type not in {AccountType.LIABILITY, AccountType.EQUITY}):
+                raise ValueError("Inventory receipt offset must be a credit-normal liability or equity account")
+        elif movement.movement_type == InventoryMovementType.ISSUE:
+            if (offset_account.normal_balance != NormalBalance.DEBIT
+                    or offset_account.account_type not in {AccountType.ASSET, AccountType.EXPENSE}):
+                raise ValueError("Inventory issue offset must be a debit-normal asset or expense account")
+        elif movement.movement_type == InventoryMovementType.WRITEOFF:
+            if (offset_account.account_type != AccountType.EXPENSE
+                    or offset_account.normal_balance != NormalBalance.DEBIT):
+                raise ValueError("Inventory writeoff offset must be a debit-normal expense account")
         if movement.cost.amount <= 0:
             raise ValueError("Zero-cost inventory movement cannot create a monetary journal entry")
         money = movement.cost
@@ -394,9 +466,11 @@ class InventoryLedger:
                 JournalLine(f"{entry_id}:cr", inventory_account_id, PostingSide.CREDIT,
                     money, money, entity_id, movement.source_ref),
             )
-        return journal.post(JournalEntry(
+        posted = journal.post(JournalEntry(
             entry_id, movement.movement_date, recorded_at, journal.functional_currency,
             lines, f"inventory-movement:{movement.movement_id}",
             f"inventory-movement:{movement.movement_id}",
             f"Post inventory {movement.movement_type.value.lower()} {movement.movement_id}",
         ))
+        self._journal_posted_movements.add(movement_id)
+        return posted

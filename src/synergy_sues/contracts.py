@@ -16,9 +16,9 @@ _CURRENCY_RE = re.compile(r"^[A-Z][A-Z0-9]{2,11}$")
 _UNIT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_./*-]{0,31}$")
 
 
-def _decimal(value: Decimal | int | float | str, field: str) -> Decimal:
-    if isinstance(value, bool):
-        raise ValueError(f"{field} must be a finite decimal number")
+def _decimal(value: Decimal | int | str, field: str) -> Decimal:
+    if isinstance(value, (bool, float)):
+        raise ValueError(f"{field} must be Decimal, int or decimal string; binary floats are rejected")
     try:
         result = value if isinstance(value, Decimal) else Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError) as exc:
@@ -37,6 +37,15 @@ def _currency(value: str) -> str:
 def _aware(value: datetime, field: str) -> None:
     if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{field} must be a timezone-aware datetime")
+
+
+def _calendar_date(value: date, field: str) -> None:
+    """Reject datetime values where a calendar date is required.
+
+    datetime subclasses date, so isinstance(value, date) alone is insufficient.
+    """
+    if isinstance(value, datetime) or not isinstance(value, date):
+        raise ValueError(f"{field} must be a calendar date, not a datetime")
 
 
 @dataclass(frozen=True)
@@ -60,7 +69,7 @@ class Money:
         self._same_currency(other)
         return Money(self.amount - other.amount, self.currency)
 
-    def scale(self, factor: Decimal | int | float | str) -> Money:
+    def scale(self, factor: Decimal | int | str) -> Money:
         return Money(self.amount * _decimal(factor, "factor"), self.currency)
 
 
@@ -86,7 +95,7 @@ class Quantity:
         self._same_unit(other)
         return Quantity(self.amount - other.amount, self.unit)
 
-    def scale(self, factor: Decimal | int | float | str) -> Quantity:
+    def scale(self, factor: Decimal | int | str) -> Quantity:
         return Quantity(self.amount * _decimal(factor, "factor"), self.unit)
 
 
@@ -99,12 +108,13 @@ class EconomicPeriod:
     def __post_init__(self) -> None:
         if not self.period_id:
             raise ValueError("period_id is required")
-        if not isinstance(self.start, date) or not isinstance(self.end, date):
-            raise ValueError("period boundaries must be dates")
+        _calendar_date(self.start, "period start")
+        _calendar_date(self.end, "period end")
         if self.end < self.start:
             raise ValueError("period end cannot precede period start")
 
     def contains(self, value: date) -> bool:
+        _calendar_date(value, "period value")
         return self.start <= value <= self.end
 
 
@@ -162,6 +172,9 @@ class EvidenceRecord:
             except ValueError as exc:
                 raise ValueError("Unsupported evidence status") from exc
         _aware(self.captured_at, "captured_at")
+        _calendar_date(self.effective_from, "effective_from")
+        if self.effective_to is not None:
+            _calendar_date(self.effective_to, "effective_to")
         if self.effective_to is not None and self.effective_to < self.effective_from:
             raise ValueError("effective_to cannot precede effective_from")
         if self.content_sha256 is not None and not re.fullmatch(r"[0-9a-f]{64}", self.content_sha256):
