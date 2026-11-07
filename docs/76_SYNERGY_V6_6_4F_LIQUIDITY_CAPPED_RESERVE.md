@@ -55,3 +55,10 @@ If the reserve target cannot be met without violating either constraint, allocat
 
 
 The credit ledger independently enforces the same floor at initialization after both regional and federation contributions are applied. Thus, a manually supplied contribution map cannot bypass the allocator's liquidity-floor check. The floor is exposed in the ledger snapshot for audit.
+
+
+## 6. Absolute post-contribution operating-cash floor
+
+The allocator also accepts `minimum_post_contribution_cash`. The effective per-member contribution cap is the lower of the fractional cap and the amount that leaves the declared minimum cash balance. If no fractional cap is supplied in the reserve-sizing experiment, the absolute floor still applies.
+
+Crucially, the `CreditLedger` independently validates the combined regional and federation reserve contributions against this floor and initializes each member's cash only after subtracting both contributions. The floor is therefore enforced by the accounting kernel, not merely by the experiment allocator. If any member would fall below it, ledger initialization fails. The floor is a synthetic operating-liquidity guard, not a calibrated working-capital requirement.
