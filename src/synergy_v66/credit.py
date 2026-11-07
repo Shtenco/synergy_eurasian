@@ -429,6 +429,13 @@ class CreditLedger:
             "guarantee_paid": guarantee, "written_off": uncovered,
         })
 
+    def _resolve_buyer_default(self, buyer_id: str, day: int) -> None:
+        """Apply cross-default to all open payables of the failed buyer."""
+        self.accounts[buyer_id].defaulted = True
+        for invoice in sorted(self.payables.values(), key=lambda x: (x.due_day, x.invoice_id)):
+            if invoice.buyer == buyer_id and invoice.remaining > EPS and invoice.status != "defaulted":
+                self._resolve_payable_default(invoice, day)
+
     def process_day(self, day: int) -> None:
         """Collect customer invoices first, then settle payables in stable ID order."""
         if not isinstance(day, int) or isinstance(day, bool) or day < self.current_day:
@@ -495,7 +502,7 @@ class CreditLedger:
             if invoice.remaining > EPS and day > invoice.due_day:
                 invoice.status = "overdue"
             if invoice.remaining > EPS and day >= invoice.due_day + self.grace_days:
-                self._resolve_payable_default(invoice, day)
+                self._resolve_buyer_default(invoice.buyer, day)
 
     def snapshot(self) -> dict[str, Any]:
         cash = {cell: account.cash for cell, account in self.accounts.items()}
