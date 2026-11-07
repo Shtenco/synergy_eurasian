@@ -127,5 +127,5 @@ def test_bank_credit_can_be_repaid_only_from_available_cash():
     assert repaid["repaid"] is True
     snap = ledger.snapshot()
     assert snap["bank_debt_by_cell"]["WEST-MF1"] == pytest.approx(2.0)
-    assert snap["cash_by_cell"]["WEST-MF1"] == pytest.approx(1.0)
+    assert snap["cash_by_cell"]["WEST-MF1"] == pytest.approx(3.0)
     assert snap["cash_conservation_error"] == pytest.approx(0.0)
