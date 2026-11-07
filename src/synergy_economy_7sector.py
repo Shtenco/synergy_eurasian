@@ -285,6 +285,17 @@ def reproduction_repair_results(cfg: dict[str, Any]) -> dict[str, Any]:
     base_replacement = float(replacement.sum())
     target_gross_total = float(target_gross.sum())
     target_replacement_total = float(target_replacement.sum())
+    target_replacement_coverage = (
+        target_gross_total / target_replacement_total
+        if target_replacement_total > 0 else None
+    )
+    baseline_replacement_coverage = (
+        base_gross / base_replacement if base_replacement > 0 else None
+    )
+    target_replacement_margin = (
+        (target_gross_total - target_replacement_total) / target_replacement_total
+        if target_replacement_total > 0 else None
+    )
     return {
         "status": plan["status"],
         "operating_cashflow_uplift_target": uplift,
@@ -295,11 +306,16 @@ def reproduction_repair_results(cfg: dict[str, Any]) -> dict[str, Any]:
         "target_gross_cashflow_usd": target_gross_total,
         "target_replacement_capex_usd": target_replacement_total,
         "target_residual_after_replacement_usd": float(target_gross_total - target_replacement_total),
-        "target_replacement_coverage": float(target_gross_total / target_replacement_total),
-        "baseline_replacement_coverage": float(base_gross / base_replacement),
-        "target_residual_margin_pct_of_replacement": float(
-            (target_gross_total - target_replacement_total) / target_replacement_total
+        "target_replacement_coverage": (
+            float(target_replacement_coverage) if target_replacement_coverage is not None else None
         ),
+        "baseline_replacement_coverage": (
+            float(baseline_replacement_coverage) if baseline_replacement_coverage is not None else None
+        ),
+        "target_residual_margin_pct_of_replacement": (
+            float(target_replacement_margin) if target_replacement_margin is not None else None
+        ),
+        "replacement_coverage_defined": target_replacement_coverage is not None,
         "public_target_residual_usd": float(public_residual.sum()),
         "private_target_residual_usd": float(private_residual.sum()),
         "public_sector_pool": public_pool,
