@@ -423,3 +423,46 @@ def test_grni_receipt_cannot_be_posted_twice_through_inventory_bridge():
     post_grni_receipt(receipt, matcher, inventory, journal, "raw", "grni", "co1", NOW)
     with pytest.raises(ValueError, match="already journalized"):
         post_grni_receipt(receipt, matcher, inventory, journal, "raw", "grni", "co1", NOW)
+
+
+def test_grni_rejects_invoice_before_supporting_physical_receipt():
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-temporal", "co1", "supplier", "steel",
+            Quantity("10", "kg"), Money("5", "USD"), date(2026, 11, 1), "po:temporal")
+    ])
+    matcher.record_receipt(GoodsReceipt(
+        "receipt-later", "po-temporal", Quantity("5", "kg"),
+        date(2026, 11, 10), "warehouse:receipt-later",
+    ))
+    with pytest.raises(ValueError, match="precedes the physical receipt"):
+        matcher.record_invoice(SupplierInvoiceLine(
+            "invoice-earlier", "po-temporal", Quantity("5", "kg"),
+            Money("25", "USD"), date(2026, 11, 5), "invoice:earlier",
+        ))
+    assert matcher.invoices == ()
+
+
+def test_production_completion_books_measured_output_not_planned_output():
+    journal = production_journal()
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("steel-receipt", "steel-lot", "steel", "factory",
+        Quantity("20", "kg"), Money("200", "USD"), date(2026, 11, 1), "receipt:steel")
+    order = ProductionOrder(
+        "batch-partial", "co1", "part", Quantity("10", "unit"), "factory",
+        (BOMComponent("steel", Quantity("2", "kg")),),
+        date(2026, 11, 5), "production:batch-partial",
+    )
+    completion = ProductionCompletionEvidence(
+        "batch-partial", Quantity("6", "unit"),
+        datetime(2026, 11, 6, 10, tzinfo=timezone.utc),
+        "quality:accepted-6",
+        (ProductionInputConsumption("steel", Quantity("12", "kg"), "scale:steel-12kg"),),
+    )
+    result = execute_production_order(
+        order, inventory, journal, "raw", "wip", "finished", NOW,
+        completion=completion,
+    )
+    assert result.output_quantity == Quantity("6", "unit")
+    assert result.output_movement.quantity == Quantity("6", "unit")
+    assert inventory.available("part", "factory", "unit") == Quantity("6", "unit")
+    assert inventory.available("steel", "factory", "kg") == Quantity("8", "kg")
