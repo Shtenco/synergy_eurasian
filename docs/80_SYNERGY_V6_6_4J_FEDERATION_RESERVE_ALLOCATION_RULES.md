@@ -1,6 +1,6 @@
 # SYNERGY V6.6.4-J — federation reserve allocation rules under multiple claims
 
-**Status:** pure deterministic comparison implemented; current credit ledger remains first-come-first-served (FCFS).  
+**Status:** deterministic comparison implemented; the credit ledger supports FCFS by default and an opt-in batch pro-rata federation-reserve policy.  
 **Purpose:** quantify how a finite federation reserve is distributed when several eligible claims compete for insufficient guarantee capital.
 
 ## 1. Competing rules
@@ -65,3 +65,25 @@ CI used a 25-unit reserve against 60 units of eligible claims. Both allocation r
 The sample makes the distributional difference explicit: FCFS fully protects the earliest invoice, while batch pro-rata shares the shortfall across all three claims. Neither changes aggregate reserve capacity or total uncovered loss. The difference is who bears the loss and when.
 
 The CLI report was generated in the successful CI run on code commit `6348e85a80e3c46da9770daae29dfe3e6a72bf6a` (154 tests passed). Later commits add member operating-cash floor enforcement; they do not alter this pure allocation function.
+
+
+## 5. Selectable ledger policy
+
+The credit ledger now accepts `federation_reserve_allocation_rule`:
+- `first_come_first_served` (default): preserves the established due-day/invoice-ID resolution path;
+- `batch_pro_rata`: when one or more buyers default during the same processing day, the ledger collects all open payables of those cross-defaulted buyers into one batch. Local regional reserves are applied first, in stable order. The remaining eligible internal-supplier claims then share the federation reserve pro-rata. Local member assessment follows the federation reserve for same-region residuals; any remaining loss stays with sellers.
+
+The pro-rata batch therefore applies across all eligible invoices of buyers that default on that processing day, including their other open payables pulled into cross-default. It does not include external supplier invoices in federation guarantee coverage. Regional reserve drawdown itself remains ordered, not pro-rata.
+
+This is an opt-in research mechanism. It does not imply that all same-day claims have equal legal priority, nor does it replace jurisdiction-specific insolvency rules. The default ledger behavior remains FCFS.
+
+
+## 6. Ledger validation
+
+The latest successful EIIOM CI on commit `d95383f568c48958e33b39a9b8390f3a29e9490a` passed **163 tests**. Targeted fixtures verify:
+- two same-day cross-region defaults split a 10-unit federation reserve into 5 units per claim under batch pro-rata;
+- FCFS pays the first claim 10 units and the second zero under the same opening conditions;
+- local regional reserve is used before the federation pool under batch pro-rata;
+- the remaining seller losses and consolidated cash balances reconcile exactly within numerical tolerance.
+
+The batch policy is covered by unit tests and the full CI test suite. The CI allocation-report fixture remains a pure side-by-side FCFS/pro-rata arithmetic comparison; the targeted ledger tests exercise the integrated policy.
