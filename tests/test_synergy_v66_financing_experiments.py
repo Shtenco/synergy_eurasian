@@ -159,3 +159,36 @@ def test_regional_loss_waterfall_rejects_non_finite_assessment_parameters():
         compare_regional_loss_waterfalls([1], assessment_rate=float("nan"))
     with pytest.raises(ValueError):
         compare_regional_loss_waterfalls([1], assessment_limit_per_cell=float("inf"))
+
+
+def test_targeted_default_stress_exercises_local_reserve_assessment_and_cross_region_boundary():
+    from synergy_v66.financing_experiments import run_targeted_regional_default_stress_cases
+
+    report = run_targeted_regional_default_stress_cases()
+    cases = report["cases"]
+    reserve_only = cases["local_reserve_only"]
+    assert reserve_only["guarantee_paid"] == pytest.approx(5.0)
+    assert reserve_only["member_assessment_paid"] == pytest.approx(0.0)
+    assert reserve_only["written_off"] == pytest.approx(5.0)
+
+    assessed = cases["local_reserve_plus_assessment"]
+    assert assessed["guarantee_paid"] == pytest.approx(5.0)
+    assert assessed["member_assessment_paid"] == pytest.approx(5.0)
+    assert assessed["written_off"] == pytest.approx(0.0)
+    assert assessed["regional_assessment_attempt_count"] == 1
+    assert assessed["regional_assessment_requested_by_region"]["WEST"] == pytest.approx(5.0)
+    assert assessed["regional_assessment_eligible_capacity_by_region"]["WEST"] == pytest.approx(15.6)
+    assert assessed["cash_conservation_error"] == pytest.approx(0.0)
+
+    capped = cases["local_tightly_capped_assessment"]
+    assert capped["member_assessment_paid"] == pytest.approx(2.0)
+    assert capped["written_off"] == pytest.approx(3.0)
+    assert capped["cash_conservation_error"] == pytest.approx(0.0)
+
+    cross = cases["cross_region_assessment_ineligible"]
+    assert cross["guarantee_paid"] == pytest.approx(0.0)
+    assert cross["member_assessment_paid"] == pytest.approx(0.0)
+    assert cross["written_off"] == pytest.approx(10.0)
+    assert cross["regional_assessment_attempt_count"] == 0
+    assert cross["trade_bad_debt_by_cell"]["EAST-AG1"] == pytest.approx(10.0)
+    assert cross["cash_conservation_error"] == pytest.approx(0.0)
