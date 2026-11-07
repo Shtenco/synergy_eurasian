@@ -922,18 +922,17 @@ def test_batch_pro_rata_keeps_local_reserve_ahead_of_federation_pool():
     from synergy_v66.network_topology import CELLS
 
     contributions = {cell.cell_id: 0.0 for cell in CELLS}
-    contributions["WEST-LG"] = 2.0
-    contributions["EAST-LG"] = 2.0
+    contributions["WEST-LG"] = 1.0
+    contributions["EAST-LG"] = 1.0
+    regional_contributions = {cell.cell_id: 0.0 for cell in CELLS}
+    regional_contributions["WEST-LG"] = 2.0
+    regional_contributions["EAST-LG"] = 2.0
     ledger = CreditLedger(
         initial_cash_per_cell=20.0,
         trade_credit_limit_per_cell=50.0,
         regional_pool_reserve_per_region=2.0,
         federation_pool_reserve_total=2.0,
-        regional_reserve_contributions_by_cell={
-            **{cell.cell_id: 0.0 for cell in CELLS},
-            "WEST-LG": 2.0,
-            "EAST-LG": 2.0,
-        },
+        regional_reserve_contributions_by_cell=regional_contributions,
         federation_reserve_contributions_by_cell=contributions,
         federation_reserve_allocation_rule="batch_pro_rata",
         grace_days=0,
