@@ -1015,3 +1015,16 @@ def test_fifo_inventory_excludes_future_receipts_from_historical_availability_an
         ledger.issue("early-issue", "steel", "factory", Quantity("1", "kg"),
             date(2026, 11, 6), "production:early")
     assert ledger.summary() == before
+
+
+
+def test_journal_reversal_cannot_be_effective_before_original_entry():
+    journal = new_journal()
+    original = journal.post(entry("dated-original", "dated-original-idem"))
+    with pytest.raises(ValueError, match="cannot precede the original"):
+        journal.reverse(
+            original.entry_id, "dated-reversal",
+            date(2026, 11, 5), datetime(2026, 11, 7, 8, tzinfo=timezone.utc),
+            "dated-reversal-event", "dated-reversal-idem", "Backdated reversal",
+        )
+    assert len(journal.entries) == 1
