@@ -809,6 +809,8 @@ def test_inventory_movement_cannot_be_posted_to_another_entity_or_second_journal
 def test_trade_subledger_foreign_currency_payable_settlement_recognizes_fx_loss():
     journal = Journal("USD", entity_id="co1")
     journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
     journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
     journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
     journal.add_account(account("fx-gain", "7100", AccountType.REVENUE, NormalBalance.CREDIT))
