@@ -117,6 +117,8 @@ def plan_reserve_recovery(
     """Build a non-mutating recovery plan with local reserves funded first."""
     if allocation_rule not in ALLOCATION_RULES:
         raise ValueError(f"allocation_rule must be one of {sorted(ALLOCATION_RULES)}")
+    if ledger.current_day < 0:
+        raise ValueError("ledger must be initialized with process_day before reserve recovery planning")
     if not isinstance(target_regional_by_region, dict) or set(target_regional_by_region) != set(REGIONS):
         raise ValueError("target_regional_by_region must contain every known region exactly once")
     if isinstance(target_federation, bool) or not isinstance(target_federation, (int, float)) or not math.isfinite(float(target_federation)) or target_federation < 0:
