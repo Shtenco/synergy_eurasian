@@ -452,3 +452,77 @@ def test_federation_liquidity_capped_allocator_rejects_invalid_scheme_and_nonfin
         build_liquidity_capped_federation_contributions(1.0, cash, scheme="risk-based")
     with pytest.raises(ValueError):
         build_liquidity_capped_federation_contributions(1.0, cash, max_combined_contribution_fraction=float("nan"))
+
+
+def test_liquidity_capped_regional_allocator_preserves_absolute_member_cash_floor():
+    from synergy_v66.financing_experiments import build_liquidity_capped_reserve_contributions
+    from synergy_v66.network_topology import CELLS
+
+    cash = {
+        cell.cell_id: (100.0 if cell.sector in {"primary", "processing", "manufacturing"} else 40.0)
+        for cell in CELLS
+    }
+    contributions = build_liquidity_capped_reserve_contributions(
+        "equal_all_members", 12.0, cash,
+        max_contribution_fraction=0.20,
+        minimum_post_contribution_cash=39.0,
+    )
+    for cell in CELLS:
+        amount = contributions[cell.cell_id]
+        assert cash[cell.cell_id] - amount >= 39.0 - 1e-9
+        assert amount <= cash[cell.cell_id] * 0.20 + 1e-9
+    for region in ("WEST", "EAST"):
+        assert sum(v for k, v in contributions.items() if k.startswith(region + "-")) == pytest.approx(12.0)
+
+
+def test_liquidity_capped_regional_allocator_rejects_floor_incompatible_reserve():
+    from synergy_v66.financing_experiments import build_liquidity_capped_reserve_contributions
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 10.0 for cell in CELLS}
+    with pytest.raises(ValueError):
+        build_liquidity_capped_reserve_contributions(
+            "equal_all_members", 2.0, cash,
+            max_contribution_fraction=0.5,
+            minimum_post_contribution_cash=9.9,
+        )
+    with pytest.raises(ValueError):
+        build_liquidity_capped_reserve_contributions(
+            "equal_all_members", 1.0, cash,
+            max_contribution_fraction=0.5,
+            minimum_post_contribution_cash=float("nan"),
+        )
+
+
+def test_liquidity_capped_federation_allocator_preserves_floor_after_regional_contributions():
+    from synergy_v66.financing_experiments import build_liquidity_capped_federation_contributions
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 100.0 for cell in CELLS}
+    regional = {cell.cell_id: 0.5 for cell in CELLS}
+    federal = build_liquidity_capped_federation_contributions(
+        10.0, cash, max_combined_contribution_fraction=0.20,
+        scheme="equal_all_members",
+        regional_contributions_by_cell=regional,
+        minimum_post_contribution_cash=99.0,
+    )
+    for cell in CELLS:
+        combined = regional[cell.cell_id] + federal[cell.cell_id]
+        assert cash[cell.cell_id] - combined >= 99.0 - 1e-9
+        assert combined <= cash[cell.cell_id] * 0.20 + 1e-9
+    assert sum(federal.values()) == pytest.approx(10.0)
+
+
+def test_federation_allocator_rejects_existing_regional_contribution_below_cash_floor():
+    from synergy_v66.financing_experiments import build_liquidity_capped_federation_contributions
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 100.0 for cell in CELLS}
+    regional = {cell.cell_id: 0.0 for cell in CELLS}
+    regional["WEST-AG1"] = 2.0
+    with pytest.raises(ValueError):
+        build_liquidity_capped_federation_contributions(
+            0.0, cash, max_combined_contribution_fraction=0.5,
+            regional_contributions_by_cell=regional,
+            minimum_post_contribution_cash=99.0,
+        )
