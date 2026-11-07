@@ -825,3 +825,51 @@ def test_federation_reserve_is_consumed_in_stable_order_across_multiple_cross_re
     assert snap["federation_pool_reserve_balance"] == pytest.approx(0.0)
     assert snap["federation_pool_guarantee_paid"] == pytest.approx(7.0)
     assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_credit_ledger_enforces_absolute_post_reserve_cash_floor_independently_of_allocator():
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 10.0 for cell in CELLS}
+    regional = {cell.cell_id: 0.0 for cell in CELLS}
+    regional["WEST-AG1"] = 2.0
+    regional["EAST-AG1"] = 2.0
+    with pytest.raises(ValueError):
+        CreditLedger(
+            initial_cash_by_cell=cash,
+            regional_pool_reserve_per_region=2.0,
+            regional_reserve_contributions_by_cell=regional,
+            minimum_post_contribution_cash=9.0,
+        )
+    regional["WEST-AG1"] = 1.0
+    regional["EAST-AG1"] = 1.0
+    ledger = CreditLedger(
+        initial_cash_by_cell=cash,
+        regional_pool_reserve_per_region=1.0,
+        regional_reserve_contributions_by_cell=regional,
+        minimum_post_contribution_cash=9.0,
+    )
+    snapshot = ledger.snapshot()
+    assert snapshot["minimum_post_contribution_cash"] == pytest.approx(9.0)
+    assert min(snapshot["cash_by_cell"].values()) >= 9.0
+
+
+def test_credit_ledger_floor_applies_to_combined_regional_and_federation_reserves():
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 10.0 for cell in CELLS}
+    regional = {cell.cell_id: 0.0 for cell in CELLS}
+    federation = {cell.cell_id: 0.0 for cell in CELLS}
+    regional["WEST-AG1"] = 1.0
+    regional["EAST-AG1"] = 1.0
+    federation["WEST-AG1"] = 1.0
+    federation["EAST-AG1"] = 1.0
+    with pytest.raises(ValueError):
+        CreditLedger(
+            initial_cash_by_cell=cash,
+            regional_pool_reserve_per_region=1.0,
+            regional_reserve_contributions_by_cell=regional,
+            federation_pool_reserve_total=2.0,
+            federation_reserve_contributions_by_cell=federation,
+            minimum_post_contribution_cash=9.0,
+        )
