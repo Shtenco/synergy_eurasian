@@ -96,6 +96,20 @@ def audit(config: dict) -> list[str]:
     for object_name, expected_authority in expected_object_authorities.items():
         if objects.get(object_name, {}).get("authority") != expected_authority:
             errors.append(f"{object_name} authority mismatch")
+    expected_schemas = {
+        "DemandSignal": "interfaces/demand_signal.schema.json",
+        "ResourceState": "interfaces/resource_state.schema.json",
+        "TechnologyCandidate": "interfaces/technology_candidate.schema.json",
+        "ProjectProposal": "interfaces/project_proposal.schema.json",
+        "CapitalAuthorization": "interfaces/capital_authorization.schema.json",
+        "PaymentIntent": "interfaces/payment_intent.schema.json",
+        "SettlementReceipt": "interfaces/settlement_receipt.schema.json",
+        "EvidencePackage": "interfaces/evidence_package.schema.json",
+        "AccountingSnapshot": "interfaces/accounting_snapshot.schema.json",
+    }
+    for object_name, expected_schema in expected_schemas.items():
+        if objects.get(object_name, {}).get("schema") != expected_schema:
+            errors.append(f"{object_name} schema registry mismatch")
     if objects.get("PaymentIntent", {}).get("executor") != settlement:
         errors.append("PaymentIntent executor must be the canonical settlement authority")
 
