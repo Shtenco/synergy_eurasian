@@ -137,3 +137,41 @@ def test_supply_solver_rejects_invalid_capacity_multipliers():
             assert "Capacity multiplier" in str(exc) or "finite and non-negative" in str(exc)
         else:
             raise AssertionError(f"Invalid capacity multipliers were accepted: {multipliers}")
+
+
+
+def test_portfolio_simulation_never_creates_negative_productive_capital():
+    cfg = config()
+    cfg["replacement_rate"] = [10.0] * len(cfg["sectors"])
+    result = simulate_portfolio(cfg, years=1, gross_yield=0.0, include_crises=False)
+    assert result["final_productive_capital_usd"] == 0.0
+    assert result["annual"][0]["unfunded_renewal_gap_usd"] > 0.0
+    assert result["cumulative_unfunded_renewal_gap_usd"] == result["annual"][0]["unfunded_renewal_gap_usd"]
+
+
+def test_portfolio_simulation_rejects_invalid_horizon_yield_and_allocation():
+    cfg = config()
+    for years in (0, -1, True, 1.5):
+        try:
+            simulate_portfolio(cfg, years=years)
+        except ValueError as exc:
+            assert "positive integer" in str(exc)
+        else:
+            raise AssertionError(f"Invalid simulation horizon accepted: {years!r}")
+    for gross_yield in (float("nan"), float("inf"), -0.1):
+        try:
+            simulate_portfolio(cfg, gross_yield=gross_yield)
+        except ValueError as exc:
+            assert "gross_yield" in str(exc)
+        else:
+            raise AssertionError(f"Invalid gross yield accepted: {gross_yield!r}")
+    bad_allocation = copy.deepcopy(cfg)
+    bad_allocation["surplus_allocation"] = {
+        "growth": 1.2, "reserve": -0.1, "dividends": -0.1
+    }
+    try:
+        simulate_portfolio(bad_allocation)
+    except ValueError as exc:
+        assert "between 0 and 1" in str(exc)
+    else:
+        raise AssertionError("Out-of-range allocation shares were accepted")
