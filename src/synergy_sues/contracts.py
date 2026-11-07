@@ -16,9 +16,9 @@ _CURRENCY_RE = re.compile(r"^[A-Z][A-Z0-9]{2,11}$")
 _UNIT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_./*-]{0,31}$")
 
 
-def _decimal(value: Decimal | int | float | str, field: str) -> Decimal:
-    if isinstance(value, bool):
-        raise ValueError(f"{field} must be a finite decimal number")
+def _decimal(value: Decimal | int | str, field: str) -> Decimal:
+    if isinstance(value, (bool, float)):
+        raise ValueError(f"{field} must be Decimal, int or decimal string; binary floats are rejected")
     try:
         result = value if isinstance(value, Decimal) else Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError) as exc:
@@ -69,7 +69,7 @@ class Money:
         self._same_currency(other)
         return Money(self.amount - other.amount, self.currency)
 
-    def scale(self, factor: Decimal | int | float | str) -> Money:
+    def scale(self, factor: Decimal | int | str) -> Money:
         return Money(self.amount * _decimal(factor, "factor"), self.currency)
 
 
@@ -95,7 +95,7 @@ class Quantity:
         self._same_unit(other)
         return Quantity(self.amount - other.amount, self.unit)
 
-    def scale(self, factor: Decimal | int | float | str) -> Quantity:
+    def scale(self, factor: Decimal | int | str) -> Quantity:
         return Quantity(self.amount * _decimal(factor, "factor"), self.unit)
 
 
