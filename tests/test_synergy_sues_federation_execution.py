@@ -382,3 +382,19 @@ def test_handler_cannot_drop_executor_receipt_triggers(tmp_path):
             "SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name='execution_receipts_no_update'"
         ).fetchone()[0]
         assert exists == 1
+
+
+def test_handler_cannot_install_temp_trigger_on_receipt_table(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="handler-temp-trigger")
+    executor = AuthorizedActionExecutor(str(tmp_path / "handler-temp-trigger.db"))
+
+    def temp_trigger_handler(db, request, decision):
+        db.execute(
+            "CREATE TEMP TRIGGER receipt_hijack AFTER INSERT ON execution_receipts "
+            "BEGIN SELECT RAISE(ABORT, 'receipt hijack'); END"
+        )
+
+    with pytest.raises(sqlite3.DatabaseError):
+        executor.execute(request, [approval], policy, registry, temp_trigger_handler, now())
+    assert executor.receipts() == ()
