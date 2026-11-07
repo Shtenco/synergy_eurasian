@@ -20,7 +20,7 @@ When `credit_config` is omitted, V6.6.2 behavior is retained. When supplied, pro
 
 ### Procurement gates
 - A supplier dispatch creates a buyer payable and seller receivable before source stock is consumed and a shipment is created.
-- Buyer trade-credit limits are checked before dispatch. The buyer's cash is applied first; any uncovered remainder may use available trade credit. If trade credit cannot cover it, an approved bank line may fund immediate full payment. A purchase with sufficient cash therefore remains possible even when the trade-credit limit is zero.
+- Buyer trade-credit limits and (for the unsecured remainder) seller receivable-exposure limits are checked before dispatch. The buyer's cash is applied first; any uncovered remainder may use available trade credit. If trade credit cannot cover it, an approved bank line may fund immediate full payment. A purchase with sufficient cash therefore remains possible even when the trade-credit limit is zero. Due payables can be partially settled from available cash and undrawn bank credit; the unpaid residual remains outstanding through the configured grace period.
 - Defaulted buyers cannot procure; defaulted suppliers cannot receive new purchase orders.
 - Local and cross-region invoice due dates use separate configurable terms.
 - If authorization fails, no stock is removed from the supplier and no shipment enters transit.
