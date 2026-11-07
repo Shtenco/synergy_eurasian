@@ -103,3 +103,16 @@ def test_sector_optimizer_rejects_booleans_and_numeric_strings():
     bad["projects"][0]["max_investment_usd"] = "10000"
     with pytest.raises(ValueError, match="not a boolean or string"):
         optimize_portfolio(bad, 250_000)
+
+
+def test_sector_optimizer_rejects_incomplete_configuration_shapes():
+    cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
+    bad = json.loads(json.dumps(cfg))
+    bad["objective_weights"].pop("annual_net_residual_yield")
+    with pytest.raises(ValueError, match="exactly the modeled metrics"):
+        optimize_portfolio(bad, 250_000)
+
+    bad = json.loads(json.dumps(cfg))
+    bad["projects"] = [None]
+    with pytest.raises(ValueError, match="project objects"):
+        optimize_portfolio(bad, 250_000)
