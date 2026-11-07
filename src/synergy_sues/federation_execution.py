@@ -335,9 +335,12 @@ class AuthorizedActionExecutor:
                 # or remove the database triggers that protect those controls.
                 protected_tables = {"execution_receipts", "execution_outbox"}
                 def authorize_handler_sql(action, arg1, arg2, database_name, trigger_name):
-                    if action in (sqlite3.SQLITE_TRANSACTION, sqlite3.SQLITE_SAVEPOINT,
-                                  sqlite3.SQLITE_ATTACH, sqlite3.SQLITE_DETACH,
-                                  sqlite3.SQLITE_CREATE_TRIGGER, sqlite3.SQLITE_DROP_TRIGGER):
+                    if action in (
+                        sqlite3.SQLITE_TRANSACTION, sqlite3.SQLITE_SAVEPOINT,
+                        sqlite3.SQLITE_ATTACH, sqlite3.SQLITE_DETACH,
+                        sqlite3.SQLITE_CREATE_TRIGGER, sqlite3.SQLITE_DROP_TRIGGER,
+                        sqlite3.SQLITE_CREATE_TEMP_TRIGGER, sqlite3.SQLITE_DROP_TEMP_TRIGGER,
+                    ):
                         return sqlite3.SQLITE_DENY
                     if action == sqlite3.SQLITE_PRAGMA and str(arg1).lower() in {"writable_schema", "foreign_keys", "journal_mode"}:
                         return sqlite3.SQLITE_DENY
