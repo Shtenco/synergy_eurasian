@@ -10,6 +10,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from hashlib import sha256
 import json
+import weakref
 from typing import Any, Callable, Iterable, Mapping
 
 from .contracts import EvidenceStatus, Money, _decimal
@@ -94,6 +95,26 @@ class SUESSourceEvent:
     payload_json: str
 
 
+# In-process provenance gate: only the exact object instances emitted by the
+# verified adapter may cross into the projector registry. Structural dataclass
+# construction or copying must not confer verified-source status.
+_VERIFIED_SOURCE_EVENT_REFS: dict[int, weakref.ReferenceType] = {}
+
+
+def _mark_source_event_verified(event: SUESSourceEvent) -> None:
+    identity = id(event)
+    def discard(reference, identity=identity):
+        current = _VERIFIED_SOURCE_EVENT_REFS.get(identity)
+        if current is reference:
+            _VERIFIED_SOURCE_EVENT_REFS.pop(identity, None)
+    _VERIFIED_SOURCE_EVENT_REFS[identity] = weakref.ref(event, discard)
+
+
+def is_verified_source_event(event: Any) -> bool:
+    reference = _VERIFIED_SOURCE_EVENT_REFS.get(id(event))
+    return reference is not None and reference() is event
+
+
 def adapt_v7_event_store(event_store: Any) -> tuple[SUESSourceEvent, ...]:
     """Verify a complete V7 EventStore and preserve its event chain without posting.
 
@@ -157,12 +178,14 @@ def adapt_v7_event_store(event_store: Any) -> tuple[SUESSourceEvent, ...]:
         if idempotency_key and idempotency_key in idempotency_keys:
             raise ValueError(f"Duplicate V7 idempotency_key: {idempotency_key}")
 
-        adapted.append(SUESSourceEvent(
+        adapted_event = SUESSourceEvent(
             event_id, digest, expected_previous, aggregate_type, aggregate_id,
             sequence, str(row["event_type"]), _timestamp(row["effective_at"], "effective_at"),
             _timestamp(row["recorded_at"], "recorded_at"), str(row["source_ref"]),
             evidence_ids, str(idempotency_key), _canonical(row["payload"]),
-        ))
+        )
+        _mark_source_event_verified(adapted_event)
+        adapted.append(adapted_event)
         event_ids.add(event_id)
         if idempotency_key:
             idempotency_keys.add(idempotency_key)
