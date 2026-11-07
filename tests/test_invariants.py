@@ -70,3 +70,10 @@ def test_eiiom_invariant_validation_rejects_tampered_solution_without_asserts():
     bad_escrow["productive_escrow"]["implemented_in_this_repo"] = True
     with pytest.raises(ValueError, match="must remain disabled"):
         validate_invariants(bad_escrow, solution)
+
+
+def test_eiiom_validator_rejects_unreasonably_large_tolerance():
+    config = load_config(ROOT / "config" / "base_scenario.json")
+    solution = solve(config)
+    with pytest.raises(ValueError, match="no greater than 1e-3"):
+        validate_invariants(config, solution, tol=1e9)
