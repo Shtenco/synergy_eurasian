@@ -41,8 +41,8 @@ def calculate(cfg: dict[str, Any]) -> dict[str, Any]:
     )
     if gross0 <= 0 or replacement0 <= 0:
         raise ValueError("Baseline cashflow and replacement capex must be positive")
-    if first_uplift < -1.0:
-        raise ValueError("Initial operating cashflow uplift cannot be below -100%")
+    if first_uplift <= -1.0:
+        raise ValueError("Initial operating cashflow uplift must be greater than -100%")
     if not 0.0 <= replacement_saving < 1.0:
         raise ValueError("Replacement cost reduction must be in [0, 1)")
     repaired_gross = gross0 * (1.0 + first_uplift)
