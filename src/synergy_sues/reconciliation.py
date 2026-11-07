@@ -36,10 +36,13 @@ class BankStatement:
     closing_bank_balance: Money
     opening_ledger_balance: Money
     lines: tuple[BankStatementLine, ...]
+    entity_id: str | None = None
 
     def __post_init__(self) -> None:
         if not all((self.statement_id, self.account_id, self.currency)):
             raise ValueError("Bank statement identity and currency are required")
+        if self.entity_id is not None and (not isinstance(self.entity_id, str) or not self.entity_id.strip()):
+            raise ValueError("Bank statement entity_id must be a non-empty string")
         for name in ("opening_bank_balance", "closing_bank_balance", "opening_ledger_balance"):
             value = getattr(self, name)
             if value.currency != self.currency:
@@ -89,6 +92,8 @@ def reconcile_bank_account(
     remain visible as exceptions. The bank statement's own opening/movement/
     closing identity is checked when the statement object is created.
     """
+    if journal.entity_id is None or statement.entity_id != journal.entity_id:
+        raise ValueError("Bank statement and journal must share one bound legal entity")
     account_map = {account.account_id: account for account in journal.accounts}
     account = account_map.get(statement.account_id)
     if account is None:
@@ -214,6 +219,7 @@ def reconcile_bank_account(
     return {
         "statement_id": statement.statement_id,
         "account_id": statement.account_id,
+        "entity_id": statement.entity_id,
         "currency": statement.currency,
         "period_id": statement.period.period_id,
         "bank_opening_balance": str(statement.opening_bank_balance.amount),
