@@ -313,6 +313,10 @@ def execute_production_order(
     if completion.completed_at > recorded_at:
         raise ValueError("Production completion evidence cannot post-date its recording time")
     completion_date = completion.completed_at.date()
+    if inventory.entity_id != order.entity_id:
+        raise ValueError("Production inventory ledger must be bound to the production order entity")
+    if journal.entity_id not in (None, order.entity_id):
+        raise ValueError("Production journal entity differs from production order")
     if journal.functional_currency != inventory.functional_currency:
         raise ValueError("Production inventory and journal currencies must match")
     _account_map(journal, inventory_account_id, AccountType.ASSET, NormalBalance.DEBIT, "Inventory account")
@@ -461,6 +465,10 @@ def execute_production_order(
             f"Capitalize finished output for {order.order_id}",
         ))
         journal.post_many(entries)
+        inventory._mark_journal_posted(
+            [movement.movement_id for movement in input_movements] + [output_movement.movement_id],
+            order.entity_id,
+        )
     except Exception:
         inventory._restore(inventory_snapshot)
         raise
