@@ -192,3 +192,58 @@ def test_targeted_default_stress_exercises_local_reserve_assessment_and_cross_re
     assert cross["regional_assessment_attempt_count"] == 0
     assert cross["trade_bad_debt_by_cell"]["EAST-AG1"] == pytest.approx(10.5)
     assert cross["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_liquidity_capped_reserve_allocation_respects_each_member_cap_and_region_total():
+    from synergy_v66.financing_experiments import build_liquidity_capped_reserve_contributions
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 40.0 + index * 2.0 for index, cell in enumerate(CELLS)}
+    contributions = build_liquidity_capped_reserve_contributions(
+        "production_capacity_weighted", 10.0, cash, max_contribution_fraction=0.10,
+    )
+    for cell_id, contribution in contributions.items():
+        assert contribution <= cash[cell_id] * 0.10 + 1e-9
+    for region in ("WEST", "EAST"):
+        assert sum(contributions[cell.cell_id] for cell in CELLS if cell.region == region) == pytest.approx(10.0)
+
+
+def test_liquidity_capped_reserve_allocation_rejects_insufficient_funding_capacity():
+    from synergy_v66.financing_experiments import build_liquidity_capped_reserve_contributions
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 1.0 for cell in CELLS}
+    with pytest.raises(ValueError):
+        build_liquidity_capped_reserve_contributions(
+            "equal_all_members", 1.0, cash, max_contribution_fraction=0.01,
+        )
+
+
+def test_liquidity_capped_reserve_experiment_uses_heterogeneous_cash_and_paired_paths():
+    from synergy_v66.financing_experiments import compare_liquidity_capped_reserve_contributions
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 80.0 + index * 5.0 for index, cell in enumerate(CELLS)}
+    report = compare_liquidity_capped_reserve_contributions(
+        [71], cash, days=6, reserve_per_region=10.0,
+        max_contribution_fraction=0.10,
+    )
+    assert report["model_id"] == "SYNERGY_V6.6.4F_LIQUIDITY_CAPPED_RESERVE"
+    assert report["initial_cash_by_cell"] == cash
+    for cell_id, contribution in report["contributions_by_cell"].items():
+        assert contribution <= cash[cell_id] * 0.10 + 1e-9
+    for pair in report["comparison"]["paired_environment_hashes"]:
+        assert len(set(pair["environment_hashes"].values())) == 1
+    for mode in ("mutual_credit", "hybrid"):
+        for row in report["comparison"]["observations"][mode]:
+            assert row["cash_conservation_error"] < 1e-6
+
+
+def test_liquidity_capped_reserve_allocation_rejects_boolean_and_invalid_cash():
+    from synergy_v66.financing_experiments import build_liquidity_capped_reserve_contributions
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 50.0 for cell in CELLS}
+    cash[CELLS[0].cell_id] = True
+    with pytest.raises(ValueError):
+        build_liquidity_capped_reserve_contributions("equal_all_members", 5.0, cash)
