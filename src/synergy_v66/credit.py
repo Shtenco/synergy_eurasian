@@ -925,6 +925,7 @@ class CreditLedger:
             raise ValueError("contribution_limit_by_cell is required for multi-level recovery")
 
         expected_ids = set(CELL_BY_ID)
+        ordered_ids = sorted(expected_ids)
         if not isinstance(regional_contributions_by_cell, dict) or set(regional_contributions_by_cell) != expected_ids:
             raise ValueError("regional contribution map must contain every known cell exactly once")
         if not isinstance(federation_contributions_by_cell, dict) or set(federation_contributions_by_cell) != expected_ids:
@@ -937,7 +938,7 @@ class CreditLedger:
         regional: dict[str, float] = {}
         federation: dict[str, float] = {}
         limits: dict[str, float] = {}
-        for cell_id in expected_ids:
+        for cell_id in ordered_ids:
             for source, target in (
                 (regional_contributions_by_cell, regional),
                 (federation_contributions_by_cell, federation),
