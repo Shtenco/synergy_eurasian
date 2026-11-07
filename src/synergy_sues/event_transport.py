@@ -219,6 +219,14 @@ class DurableEventStore:
                     received_at TEXT NOT NULL,
                     PRIMARY KEY(consumer, message_id)
                 );
+                CREATE UNIQUE INDEX IF NOT EXISTS inbox_consumer_event_unique
+                    ON inbox(consumer, event_id);
+                CREATE TRIGGER IF NOT EXISTS inbox_no_update
+                BEFORE UPDATE ON inbox
+                BEGIN SELECT RAISE(ABORT, 'inbox receipts are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS inbox_no_delete
+                BEFORE DELETE ON inbox
+                BEGIN SELECT RAISE(ABORT, 'inbox receipts are append-only'); END;
             """)
 
     @property
@@ -420,19 +428,22 @@ class DurableEventStore:
             raise ValueError("consumer must be a non-empty string")
         if not callable(handler):
             raise ValueError("handler must be callable")
+        message_snapshot = json.loads(_canonical(dict(message)))
         required = ("message_id", "event_id", "event_hash", "payload_json")
-        if any(not isinstance(message.get(key), str) or not message.get(key) for key in required):
+        if any(not isinstance(message_snapshot.get(key), str) or not message_snapshot.get(key) for key in required):
             raise ValueError("Inbox message is missing required string fields")
-        payload = json.loads(message["payload_json"])
+        payload = json.loads(message_snapshot["payload_json"])
         if not isinstance(payload, dict):
             raise ValueError("Inbox payload_json must contain an event object")
-        if payload.get("event_id") != message["event_id"] or payload.get("event_hash") != message["event_hash"]:
+        if _canonical(payload) != message_snapshot["payload_json"]:
+            raise ValueError("Inbox payload_json must use canonical JSON encoding")
+        if payload.get("event_id") != message_snapshot["event_id"] or payload.get("event_hash") != message_snapshot["event_hash"]:
             raise ValueError("Inbox envelope identity does not match its event payload")
         digest_row = dict(payload)
         supplied_hash = digest_row.pop("event_hash", None)
         unsigned = _unsigned(digest_row, str(digest_row.get("previous_hash") or ""))
         digest = sha256(_canonical(unsigned).encode("utf-8")).hexdigest()
-        if supplied_hash != digest or message["event_hash"] != digest:
+        if supplied_hash != digest or message_snapshot["event_hash"] != digest:
             raise ValueError("Inbox event hash verification failed")
         _validate_event(digest_row)
         stamp = _now(received_at).isoformat()
@@ -441,18 +452,27 @@ class DurableEventStore:
             try:
                 existing = db.execute(
                     "SELECT event_hash FROM inbox WHERE consumer=? AND message_id=?",
-                    (consumer, message["message_id"]),
+                    (consumer, message_snapshot["message_id"]),
                 ).fetchone()
                 if existing is not None:
                     if existing["event_hash"] != digest:
                         raise ValueError("Inbox message ID reused with a different event hash")
                     db.rollback()
                     return False
-                handler(db, message)
+                existing_event = db.execute(
+                    "SELECT message_id,event_hash FROM inbox WHERE consumer=? AND event_id=?",
+                    (consumer, message_snapshot["event_id"]),
+                ).fetchone()
+                if existing_event is not None:
+                    if existing_event["event_hash"] != digest:
+                        raise ValueError("Inbox event ID reused with a different event hash")
+                    db.rollback()
+                    return False
+                handler(db, message_snapshot)
                 db.execute(
                     """INSERT INTO inbox(consumer,message_id,event_id,event_hash,received_at)
                     VALUES(?,?,?,?,?)""",
-                    (consumer, message["message_id"], message["event_id"], digest, stamp),
+                    (consumer, message_snapshot["message_id"], message_snapshot["event_id"], digest, stamp),
                 )
                 db.commit()
                 return True
