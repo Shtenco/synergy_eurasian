@@ -1,9 +1,9 @@
 """Fail-closed economic authority scopes for SUES federation (V1).
 
-This evaluator constrains an already-authorized signed request. It is deliberately
-stateless: callers must supply period usage from a trusted ledger read. It does
-not reserve funds or execute actions; those guarantees require a transactional
-integration with the executor and the authoritative economic ledger.
+This evaluator constrains an already-authorized signed request. Evaluation is
+stateless, while reserve/release operations append reservation events through the
+executor's SQLite transaction. Callers must read committed usage from the
+authoritative ledger in that same transaction; this module never executes actions.
 """
 from __future__ import annotations
 
@@ -69,8 +69,8 @@ class AuthorityScopeEngine:
     """Evaluate exact economic limits using explicitly provisioned scopes.
 
     identity_roles is trusted deployment configuration, not request input.
-    committed_period_total must come from an authoritative ledger query and
-    must be read consistently with the eventual execution transaction.
+    committed_period_total must come from an authoritative ledger query in the
+    same SQLite transaction passed to reserve_in_transaction().
     """
 
     def __init__(
