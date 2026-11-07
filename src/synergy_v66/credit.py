@@ -263,6 +263,17 @@ class CreditLedger:
             "trade_receivable_by_cell": {k: v.trade_receivable for k, v in self.accounts.items()},
             "customer_receivable_by_cell": {k: v.customer_receivable for k, v in self.accounts.items()},
             "defaulted_cells": sorted(k for k, v in self.accounts.items() if v.defaulted),
+            "production_rejection_count": sum(e["type"] == "production_rejected" for e in self.events),
+            "purchase_rejection_count": sum(e["type"] == "purchase_rejected" for e in self.events),
+            "default_event_count": sum(e["type"] == "default" for e in self.events),
+            "bank_line_utilization_by_cell": {
+                k: (v.bank_debt / v.bank_limit if v.bank_limit > EPS else 0.0)
+                for k, v in self.accounts.items()
+            },
+            "trade_credit_utilization_by_cell": {
+                k: (v.trade_payable / v.trade_credit_limit if v.trade_credit_limit > EPS else 0.0)
+                for k, v in self.accounts.items()
+            },
             "open_payables": {k: v.remaining for k, v in self.payables.items() if v.remaining > EPS},
             "bank_draws": self.bank_draws,
             "customer_collections": self.customer_collections,
