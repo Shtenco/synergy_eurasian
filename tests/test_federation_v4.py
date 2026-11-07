@@ -78,3 +78,9 @@ def test_payment_intent_executor_must_be_canonical_settlement_authority():
     config = load_config()
     config["canonical_objects"]["PaymentIntent"]["executor"] = "Shtenco/midas_ai"
     assert any("PaymentIntent executor" in error for error in audit(config))
+
+
+def test_all_canonical_financial_objects_require_registered_schemas():
+    config = load_config()
+    config["canonical_objects"]["CapitalAuthorization"].pop("schema")
+    assert any("CapitalAuthorization schema registry mismatch" in error for error in audit(config))
