@@ -349,3 +349,27 @@ def test_opening_cash_weighted_reserve_rejects_zero_capacity_and_bad_member_cash
     invalid[CELLS[0].cell_id] = float("nan")
     with pytest.raises(ValueError):
         build_regional_reserve_contributions("opening_cash_weighted", 1.0, invalid)
+
+
+def test_reserve_allocation_experiment_accepts_heterogeneous_member_cash_and_reconciles():
+    from synergy_v66.financing_experiments import compare_reserve_contribution_schemes
+    from synergy_v66.network_topology import CELLS
+
+    opening_cash = {
+        cell.cell_id: (120.0 if cell.sector in {"primary", "processing", "manufacturing"} else 40.0)
+        for cell in CELLS
+    }
+    report = compare_reserve_contribution_schemes(
+        [71], days=5, shock_regime="severe", reserve_per_region=10.0,
+        base_config={"initial_cash_by_cell": opening_cash},
+    )
+    schemes = report["reports_by_contribution_scheme"]
+    assert set(schemes) == {
+        "equal_all_members", "production_capacity_weighted", "opening_cash_weighted"
+    }
+    for scheme in schemes.values():
+        comparison = scheme["comparison"]
+        assert comparison["base_config"]["initial_cash_by_cell"] == opening_cash
+        for mode in ("mutual_credit", "hybrid"):
+            row = comparison["observations"][mode][0]
+            assert row["cash_conservation_error"] < 1e-6
