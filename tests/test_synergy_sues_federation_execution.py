@@ -92,9 +92,16 @@ def test_executor_consumes_request_once_and_commits_receipt_with_effect(tmp_path
     with sqlite3.connect(tmp_path / "executor.db") as db:
         assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 1
     assert len(executor.receipts()) == 1
-    decision_record = json.loads(executor.receipts()[0]["decision_json"])
+    receipt = executor.receipts()[0]
+    decision_record = json.loads(receipt["decision_json"])
     assert decision_record["approval_identity_ids"] == ["org:approver"]
     assert decision_record["approval_event_refs"] == [[approval.event["event_id"], approval.event["event_hash"]]]
+    request_evidence = json.loads(receipt["request_envelope_json"])
+    approval_evidence = json.loads(receipt["approval_envelopes_json"])
+    assert request_evidence["signature_b64"] == request.signature_b64
+    assert len(approval_evidence) == 1
+    assert approval_evidence[0]["signature_b64"] == approval.signature_b64
+    assert receipt["receipt_version"] == 2
     assert executor.verify()
 
 
@@ -246,3 +253,57 @@ def test_outbox_payload_is_immutable_while_delivery_state_can_advance(tmp_path):
             db.execute("UPDATE execution_outbox SET payload_json='{}'")
         db.execute("UPDATE execution_outbox SET status='DELIVERED', attempts=1")
         assert db.execute("SELECT status,attempts FROM execution_outbox").fetchone() == ("DELIVERED", 1)
+
+
+def test_executor_isolates_signed_snapshot_from_caller_mutation(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="caller-mutation")
+    original_resource = request.event["payload"]["resource_id"]
+
+    class MutatingRegistry(TrustedKeyRegistry):
+        def verify(self, envelope, received_at=None):
+            identity = super().verify(envelope, received_at)
+            request.event["payload"]["resource_id"] = "ledger:attacker-mutated"
+            return identity
+
+    mutating_registry = MutatingRegistry()
+    # Copy the trusted identities/keys into the test registry.
+    private, public = generate_ed25519_keypair()
+    # Reuse the original registry's verification implementation and trust state
+    # while mutating only the caller-owned envelope.
+    mutating_registry._identities = registry._identities
+    mutating_registry._keys = registry._keys
+    executor = AuthorizedActionExecutor(str(tmp_path / "snapshot-executor.db"))
+
+    def handler(db, signed_request, decision):
+        db.execute("CREATE TABLE observed_resources (resource_id TEXT)")
+        db.execute("INSERT INTO observed_resources VALUES(?)",
+            (signed_request.event["payload"]["resource_id"],))
+        return {"resource_id": signed_request.event["payload"]["resource_id"]}
+
+    result = executor.execute(request, [approval], policy, mutating_registry, handler, now())
+    assert result.executed
+    assert request.event["payload"]["resource_id"] == "ledger:attacker-mutated"
+    assert result.result["resource_id"] == original_resource
+    receipt = executor.receipts()[0]
+    assert json.loads(receipt["request_envelope_json"])["event"]["payload"]["resource_id"] == original_resource
+    assert executor.verify()
+
+
+def test_executor_rejects_policy_mutation_of_signed_authorization_snapshot(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="policy-mutation")
+
+    class MutatingPolicy:
+        def authorize(self, signed_request, approvals, trusted_registry, received_at):
+            decision = policy.authorize(signed_request, approvals, trusted_registry, received_at)
+            signed_request.event["payload"]["resource_id"] = "ledger:forged"
+            return decision
+
+    executor = AuthorizedActionExecutor(str(tmp_path / "policy-mutation.db"))
+    called = []
+    with pytest.raises(ValueError, match="mutated signed request"):
+        executor.execute(request, [approval], MutatingPolicy(), registry,
+            lambda *_: called.append(True), now())
+    assert called == []
+    assert executor.receipts() == ()
