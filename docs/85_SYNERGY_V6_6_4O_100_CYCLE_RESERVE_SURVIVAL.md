@@ -1,11 +1,11 @@
 # SYNERGY V6.6.4-O — 100-cycle reserve survival experiment
 
-**Status:** research implementation added; 20 focused reserve-recovery tests are present, including a repeated-run determinism check. Full EIIOM CI on the exact current V6.6.4-O head is pending.  
+**Status:** research implementation added; 21 focused reserve-recovery tests are present, including a repeated-run determinism check. Full EIIOM CI on the exact current V6.6.4-O head is pending.  
 **Purpose:** compare no-replenishment and four contribution-allocation policies over 100 repeated reserve-claim / recovery cycles with paired exogenous paths and no external cash inflows.
 
 ## 1. What is being tested
 
-V6.6.4-O adds a reproducible stress harness around the V6.6.4-N recovery planner. Each seed creates one heterogeneous opening-cash profile and one 100-day two-region claim path. Every allocation policy receives the exact same opening balances and claim path for that seed.
+V6.6.4-O adds a reproducible stress harness around the V6.6.4-N recovery planner. Each seed creates one heterogeneous opening-cash profile, one 100-day two-region claim path, and a deterministic round-robin beneficiary schedule across all member cells in each region. Every allocation policy receives the exact same opening balances, claim path and beneficiary schedule for that seed.
 
 Policies compared:
 
@@ -15,7 +15,7 @@ Policies compared:
 4. `opening_cash` — weights by opening member cash;
 5. `adaptive_liquidity` — weights by currently available contribution capacity.
 
-The claim-size regimes are explicit synthetic inputs:
+Claim beneficiaries rotate through the region's member cells by cycle rather than always crediting the same `MF1` cell. This avoids concentrating every guarantee payout in one predetermined member and then making that same member a disproportionately large source of recovery liquidity. Beneficiary selection is deterministic and included in the paired-path fingerprint. It remains a synthetic internal recipient assignment, not an actual invoice seller or defaulting debtor.\n\nThe claim-size regimes are explicit synthetic inputs:
 
 | Regime | Claim per region per cycle |
 |---|---:|
