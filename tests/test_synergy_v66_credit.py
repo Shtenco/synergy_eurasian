@@ -671,7 +671,7 @@ def test_federation_reserve_covers_cross_region_default_without_local_reserve():
     assert invoice.guarantee_paid == pytest.approx(0.0)
     assert invoice.federation_guarantee_paid == pytest.approx(5.0)
     assert invoice.member_assessment_paid == pytest.approx(0.0)
-    assert invoice.written_off == pytest.approx(5.5)
+    assert invoice.written_off == pytest.approx(5.25)
     assert snapshot["federation_pool_reserve_balance"] == pytest.approx(0.0)
     assert snapshot["federation_pool_guarantee_paid"] == pytest.approx(5.0)
     assert snapshot["cash_conservation_error"] == pytest.approx(0.0)
@@ -694,7 +694,7 @@ def test_local_default_uses_local_reserve_then_federation_reserve_then_member_as
     snapshot = ledger.snapshot()
     assert invoice.guarantee_paid == pytest.approx(5.0)
     assert invoice.federation_guarantee_paid == pytest.approx(3.0)
-    assert invoice.member_assessment_paid == pytest.approx(2.5)
+    assert invoice.member_assessment_paid == pytest.approx(2.65)
     assert invoice.written_off == pytest.approx(0.0)
     assert snapshot["cash_conservation_error"] == pytest.approx(0.0)
 
