@@ -911,3 +911,15 @@ def test_journal_rejects_stale_foreign_exchange_rate():
     )
     with pytest.raises(ValueError, match="FX rate is stale"):
         journal.post(stale_entry)
+
+
+def test_bank_reconciliation_rejects_statement_from_another_legal_entity():
+    journal = new_journal()
+    period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
+    statement = BankStatement(
+        "stmt-wrong-entity", "cash", "USD", period,
+        Money("0", "USD"), Money("0", "USD"), Money("0", "USD"), (),
+        entity_id="co2",
+    )
+    with pytest.raises(ValueError, match="share one bound legal entity"):
+        reconcile_bank_account(journal, statement, [])
