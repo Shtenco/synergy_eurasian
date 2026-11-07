@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import math
 from typing import Any
 
-from .network_topology import CELLS
+from .network_topology import CELLS, CELL_BY_ID, REGIONS
 
 EPS = 1e-9
 
@@ -34,6 +34,7 @@ class CellAccount:
     trade_receivable: float = 0.0
     customer_receivable: float = 0.0
     customer_receivable_limit: float | None = None
+    regional_credit_balance: float = 0.0
     defaulted: bool = False
 
 
@@ -73,6 +74,9 @@ class CreditLedger:
         customer_receivable_limit_per_cell: float | None = None,
         customer_recovery_rate: float = 1.0,
         customer_grace_days: int = 0,
+        regional_pool_limit_per_region: float | None = None,
+        regional_member_debit_limit_per_cell: float | None = None,
+        regional_member_credit_limit_per_cell: float | None = None,
         grace_days: int = 2,
     ) -> None:
         limits = (initial_cash_per_cell, bank_limit_per_cell, trade_credit_limit_per_cell)
@@ -90,6 +94,13 @@ class CreditLedger:
             raise ValueError("customer_recovery_rate must be between 0 and 1")
         if not isinstance(customer_grace_days, int) or isinstance(customer_grace_days, bool) or customer_grace_days < 0:
             raise ValueError("customer_grace_days must be a non-negative integer")
+        regional_limits = (
+            regional_pool_limit_per_region,
+            regional_member_debit_limit_per_cell,
+            regional_member_credit_limit_per_cell,
+        )
+        if any(x is not None and (not math.isfinite(float(x)) or x < 0) for x in regional_limits):
+            raise ValueError("regional pool and member limits must be finite and >= 0")
         if grace_days < 0:
             raise ValueError("grace_days must be >= 0")
         self.accounts = {
@@ -114,6 +125,18 @@ class CreditLedger:
         self.customer_recovery_rate = float(customer_recovery_rate)
         self.customer_grace_days = int(customer_grace_days)
         self.customer_bad_debt = 0.0
+        self.regional_pool_limit_per_region = (
+            float(regional_pool_limit_per_region)
+            if regional_pool_limit_per_region is not None else None
+        )
+        self.regional_member_debit_limit_per_cell = (
+            float(regional_member_debit_limit_per_cell)
+            if regional_member_debit_limit_per_cell is not None else None
+        )
+        self.regional_member_credit_limit_per_cell = (
+            float(regional_member_credit_limit_per_cell)
+            if regional_member_credit_limit_per_cell is not None else None
+        )
         self.current_day = -1
         self.opening_cash = float(initial_cash_per_cell) * len(CELLS)
         self.bank_draws = 0.0
@@ -184,6 +207,13 @@ class CreditLedger:
         self.events.append({"day": day, "type": "bank_repayment", "cell_id": cell_id, "amount": float(amount)})
         return {"repaid": True, "reason": None, "amount": float(amount)}
 
+    def _regional_pool_outstanding(self, region: str) -> float:
+        return sum(
+            max(0.0, -account.regional_credit_balance)
+            for cell_id, account in self.accounts.items()
+            if CELL_BY_ID[cell_id].region == region
+        )
+
     def authorize_purchase(
         self,
         buyer: str,
@@ -193,7 +223,7 @@ class CreditLedger:
         day: int,
         invoice_id: str,
     ) -> dict[str, Any]:
-        """Authorize cash, mixed cash/trade-credit, or bank-funded procurement."""
+        """Authorize cash, bilateral trade credit, regional pool credit, or bank-funded procurement."""
         account = self._cell(buyer)
         if seller is not None:
             self._cell(seller)
@@ -212,17 +242,51 @@ class CreditLedger:
         cash_part = min(account.cash, float(amount))
         credit_part = float(amount) - cash_part
         available_trade = max(0.0, account.trade_credit_limit - account.trade_payable)
-        bank_draw = 0.0
-        funding_mode = "cash"
+        credit_reason = None
+        same_region = seller is not None and CELL_BY_ID[buyer].region == CELL_BY_ID[seller].region
+        seller_account = self.accounts[seller] if seller is not None else None
 
         if credit_part > available_trade + EPS:
-            # If trade credit cannot cover the remainder, test the bank line
-            # before mutating cash. _fund() is called only after sufficiency is known.
+            credit_reason = "buyer_trade_credit_limit"
+        elif seller_account is not None and credit_part > EPS:
+            exposure_limit = seller_account.trade_receivable_limit
+            if exposure_limit is not None and seller_account.trade_receivable + credit_part > exposure_limit + EPS:
+                credit_reason = "seller_exposure_limit"
+
+        new_buyer_balance = account.regional_credit_balance
+        new_seller_balance = seller_account.regional_credit_balance if seller_account is not None else 0.0
+        if credit_reason is None and same_region and credit_part > EPS:
+            new_buyer_balance -= credit_part
+            new_seller_balance += credit_part
+            debit_limit = self.regional_member_debit_limit_per_cell
+            credit_limit = self.regional_member_credit_limit_per_cell
+            if debit_limit is not None and max(0.0, -new_buyer_balance) > debit_limit + EPS:
+                credit_reason = "regional_member_debit_limit"
+            elif credit_limit is not None and max(0.0, new_seller_balance) > credit_limit + EPS:
+                credit_reason = "regional_member_credit_limit"
+            else:
+                pool_limit = self.regional_pool_limit_per_region
+                if pool_limit is not None:
+                    current = self._regional_pool_outstanding(CELL_BY_ID[buyer].region)
+                    revised = (
+                        current
+                        - max(0.0, -account.regional_credit_balance)
+                        - max(0.0, -seller_account.regional_credit_balance)
+                        + max(0.0, -new_buyer_balance)
+                        + max(0.0, -new_seller_balance)
+                    )
+                    if revised > pool_limit + EPS:
+                        credit_reason = "regional_pool_limit"
+
+        bank_draw = 0.0
+        funding_mode = "cash"
+        if credit_reason is not None:
+            # A bank line can replace the entire unsecured credit portion with immediate payment.
             required_draw = max(0.0, float(amount) - account.cash)
             available_bank = max(0.0, account.bank_limit - account.bank_debt)
             if required_draw > available_bank + EPS:
-                self.events.append({"day": day, "type": "purchase_rejected", "buyer": buyer, "amount": float(amount), "reason": "insufficient_cash_and_credit"})
-                return {"authorized": False, "reason": "insufficient_cash_and_credit"}
+                self.events.append({"day": day, "type": "purchase_rejected", "buyer": buyer, "seller": seller, "amount": float(amount), "reason": credit_reason})
+                return {"authorized": False, "reason": credit_reason}
             ok, bank_draw = self._fund(buyer, float(amount), day)
             if not ok:
                 raise RuntimeError("bank funding pre-check and draw disagreed")
@@ -231,14 +295,9 @@ class CreditLedger:
             cash_part = float(amount)
             credit_part = 0.0
         else:
-            # Cash is paid immediately; only the uncovered remainder is invoiced.
-            if seller is not None:
-                seller_account = self.accounts[seller]
-                exposure_limit = seller_account.trade_receivable_limit
-                if exposure_limit is not None and seller_account.trade_receivable + credit_part > exposure_limit + EPS:
-                    self.events.append({"day": day, "type": "purchase_rejected", "buyer": buyer, "seller": seller, "amount": float(amount), "reason": "seller_exposure_limit"})
-                    return {"authorized": False, "reason": "seller_exposure_limit"}
-            account.cash -= cash_part
+            # Cash is paid immediately; only the uncovered remainder is carried as credit.
+            if cash_part > EPS:
+                account.cash -= cash_part
             funding_mode = "cash_and_trade_credit" if credit_part > EPS else "cash"
 
         invoice = PayableInvoice(
@@ -251,7 +310,7 @@ class CreditLedger:
             if seller is None:
                 self.external_supplier_payments += cash_part
             else:
-                self.accounts[seller].cash += cash_part
+                seller_account.cash += cash_part
                 self.internal_transfer_out += cash_part
                 self.internal_transfer_in += cash_part
             self.events.append({
@@ -262,7 +321,10 @@ class CreditLedger:
         if credit_part > EPS:
             account.trade_payable += credit_part
             if seller is not None:
-                self.accounts[seller].trade_receivable += credit_part
+                seller_account.trade_receivable += credit_part
+                if same_region:
+                    account.regional_credit_balance = new_buyer_balance
+                    seller_account.regional_credit_balance = new_seller_balance
 
         self.events.append({
             "day": day, "type": "purchase_authorized", "invoice_id": invoice_id,
@@ -274,6 +336,7 @@ class CreditLedger:
             "authorized": True, "reason": None, "invoice_id": invoice_id,
             "cash_paid": cash_part, "trade_credit_extended": credit_part,
             "bank_draw": bank_draw, "funding_mode": funding_mode,
+            "regional_pool_credit": credit_part if same_region and funding_mode != "bank_funded_cash" else 0.0,
         }
 
     def issue_customer_invoice(
