@@ -57,3 +57,5 @@ CI on code commit `633a7568978820a5176174c1d2dc74319230c327` completed successfu
 - same-region claim: local reserve paid 5.0, federation reserve paid 3.0, local member assessment paid 2.65, residual write-off 0.0, cash-conservation residual 0.0.
 
 The 5.75 cross-region residual is intentionally higher than the 5.5 no-federation baseline in the targeted fixture: the regional and federation reserves are both funded by member opening cash, so the defaulting buyer has less cash available to pay its invoice. This illustrates why reserve coverage and reserve-funding liquidity effects must be assessed together.
+
+The latest full CI run on commit `864166836b7c7d57a818afe3adb78be7a6897988` also completed successfully: 138 tests passed, the financing stress experiment succeeded, and README integrity checks passed.
