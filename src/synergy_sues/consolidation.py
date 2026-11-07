@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
 from enum import Enum
+import calendar
+import re
 from typing import Iterable
 
 from .contracts import Money, _aware
@@ -60,6 +62,35 @@ _MATCHES = (
     (IntercompanyRecordType.SELLER_RECEIVABLE, IntercompanyRecordType.BUYER_PAYABLE, "BALANCE_SHEET"),
     (IntercompanyRecordType.SELLER_CASH_IN, IntercompanyRecordType.BUYER_CASH_OUT, "CASH_TRANSFER"),
 )
+
+def _period_bounds(period_id: str) -> tuple[date, date]:
+    """Resolve only canonical year, quarter, month and ISO-week period IDs."""
+    if not isinstance(period_id, str):
+        raise ValueError("Unsupported or non-canonical intercompany period_id")
+    year_match = re.fullmatch(r"(\\d{4})", period_id)
+    quarter_match = re.fullmatch(r"(\\d{4})-Q([1-4])", period_id)
+    month_match = re.fullmatch(r"(\\d{4})-(0[1-9]|1[0-2])", period_id)
+    week_match = re.fullmatch(r"(\\d{4})-W(0[1-9]|[1-4][0-9]|5[0-3])", period_id)
+    try:
+        if year_match:
+            year = int(year_match.group(1))
+            return date(year, 1, 1), date(year, 12, 31)
+        if quarter_match:
+            year, quarter = int(quarter_match.group(1)), int(quarter_match.group(2))
+            month = (quarter - 1) * 3 + 1
+            start = date(year, month, 1)
+            end_month = month + 2
+            return start, date(year, end_month, calendar.monthrange(year, end_month)[1])
+        if month_match:
+            year, month = int(month_match.group(1)), int(month_match.group(2))
+            return date(year, month, 1), date(year, month, calendar.monthrange(year, month)[1])
+        if week_match:
+            year, week = int(week_match.group(1)), int(week_match.group(2))
+            start = date.fromisocalendar(year, week, 1)
+            return start, start + timedelta(days=6)
+    except (ValueError, OverflowError) as exc:
+        raise ValueError(f"Unsupported or non-canonical intercompany period_id: {period_id}") from exc
+    raise ValueError(f"Unsupported or non-canonical intercompany period_id: {period_id}")
 
 
 def reconcile_intercompany(records: Iterable[IntercompanyRecord]) -> dict:
@@ -236,6 +267,12 @@ def post_intercompany_eliminations(
                     raise ValueError(f"One explicit credit account_id is required for {category}")
                 if period_id not in effective_dates_by_period:
                     raise ValueError(f"Missing effective date for intercompany period: {period_id}")
+                effective_date = effective_dates_by_period[period_id]
+                period_start, period_end = _period_bounds(period_id)
+                if not period_start <= effective_date <= period_end:
+                    raise ValueError(
+                        f"Effective date {effective_date} falls outside intercompany period {period_id}"
+                    )
                 debit_account = account_map.get(next(iter(debit_accounts)))
                 credit_account = account_map.get(next(iter(credit_accounts)))
                 if debit_account is None or credit_account is None:
@@ -259,7 +296,7 @@ def post_intercompany_eliminations(
                 money = Money(amount, currency)
                 entry = JournalEntry(
                     entry_id=entry_id,
-                    effective_date=effective_dates_by_period[period_id],
+                    effective_date=effective_date,
                     recorded_at=recorded_at,
                     functional_currency=journal.functional_currency,
                     lines=(
