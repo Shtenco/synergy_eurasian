@@ -932,3 +932,20 @@ def test_journal_close_date_is_monotonic_and_rejects_datetime():
         journal.close_through(date(2026, 11, 29))
     with pytest.raises(ValueError, match="calendar date"):
         journal.close_through(datetime(2026, 12, 1, tzinfo=timezone.utc))
+
+
+def test_intercompany_elimination_effective_date_must_fall_inside_period():
+    journal = Journal("USD")
+    journal.add_account(account("seller-revenue", "4100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("buyer-expense", "5100", AccountType.EXPENSE, NormalBalance.DEBIT))
+    rows = [
+        IntercompanyRecord("rev-period", "tx-period", "seller", "buyer",
+            "SELLER_REVENUE", Money("10", "USD"), "2026-Q4", "erp:rev", "seller-revenue"),
+        IntercompanyRecord("exp-period", "tx-period", "buyer", "seller",
+            "BUYER_EXPENSE", Money("10", "USD"), "2026-Q4", "erp:exp", "buyer-expense"),
+    ]
+    with pytest.raises(ValueError, match="falls outside intercompany period"):
+        post_intercompany_eliminations(
+            journal, rows, {"2026-Q4": date(2027, 1, 15)},
+            datetime(2027, 1, 15, tzinfo=timezone.utc), "event-period", "idem-period",
+        )
