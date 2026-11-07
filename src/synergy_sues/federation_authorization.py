@@ -133,14 +133,19 @@ class FederationAuthorizationPolicy:
 
         verified_approvals: dict[str, tuple[str, str]] = {}
         vetoes: list[tuple[str, str, str]] = []
-        seen_events: set[str] = set()
+        seen_events: dict[str, str] = {}
         for approval in approvals:
             approver = registry.verify(approval, received_at)
             approval_payload = self._payload_fields(approval, "AUTHORIZATION_APPROVAL",
                 ("request_id", "request_event_id", "request_event_hash", "action", "resource_type", "resource_id", "requester_identity_id", "decision"))
-            if approval.event["event_id"] in seen_events:
+            approval_event_id = approval.event["event_id"]
+            approval_event_hash = approval.event["event_hash"]
+            previous_hash = seen_events.get(approval_event_id)
+            if previous_hash is not None:
+                if previous_hash != approval_event_hash:
+                    raise ValueError("approval event ID reused with a different event hash")
                 continue
-            seen_events.add(approval.event["event_id"])
+            seen_events[approval_event_id] = approval_event_hash
             scope_matches = (
                 approval_payload["request_id"] == request_id
                 and approval_payload["request_event_id"] == request.event["event_id"]
