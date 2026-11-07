@@ -11,7 +11,7 @@ import json
 import math
 from typing import Any
 
-from .credit import CreditLedger, EPS
+from .credit import CreditLedger, EPS, RECOVERY_PERIOD_DAYS
 from .network_topology import CELL_BY_ID, CELLS, REGIONS
 
 ALLOCATION_RULES = {
@@ -109,7 +109,7 @@ def plan_reserve_recovery(
     target_federation: float,
     allocation_rule: str = "adaptive_liquidity",
     contribution_fraction_per_period: float = 0.10,
-    recovery_period_id: str = "recovery-period-1",
+    recovery_period_id: str | None = None,
 ) -> dict[str, Any]:
     """Build a non-mutating recovery plan with local reserves funded first."""
     if allocation_rule not in ALLOCATION_RULES:
@@ -120,8 +120,10 @@ def plan_reserve_recovery(
         raise ValueError("target_federation must be finite and non-negative")
     if isinstance(contribution_fraction_per_period, bool) or not isinstance(contribution_fraction_per_period, (int, float)) or not math.isfinite(float(contribution_fraction_per_period)) or not 0 <= contribution_fraction_per_period <= 1:
         raise ValueError("contribution_fraction_per_period must be between 0 and 1")
-    if not isinstance(recovery_period_id, str) or not recovery_period_id.strip():
-        raise ValueError("recovery_period_id must be a non-empty string")
+    expected_period_id = f"day-window-{ledger.current_day // RECOVERY_PERIOD_DAYS}"
+    if recovery_period_id is not None and recovery_period_id != expected_period_id:
+        raise ValueError(f"recovery_period_id must be the ledger-defined {expected_period_id}")
+    recovery_period_id = expected_period_id
 
     targets: dict[str, float] = {}
     for region, target in target_regional_by_region.items():
