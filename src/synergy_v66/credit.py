@@ -91,7 +91,7 @@ class CreditLedger:
         return self.accounts[cell_id]
 
     def _day(self, day: int) -> None:
-        if not isinstance(day, int) or day < self.current_day:
+        if not isinstance(day, int) or isinstance(day, bool) or day < self.current_day:
             raise ValueError("days must be integers and non-decreasing")
         if day > self.current_day:
             self.process_day(day)
@@ -114,10 +114,10 @@ class CreditLedger:
 
     def authorize_production(self, cell_id: str, variable_cost: float, day: int) -> dict[str, Any]:
         """Charge the modeled external variable cost before authorizing output."""
-        self._day(day)
         account = self._cell(cell_id)
         if not math.isfinite(float(variable_cost)) or variable_cost < 0:
             raise ValueError("variable_cost must be finite and >= 0")
+        self._day(day)
         if account.defaulted:
             return {"authorized": False, "reason": "cell_defaulted", "bank_draw": 0.0}
         ok, draw = self._fund(cell_id, float(variable_cost), day)
@@ -131,10 +131,10 @@ class CreditLedger:
 
     def repay_bank_credit(self, cell_id: str, amount: float, day: int) -> dict[str, Any]:
         """Repay drawn bank credit from available cash without creating overdraft."""
-        self._day(day)
         account = self._cell(cell_id)
         if not math.isfinite(float(amount)) or amount <= 0:
             raise ValueError("repayment amount must be finite and > 0")
+        self._day(day)
         if amount > account.cash + EPS:
             return {"repaid": False, "reason": "insufficient_cash", "amount": 0.0}
         if amount > account.bank_debt + EPS:
@@ -155,14 +155,14 @@ class CreditLedger:
         invoice_id: str,
     ) -> dict[str, Any]:
         """Authorize a purchase only if the buyer has unused trade-credit capacity."""
-        self._day(day)
         account = self._cell(buyer)
         if seller is not None:
             self._cell(seller)
             if seller == buyer:
                 raise ValueError("buyer and seller must differ for internal trade")
-        if not math.isfinite(float(amount)) or amount <= 0 or not isinstance(due_day, int) or due_day < day:
-            raise ValueError("amount must be finite and > 0; due_day must be an integer >= issue day")
+        if not isinstance(day, int) or isinstance(day, bool) or not math.isfinite(float(amount)) or amount <= 0 or not isinstance(due_day, int) or isinstance(due_day, bool) or due_day < day:
+            raise ValueError("day and due_day must be integers; amount must be finite and > 0; due_day must be >= issue day")
+        self._day(day)
         if not invoice_id or invoice_id in self.payables or invoice_id in self.customer_invoices:
             raise ValueError("invoice_id must be non-empty and unique")
         if account.defaulted:
@@ -181,10 +181,10 @@ class CreditLedger:
     def issue_customer_invoice(
         self, seller: str, amount: float, due_day: int, day: int, invoice_id: str
     ) -> None:
-        self._day(day)
         self._cell(seller)
-        if not math.isfinite(float(amount)) or amount <= 0 or not isinstance(due_day, int) or due_day < day:
-            raise ValueError("amount must be finite and > 0; due_day must be an integer >= issue day")
+        if not isinstance(day, int) or isinstance(day, bool) or not math.isfinite(float(amount)) or amount <= 0 or not isinstance(due_day, int) or isinstance(due_day, bool) or due_day < day:
+            raise ValueError("day and due_day must be integers; amount must be finite and > 0; due_day must be >= issue day")
+        self._day(day)
         if not invoice_id or invoice_id in self.payables or invoice_id in self.customer_invoices:
             raise ValueError("invoice_id must be non-empty and unique")
         account = self.accounts[seller]
@@ -198,7 +198,7 @@ class CreditLedger:
 
     def process_day(self, day: int) -> None:
         """Collect customer invoices first, then settle payables in stable ID order."""
-        if not isinstance(day, int) or day < self.current_day:
+        if not isinstance(day, int) or isinstance(day, bool) or day < self.current_day:
             raise ValueError("days must be integers and non-decreasing")
         self.current_day = day
         for invoice in sorted(self.customer_invoices.values(), key=lambda x: (x.due_day, x.invoice_id)):
