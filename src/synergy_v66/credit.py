@@ -262,6 +262,10 @@ class CreditLedger:
         self.federation_pool_reserve_replenished_total = 0.0
         self.federation_reserve_replenished_by_cell = {cell.cell_id: 0.0 for cell in CELLS}
         self.federation_replenishment_ids: set[str] = set()
+        self.exogenous_guarantee_claim_ids: set[str] = set()
+        self.exogenous_guarantee_claim_requested_total = 0.0
+        self.exogenous_guarantee_claim_paid_total = 0.0
+        self.exogenous_guarantee_claim_uncovered_total = 0.0
         self.federation_reserve_allocation_rule = federation_reserve_allocation_rule
         self.federation_pool_guarantee_paid = 0.0
         self.regional_assessment_rate = float(regional_assessment_rate)
@@ -834,6 +838,68 @@ class CreditLedger:
         if batch_default_buyers:
             self._resolve_buyer_defaults_batch(batch_default_buyers, day)
 
+    def apply_exogenous_guarantee_claim(
+        self,
+        claim_id: str,
+        region: str,
+        beneficiary_cell: str,
+        amount: float,
+        day: int,
+    ) -> dict[str, float | str | int]:
+        """Inject a synthetic exogenous claim through the local-first/federation waterfall.
+
+        This is a stress-test input, not a default-resolution substitute. It does not
+        create a debtor, receivable, bank draw or external cash inflow. Reserve cash
+        is transferred to an existing member beneficiary and remains inside the ledger.
+        """
+        if not isinstance(claim_id, str) or not claim_id.strip():
+            raise ValueError("claim_id must be a non-empty string")
+        if claim_id in self.exogenous_guarantee_claim_ids:
+            raise ValueError("exogenous guarantee claim_id has already been processed")
+        if region not in REGIONS:
+            raise ValueError("unknown claim region")
+        self._cell(beneficiary_cell)
+        if CELL_BY_ID[beneficiary_cell].region != region:
+            raise ValueError("beneficiary must belong to the claim region")
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(float(amount)) or amount <= 0:
+            raise ValueError("claim amount must be finite and > 0")
+        if not isinstance(day, int) or isinstance(day, bool) or day < self.current_day:
+            raise ValueError("claim day must be an integer not earlier than current_day")
+        if self.accounts[beneficiary_cell].defaulted:
+            raise ValueError("defaulted beneficiary cannot receive a stress claim")
+        if day > self.current_day:
+            self.process_day(day)
+
+        requested = float(amount)
+        regional_paid = min(requested, self.regional_pool_reserve_by_region[region])
+        federation_paid = min(
+            max(0.0, requested - regional_paid),
+            self.federation_pool_reserve_balance,
+        )
+        paid = regional_paid + federation_paid
+        uncovered = max(0.0, requested - paid)
+        self.regional_pool_reserve_by_region[region] -= regional_paid
+        self.regional_pool_guarantee_paid_by_region[region] += regional_paid
+        self.federation_pool_reserve_balance -= federation_paid
+        self.federation_pool_guarantee_paid += federation_paid
+        self.accounts[beneficiary_cell].cash += paid
+        self.exogenous_guarantee_claim_ids.add(claim_id)
+        self.exogenous_guarantee_claim_requested_total += requested
+        self.exogenous_guarantee_claim_paid_total += paid
+        self.exogenous_guarantee_claim_uncovered_total += uncovered
+        self.events.append({
+            "day": day, "type": "exogenous_guarantee_claim",
+            "claim_id": claim_id, "region": region, "beneficiary_cell": beneficiary_cell,
+            "requested": requested, "regional_paid": regional_paid,
+            "federation_paid": federation_paid, "paid": paid, "uncovered": uncovered,
+            "stress_only": True,
+        })
+        return {
+            "claim_id": claim_id, "day": day, "requested": requested,
+            "regional_paid": regional_paid, "federation_paid": federation_paid,
+            "paid": paid, "uncovered": uncovered,
+        }
+
     def replenish_reserves(
         self,
         regional_contributions_by_cell: dict[str, float],
@@ -1088,6 +1154,10 @@ class CreditLedger:
             ),
             "federation_reserve_replenished_by_cell": dict(self.federation_reserve_replenished_by_cell),
             "federation_pool_guarantee_paid": self.federation_pool_guarantee_paid,
+            "exogenous_guarantee_claim_count": len(self.exogenous_guarantee_claim_ids),
+            "exogenous_guarantee_claim_requested_total": self.exogenous_guarantee_claim_requested_total,
+            "exogenous_guarantee_claim_paid_total": self.exogenous_guarantee_claim_paid_total,
+            "exogenous_guarantee_claim_uncovered_total": self.exogenous_guarantee_claim_uncovered_total,
             "regional_pool_reserve_initial_by_region": dict(self.regional_pool_reserve_initial_by_region),
             "regional_pool_reserve_by_region": dict(self.regional_pool_reserve_by_region),
             "regional_pool_reserve_replenished_by_region": dict(self.regional_pool_reserve_replenished_by_region),
