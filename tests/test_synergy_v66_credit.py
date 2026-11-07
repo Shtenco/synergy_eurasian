@@ -114,3 +114,18 @@ def test_non_finite_amounts_and_limits_are_rejected():
         ledger.authorize_production("WEST-MF1", float("inf"), day=0)
     with pytest.raises(ValueError):
         ledger.authorize_purchase("WEST-PR1", "WEST-AG1", float("nan"), 2, 0, "PO-NAN")
+
+
+def test_bank_credit_can_be_repaid_only_from_available_cash():
+    ledger = CreditLedger(initial_cash_per_cell=5.0, bank_limit_per_cell=10.0)
+    ledger.authorize_production("WEST-MF1", 12.0, day=0)
+    insufficient = ledger.repay_bank_credit("WEST-MF1", 1.0, day=0)
+    assert insufficient == {"repaid": False, "reason": "insufficient_cash", "amount": 0.0}
+    ledger.issue_customer_invoice("WEST-MF1", 8.0, due_day=1, day=0, invoice_id="CASH-IN")
+    ledger.process_day(1)
+    repaid = ledger.repay_bank_credit("WEST-MF1", 5.0, day=1)
+    assert repaid["repaid"] is True
+    snap = ledger.snapshot()
+    assert snap["bank_debt_by_cell"]["WEST-MF1"] == pytest.approx(2.0)
+    assert snap["cash_by_cell"]["WEST-MF1"] == pytest.approx(1.0)
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
