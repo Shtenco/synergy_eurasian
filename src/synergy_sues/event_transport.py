@@ -252,6 +252,7 @@ class DurableEventStore:
                     event_id TEXT NOT NULL,
                     event_hash TEXT NOT NULL,
                     received_at TEXT NOT NULL,
+                    message_json TEXT NOT NULL DEFAULT '{}',
                     PRIMARY KEY(consumer, message_id)
                 );
                 CREATE UNIQUE INDEX IF NOT EXISTS inbox_consumer_event_unique
@@ -263,6 +264,11 @@ class DurableEventStore:
                 BEFORE DELETE ON inbox
                 BEGIN SELECT RAISE(ABORT, 'inbox receipts are append-only'); END;
             """)
+            inbox_columns = {
+                row["name"] for row in db.execute("PRAGMA table_info(inbox)").fetchall()
+            }
+            if "message_json" not in inbox_columns:
+                db.execute("ALTER TABLE inbox ADD COLUMN message_json TEXT NOT NULL DEFAULT '{}'")
 
     @property
     def events(self) -> tuple[DurableEvent, ...]:
@@ -517,15 +523,57 @@ class DurableEventStore:
                 handler_message = json.loads(_canonical(message_snapshot))
                 handler(db, handler_message)
                 db.execute(
-                    """INSERT INTO inbox(consumer,message_id,event_id,event_hash,received_at)
-                    VALUES(?,?,?,?,?)""",
-                    (consumer, message_snapshot["message_id"], message_snapshot["event_id"], digest, stamp),
+                    """INSERT INTO inbox(
+                        consumer,message_id,event_id,event_hash,received_at,message_json
+                    ) VALUES(?,?,?,?,?,?)""",
+                    (consumer, message_snapshot["message_id"], message_snapshot["event_id"],
+                     digest, stamp, _canonical(message_snapshot)),
                 )
                 db.commit()
                 return True
             except Exception:
                 db.rollback()
                 raise
+
+    def verify_inbox(self, authenticator: Callable[[Mapping[str, Any]], bool]) -> bool:
+        """Re-verify retained publisher envelopes against the current trust registry.
+
+        Legacy inbox receipts without a retained message envelope are not
+        considered authenticated and make this verification fail closed.
+        """
+        if not callable(authenticator):
+            raise ValueError("a trusted signed-message authenticator is required")
+        with self._session() as db:
+            rows = db.execute("SELECT * FROM inbox ORDER BY consumer,message_id").fetchall()
+        for stored in rows:
+            try:
+                if stored["message_json"] == "{}":
+                    return False
+                message = json.loads(stored["message_json"])
+                if _canonical(message) != stored["message_json"]:
+                    return False
+                if (message.get("message_id") != stored["message_id"]
+                        or message.get("event_id") != stored["event_id"]
+                        or message.get("event_hash") != stored["event_hash"]):
+                    return False
+                payload = json.loads(message["payload_json"])
+                if not isinstance(payload, dict):
+                    return False
+                digest_row = dict(payload)
+                supplied_hash = digest_row.pop("event_hash", None)
+                digest = sha256(_canonical(_unsigned(
+                    digest_row, str(digest_row.get("previous_hash") or "")
+                )).encode("utf-8")).hexdigest()
+                if supplied_hash != digest or digest != stored["event_hash"]:
+                    return False
+                snapshot = json.loads(_canonical(message))
+                if authenticator(snapshot) is not True:
+                    return False
+                if _canonical(snapshot) != _canonical(message):
+                    return False
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                return False
+        return True
 
     def inbox_contains(self, consumer: str, message_id: str) -> bool:
         with self._session() as db:
