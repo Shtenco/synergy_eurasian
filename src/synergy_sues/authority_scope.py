@@ -53,6 +53,11 @@ class ScopeEvaluation:
     approval_identity_ids: tuple[str, ...] = ()
 
 
+def _require_active_transaction(connection: Any) -> None:
+    if getattr(connection, "in_transaction", False) is not True:
+        raise ValueError("authority scope reservations must run inside the executor's active SQLite transaction")
+
+
 def _decimal(value: object, field: str) -> Decimal:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} must be a decimal string")
@@ -171,6 +176,7 @@ class AuthorityScopeEngine:
         limit check, preventing two concurrent requests from spending the same
         remaining headroom. Returns False only for an exact idempotent retry.
         """
+        _require_active_transaction(connection)
         if not evaluation.allowed or not evaluation.scope_id:
             raise ValueError("only an allowed scope evaluation can be reserved")
         if not isinstance(source_ref, str) or not source_ref.strip():
@@ -251,6 +257,7 @@ class AuthorityScopeEngine:
         ledger on this same connection. Returning anything other than literal
         True keeps the reservation active.
         """
+        _require_active_transaction(connection)
         if not isinstance(request_id, str) or not request_id.strip():
             raise ValueError("request_id is required to release a scope reservation")
         if not isinstance(settlement_ref, str) or not settlement_ref.strip():
