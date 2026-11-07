@@ -40,3 +40,10 @@ Any real priority-class system needs robust controls against strategic relabelin
 The model does not decide which claims deserve priority. It demonstrates that priority labels can have measurable economic value and therefore need governance.
 
 All values and classes are synthetic. No legal creditor priority or EAEU guarantee policy is recommended.
+
+
+## 4. CI validation
+
+The targeted tests verify that relabeling the ordinary claim increases its payout by 10 units under priority-class FCFS and by 5 units under priority-class batch pro-rata, with equal and opposite combined payout changes to other claims. The CI runner wrote `outputs/synergy_v66_claim_class_relabeling_sensitivity.json`.
+
+The full EIIOM CI run on code commit `d9c1f37664614f46353a320071b345669e049dd2` passed **172 pytest tests**. The report is an adversarial incentive demonstration, not evidence that any real participant would or could successfully relabel a claim.
