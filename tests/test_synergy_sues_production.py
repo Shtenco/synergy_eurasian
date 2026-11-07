@@ -354,3 +354,35 @@ def test_production_completion_requires_measured_inputs_for_every_bom_component(
         )
     assert inventory.summary()["pools"][0]["quantity"] == "5"
     assert journal.entries == ()
+
+
+def test_maintenance_depreciation_and_overhead_are_not_capitalized_without_policy():
+    for cost_type in (
+        ProductionCostType.MAINTENANCE,
+        ProductionCostType.DEPRECIATION,
+        ProductionCostType.OTHER_OVERHEAD,
+    ):
+        journal = production_journal()
+        inventory = InventoryLedger("USD", entity_id="co1")
+        inventory.receive(f"input-{cost_type.value}", f"lot-{cost_type.value}", "steel", "factory",
+            Quantity("2", "kg"), Money("20", "USD"), date(2026, 11, 1), f"receipt:{cost_type.value}")
+        order = ProductionOrder(
+            f"batch-{cost_type.value}", "co1", "part", Quantity("1", "unit"), "factory",
+            (BOMComponent("steel", Quantity("1", "kg")),),
+            date(2026, 11, 6), f"production:{cost_type.value}",
+        )
+        event = ProductionCostEvent(
+            f"cost-{cost_type.value}", order.order_id, "co1", cost_type,
+            Money("5", "USD"), date(2026, 11, 6), f"cost:{cost_type.value}",
+            f"evidence:{cost_type.value}",
+        )
+        with pytest.raises(ValueError, match="without an explicit approved accounting policy"):
+            execute_production_order(
+                order, inventory, journal, "raw", "wip", "finished", NOW,
+                (event,), {cost_type: "labor_payable"},
+                completion=completion(order.order_id, "1", {
+                    "steel": ("1", "kg", f"meter:{cost_type.value}")
+                }),
+            )
+        assert inventory.summary()["pools"][0]["quantity"] == "2"
+        assert journal.entries == ()
