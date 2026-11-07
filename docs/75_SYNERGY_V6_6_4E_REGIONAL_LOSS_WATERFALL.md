@@ -49,3 +49,6 @@ Both cases use the same seed-specific environment and financing-mode replay. Com
 This is a synthetic accounting rule, not a legally enforceable guarantee or assessment authority. It does not specify member voting, notice, appeal, exemptions, hardship treatment, dispute resolution, insolvency priority or jurisdiction-specific recovery. A production institution would need an explicit membership contract, transparent assessment policy, audited data, caps, due process and independent oversight.
 
 No fairness or policy superiority claim follows from the existence of this mechanism.
+
+
+The audit trail records each assessment attempt, requested loss amount, eligible member assessment capacity and amount actually paid. A zero assessment payment can therefore be distinguished from a zero eligible capacity or from a case where no assessment was required.
