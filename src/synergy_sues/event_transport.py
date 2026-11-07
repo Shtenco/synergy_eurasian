@@ -468,7 +468,8 @@ class DurableEventStore:
                         raise ValueError("Inbox event ID reused with a different event hash")
                     db.rollback()
                     return False
-                handler(db, message_snapshot)
+                handler_message = json.loads(_canonical(message_snapshot))
+                handler(db, handler_message)
                 db.execute(
                     """INSERT INTO inbox(consumer,message_id,event_id,event_hash,received_at)
                     VALUES(?,?,?,?,?)""",
