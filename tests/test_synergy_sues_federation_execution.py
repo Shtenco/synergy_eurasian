@@ -419,6 +419,7 @@ def test_executor_can_require_scope_guard_inside_the_same_transaction(tmp_path):
             ("reserve:guarded", "req-1", "RESERVED", "scope:treasury",
              "tenant:one", "2026-11", "USD", "10", signed_request.event["event_hash"], now()),
         )
+        return True
 
     result = executor.execute(
         request, [approval], policy, registry, insert_effect, now(), scope_guard=scope_guard
@@ -430,3 +431,19 @@ def test_executor_can_require_scope_guard_inside_the_same_transaction(tmp_path):
             "SELECT COUNT(*) FROM authority_scope_reservation_events WHERE event_type='RESERVED'"
         ).fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 1
+
+
+def test_executor_rejects_scope_guard_without_literal_true(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="scope-guard-false")
+    executor = AuthorizedActionExecutor(
+        str(tmp_path / "scope-guard-false.db"), require_scope_guard=True
+    )
+    with pytest.raises(ValueError, match="must return literal True"):
+        executor.execute(
+            request, [approval], policy, registry, insert_effect, now(),
+            scope_guard=lambda *_: None,
+        )
+    assert executor.receipts() == ()
+    with sqlite3.connect(tmp_path / "scope-guard-false.db") as db:
+        assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 0
