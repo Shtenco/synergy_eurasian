@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from statistics import mean, median
+import math
 from typing import Any, Iterable
 
 from .network import make_environment, simulate
+from .network_topology import CELLS
 
 FINANCING_MODES = {
     "unconstrained_reference": None,
@@ -282,5 +284,75 @@ def compare_regional_pool_sensitivities(
         "interpretation_guard": (
             "Synthetic sensitivity grid only. Pool ceilings and member caps are design parameters, "
             "not empirically calibrated limits or policy recommendations."
+        ),
+    }
+
+
+def build_regional_reserve_contributions(
+    scheme: str,
+    reserve_per_region: float = 20.0,
+) -> dict[str, float]:
+    """Build explicit per-cell reserve contributions for a documented allocation rule."""
+    if scheme not in {"equal_all_members", "production_capacity_weighted"}:
+        raise ValueError("unsupported reserve contribution scheme")
+    if isinstance(reserve_per_region, bool) or not isinstance(reserve_per_region, (int, float)):
+        raise ValueError("reserve_per_region must be a finite non-negative number")
+    if not math.isfinite(float(reserve_per_region)) or reserve_per_region < 0:
+        raise ValueError("reserve_per_region must be a finite non-negative number")
+
+    contributions: dict[str, float] = {}
+    for region in sorted({cell.region for cell in CELLS}):
+        members = [cell for cell in CELLS if cell.region == region]
+        if scheme == "equal_all_members":
+            weights = {cell.cell_id: 1.0 for cell in members}
+        else:
+            weights = {
+                cell.cell_id: cell.capacity if cell.sector in {"primary", "processing", "manufacturing"} else 0.0
+                for cell in members
+            }
+        total_weight = sum(weights.values())
+        if total_weight <= 0 and reserve_per_region > 0:
+            raise ValueError(f"no positive contribution weights in region {region}")
+        for cell in members:
+            contributions[cell.cell_id] = (
+                float(reserve_per_region) * weights[cell.cell_id] / total_weight
+                if total_weight > 0 else 0.0
+            )
+    return contributions
+
+
+def compare_reserve_contribution_schemes(
+    seeds: Iterable[int],
+    days: int = 45,
+    shock_regime: str = "severe",
+    reserve_per_region: float = 20.0,
+    base_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Paired comparison of equal-member and production-capacity reserve funding."""
+    seed_list = list(seeds)
+    if not seed_list:
+        raise ValueError("at least one seed is required")
+    reports = {}
+    for scheme in ("equal_all_members", "production_capacity_weighted"):
+        config = dict(base_config or {})
+        config["regional_pool_reserve_per_region"] = float(reserve_per_region)
+        config["regional_reserve_contributions_by_cell"] = build_regional_reserve_contributions(
+            scheme, reserve_per_region
+        )
+        report = compare_financing_modes(seed_list, days, shock_regime, config)
+        reports[scheme] = {
+            "contributions_by_cell": config["regional_reserve_contributions_by_cell"],
+            "comparison": report,
+        }
+    return {
+        "model_id": "SYNERGY_V6.6.4D_RESERVE_CONTRIBUTION_FAIRNESS",
+        "days": days,
+        "shock_regime": shock_regime,
+        "seeds": seed_list,
+        "reserve_per_region": float(reserve_per_region),
+        "reports_by_contribution_scheme": reports,
+        "interpretation_guard": (
+            "Synthetic burden-allocation comparison only. Capacity weighting is not a normative "
+            "fairness rule; it may exclude support cells that still benefit from the guarantee."
         ),
     }
