@@ -383,8 +383,15 @@ def compare_regional_loss_waterfalls(
     seed_list = list(seeds)
     if not seed_list:
         raise ValueError("at least one seed is required")
-    if not 0.0 <= assessment_rate <= 1.0 or assessment_limit_per_cell < 0:
-        raise ValueError("assessment rate must be in [0, 1] and member cap must be >= 0")
+    if (
+        isinstance(assessment_rate, bool)
+        or not math.isfinite(float(assessment_rate))
+        or not 0.0 <= assessment_rate <= 1.0
+        or isinstance(assessment_limit_per_cell, bool)
+        or not math.isfinite(float(assessment_limit_per_cell))
+        or assessment_limit_per_cell < 0
+    ):
+        raise ValueError("assessment rate must be finite and in [0, 1]; member cap must be finite and >= 0")
     cases = {
         "reserve_only": {
             "regional_assessment_rate": 0.0,
