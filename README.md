@@ -401,3 +401,12 @@ Cash-first procurement funding is supported: own cash is used first, then unused
 The integrated credit ledger now also supports partial invoice settlement during grace periods, supplier-side receivable exposure caps, customer receivable limits, deterministic customer recovery/default write-offs, and credit rejection diagnostics. Customer credit limits can block final sales without consuming finished-goods inventory.
 
 - [V6.6.3-C bilateral exposure and customer credit risk specification](docs/70_SYNERGY_V6_6_3C_BILATERAL_EXPOSURE_AND_CUSTOMER_RISK.md)
+
+
+### SYNERGY V6.6.3-D — paired financing experiments
+
+- [Paired financing-mode runner](src/synergy_v66/financing_experiments.py)
+- [Experiment design and interpretation rules](docs/71_SYNERGY_V6_6_3D_PAIRED_FINANCING_EXPERIMENTS.md)
+- [Experiment tests](tests/test_synergy_v66_financing_experiments.py)
+
+The runner compares cash-only, bank-only, mutual-credit and hybrid modes against an unconstrained reference using identical seed-specific exogenous environments. It reports service level, output, defaults, bad debt, financing usage, rejection counts and accounting residuals. It does not assume any policy is superior.
