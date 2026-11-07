@@ -11,7 +11,8 @@ from synergy_sues.inventory import InventoryLedger
 from synergy_sues.journal import Account, AccountType, Journal, NormalBalance
 from synergy_sues.production import (
     BOMComponent, GRNIMatcher, GoodsReceipt, ProductionOrder,
-    ProductionCostEvent, ProductionCostType, PurchaseOrderLine, SupplierInvoiceLine, execute_production_order,
+    ProductionCostEvent, ProductionCostType, ProductionCompletionEvidence, ProductionInputConsumption,
+    PurchaseOrderLine, SupplierInvoiceLine, execute_production_order,
     post_grni_invoice, post_grni_receipt,
 )
 
@@ -33,6 +34,23 @@ def production_journal():
     add_account(journal, "labor_payable", "2300", AccountType.LIABILITY, NormalBalance.CREDIT)
     add_account(journal, "energy_payable", "2400", AccountType.LIABILITY, NormalBalance.CREDIT)
     return journal
+
+def completion_for(order, output_quantity=None, input_quantities=None, evidence_ref="quality:accepted-output"):
+    output = output_quantity or order.output_quantity
+    measured = input_quantities or {
+        component.item_id: Quantity(
+            component.quantity_per_output_unit.amount * order.output_quantity.amount,
+            component.quantity_per_output_unit.unit,
+        )
+        for component in order.components
+    }
+    return ProductionCompletionEvidence(
+        order.order_id, output, NOW, evidence_ref,
+        tuple(ProductionInputConsumption(item, quantity, f"scale:{item}")
+              for item, quantity in measured.items()),
+    )
+
+
 
 
 def test_grni_three_way_match_and_journal_clearance():
@@ -93,7 +111,7 @@ def test_bom_execution_reconciles_material_wip_and_finished_goods():
         date(2026, 11, 6), "production-order:batch-1",
     )
     result = execute_production_order(order, inventory, journal,
-        "raw", "wip", "finished", NOW)
+        "raw", "wip", "finished", NOW, completion=completion_for(order))
 
     assert result.direct_material_cost == Money("40", "USD")
     assert result.output_movement.quantity == Quantity("2", "unit")
@@ -106,7 +124,8 @@ def test_bom_execution_reconciles_material_wip_and_finished_goods():
     assert journal.trial_balance()["balanced"]
     assert journal.trial_balance()["total_debits"] == journal.trial_balance()["total_credits"] == "180"
     with pytest.raises(ValueError, match="already executed"):
-        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW)
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW,
+            completion=completion_for(order))
 
 
 def test_production_preflight_prevents_partial_material_consumption():
@@ -124,7 +143,8 @@ def test_production_preflight_prevents_partial_material_consumption():
         date(2026, 11, 6), "production-order:short",
     )
     with pytest.raises(ValueError, match="Insufficient component copper"):
-        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW)
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW,
+            completion=completion_for(order))
     assert inventory.summary() == before
     assert journal.entries == ()
 
@@ -168,6 +188,7 @@ def test_evidence_backed_labor_and_energy_costs_are_capitalized_into_finished_go
     result = execute_production_order(
         order, inventory, journal, "raw", "wip", "finished", NOW,
         costs, {ProductionCostType.LABOR: "labor_payable", ProductionCostType.ENERGY: "energy_payable"},
+        completion=completion_for(order),
     )
     assert result.direct_material_cost == Money("40", "USD")
     assert result.conversion_cost == Money("30", "USD")
@@ -191,7 +212,8 @@ def test_production_cost_events_require_mapping_before_inventory_is_consumed():
     event = ProductionCostEvent("labor-unmapped", "batch-unmapped", "co1", ProductionCostType.LABOR,
         Money("5", "USD"), date(2026, 11, 6), "payroll:unmapped", "evidence:unmapped")
     with pytest.raises(ValueError, match="Missing credit account mapping"):
-        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, (event,), {})
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW, (event,), {},
+            completion=completion_for(order))
     assert inventory.summary() == before
     assert journal.entries == ()
 
