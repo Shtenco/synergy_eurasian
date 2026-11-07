@@ -829,6 +829,69 @@ def compare_federation_reserve_allocation_rules(
     }
 
 
+def analyze_claim_class_relabeling_incentives(
+    claims: Iterable[dict[str, Any]],
+    reserve_available: float,
+    priority_order: Iterable[str],
+    allocation_rule: str = "priority_class_then_batch_pro_rata",
+) -> dict[str, Any]:
+    """Measure synthetic payout changes if a claim is relabeled into the highest class."""
+    if allocation_rule not in {
+        "priority_class_then_first_come_first_served",
+        "priority_class_then_batch_pro_rata",
+    }:
+        raise ValueError("relabeling analysis requires a priority-class allocation rule")
+    claim_list = [dict(claim) for claim in claims]
+    order = list(priority_order)
+    if not order:
+        raise ValueError("priority_order must not be empty")
+    baseline = allocate_federation_reserve_claims(
+        claim_list, reserve_available, allocation_rule, order
+    )
+    highest_class = order[0]
+    sensitivity = []
+    for index, claim in enumerate(claim_list):
+        original_class = claim.get("claim_class", "standard")
+        if original_class == highest_class:
+            continue
+        relabeled = [dict(item) for item in claim_list]
+        relabeled[index]["claim_class"] = highest_class
+        # The relabeled claim's original class may no longer appear in the modified batch.
+        relabeled_classes = {item.get("claim_class", "standard") for item in relabeled}
+        relabeled_order = [name for name in order if name in relabeled_classes]
+        alternative = allocate_federation_reserve_claims(
+            relabeled, reserve_available, allocation_rule, relabeled_order
+        )
+        invoice_id = claim["invoice_id"]
+        payout_before = baseline["allocations_by_invoice"][invoice_id]
+        payout_after = alternative["allocations_by_invoice"][invoice_id]
+        sensitivity.append({
+            "invoice_id": invoice_id,
+            "original_class": original_class,
+            "relabeled_class": highest_class,
+            "payout_before": payout_before,
+            "payout_after": payout_after,
+            "claimant_payout_delta": payout_after - payout_before,
+            "other_claim_payout_delta_total": (
+                sum(alternative["allocations_by_invoice"].values())
+                - payout_after
+                - (sum(baseline["allocations_by_invoice"].values()) - payout_before)
+            ),
+        })
+    return {
+        "model_id": "SYNERGY_V6.6.4M_CLAIM_CLASS_RELABELING_SENSITIVITY",
+        "allocation_rule": allocation_rule,
+        "priority_order": order,
+        "reserve_available": reserve_available,
+        "baseline": baseline,
+        "relabeling_sensitivity": sensitivity,
+        "interpretation_guard": (
+            "Adversarial incentive sensitivity only. It assumes a class label can be changed and "
+            "does not model validation, evidence, audit, appeal or legal eligibility controls."
+        ),
+    }
+
+
 def build_liquidity_capped_federation_contributions(
     reserve_total: float,
     initial_cash_by_cell: dict[str, float],
