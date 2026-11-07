@@ -789,3 +789,39 @@ def test_heterogeneous_opening_cash_and_both_reserves_conserve_consolidated_cash
     )
     assert consolidated == pytest.approx(sum(cash.values()))
     assert snapshot["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_federation_reserve_is_consumed_in_stable_order_across_multiple_cross_region_defaults():
+    from synergy_v66.network_topology import CELLS
+
+    contributions = {cell.cell_id: 0.0 for cell in CELLS}
+    contributions["WEST-LG"] = 3.5
+    contributions["EAST-LG"] = 3.5
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        trade_credit_limit_per_cell=50.0,
+        federation_pool_reserve_total=7.0,
+        federation_reserve_contributions_by_cell=contributions,
+        grace_days=0,
+    )
+    first = ledger.authorize_purchase("WEST-PR1", "EAST-AG1", 30.0, 0, 0, "A-CROSS-DEFAULT")
+    second = ledger.authorize_purchase("EAST-PR1", "WEST-AG1", 30.0, 0, 0, "B-CROSS-DEFAULT")
+    assert first["authorized"] and second["authorized"]
+
+    ledger.process_day(0)
+    snap = ledger.snapshot()
+    first_invoice = ledger.payables[first["invoice_id"]]
+    second_invoice = ledger.payables[second["invoice_id"]]
+
+    assert first_invoice.federation_guarantee_paid == pytest.approx(7.0)
+    assert first_invoice.written_off == pytest.approx(3.0)
+    assert second_invoice.federation_guarantee_paid == pytest.approx(0.0)
+    assert second_invoice.written_off == pytest.approx(10.0)
+    payouts = [
+        event for event in snap["events"]
+        if event["type"] == "federation_pool_guarantee_paid"
+    ]
+    assert [event["invoice_id"] for event in payouts] == [first["invoice_id"]]
+    assert snap["federation_pool_reserve_balance"] == pytest.approx(0.0)
+    assert snap["federation_pool_guarantee_paid"] == pytest.approx(7.0)
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
