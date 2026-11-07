@@ -40,3 +40,10 @@ def test_invalid_terms_and_missing_audit_are_rejected():
         replay_settlement(physical(), customer_terms_days=-1)
     with pytest.raises(ValueError):
         replay_settlement({"days": 2})
+
+
+def test_integrated_credit_result_cannot_be_replayed_as_legacy_settlement():
+    result = physical()
+    result["credit_constrained"] = True
+    with pytest.raises(ValueError, match="already contain the integrated cash ledger"):
+        replay_settlement(result)
