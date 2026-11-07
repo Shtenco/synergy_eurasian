@@ -644,3 +644,104 @@ def compare_liquidity_capped_reserve_contributions(
             "but does not establish fairness, ability to pay, benefit received or legal enforceability."
         ),
     }
+
+
+def compare_regional_reserve_size_sensitivities(
+    seeds: Iterable[int],
+    reserve_levels_per_region: Iterable[float],
+    days: int = 45,
+    shock_regime: str = "severe",
+    contribution_scheme: str = "equal_all_members",
+    max_contribution_fraction: float | None = None,
+    base_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Measure reserve coverage against the member-liquidity opportunity cost on paired paths."""
+    seed_list = list(seeds)
+    levels = list(reserve_levels_per_region)
+    if not seed_list or not levels:
+        raise ValueError("at least one seed and one reserve level are required")
+    if len(set(seed_list)) != len(seed_list) or any(
+        not isinstance(seed, int) or isinstance(seed, bool) for seed in seed_list
+    ):
+        raise ValueError("seeds must be unique integers")
+    if any(
+        isinstance(level, bool) or not isinstance(level, (int, float))
+        or not math.isfinite(float(level)) or level < 0
+        for level in levels
+    ):
+        raise ValueError("reserve levels must be finite non-negative numbers")
+    if len(set(float(level) for level in levels)) != len(levels):
+        raise ValueError("reserve levels must be unique")
+    if contribution_scheme not in {"equal_all_members", "production_capacity_weighted"}:
+        raise ValueError("unsupported reserve contribution scheme")
+    if max_contribution_fraction is not None and (
+        isinstance(max_contribution_fraction, bool)
+        or not isinstance(max_contribution_fraction, (int, float))
+        or not math.isfinite(float(max_contribution_fraction))
+        or not 0.0 <= max_contribution_fraction <= 1.0
+    ):
+        raise ValueError("max_contribution_fraction must be finite and in [0, 1]")
+
+    config_base = dict(base_config or {})
+    config_base.pop("regional_reserve_contributions_by_cell", None)
+    initial_cash = config_base.get("initial_cash_by_cell")
+    if initial_cash is None:
+        scalar_cash = float(config_base.get("initial_cash_per_cell", BASE_CONFIG["initial_cash_per_cell"]))
+        initial_cash = {cell.cell_id: scalar_cash for cell in CELLS}
+    reports = []
+    for level in levels:
+        if max_contribution_fraction is None:
+            contributions = build_regional_reserve_contributions(contribution_scheme, float(level))
+        else:
+            contributions = build_liquidity_capped_reserve_contributions(
+                contribution_scheme, float(level), initial_cash, float(max_contribution_fraction)
+            )
+        config = dict(config_base)
+        config["regional_pool_reserve_per_region"] = float(level)
+        config["regional_reserve_contributions_by_cell"] = contributions
+        comparison = compare_financing_modes(seed_list, days, shock_regime, config)
+        mode_diagnostics = {}
+        for mode in ("mutual_credit", "hybrid"):
+            rows = comparison["observations"][mode]
+            initial_total = 2.0 * float(level)
+            reserve_paid = [row["regional_pool_guarantee_paid"] for row in rows]
+            reserve_remaining = [row["regional_pool_reserve_balance"] for row in rows]
+            bad_debt = [row["trade_bad_debt"] for row in rows]
+            mode_diagnostics[mode] = {
+                "initial_reserve_total": initial_total,
+                "reserve_paid_mean": mean(reserve_paid),
+                "reserve_remaining_mean": mean(reserve_remaining),
+                "reserve_exhaustion_rate": mean(
+                    1.0 if initial_total > EPS and remaining <= EPS and paid > EPS else 0.0
+                    for remaining, paid in zip(reserve_remaining, reserve_paid)
+                ),
+                "reserve_utilization_mean": (
+                    mean(paid / initial_total for paid in reserve_paid)
+                    if initial_total > EPS else 0.0
+                ),
+                "seller_trade_bad_debt_mean": mean(bad_debt),
+                "service_level_mean": mean(row["service_level"] for row in rows),
+                "defaults_mean": mean(row["defaulted_cells"] for row in rows),
+                "cash_conservation_error_max": max(row["cash_conservation_error"] for row in rows),
+            }
+        reports.append({
+            "reserve_per_region": float(level),
+            "total_initial_reserve": 2.0 * float(level),
+            "contributions_by_cell": contributions,
+            "comparison": comparison,
+            "diagnostics": mode_diagnostics,
+        })
+    return {
+        "model_id": "SYNERGY_V6.6.4G_REGIONAL_RESERVE_ADEQUACY",
+        "days": days,
+        "shock_regime": shock_regime,
+        "seeds": seed_list,
+        "contribution_scheme": contribution_scheme,
+        "max_contribution_fraction": max_contribution_fraction,
+        "sensitivity_reports": reports,
+        "interpretation_guard": (
+            "Synthetic reserve sizing sensitivity. Larger reserves improve nominal claim capacity "
+            "but reduce member cash at initialization; service-level and default outcomes need not "
+            "improve monotonically. Results are not empirical reserve recommendations."
+        ),
+    }
