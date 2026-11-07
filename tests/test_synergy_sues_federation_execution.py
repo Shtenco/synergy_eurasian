@@ -246,3 +246,27 @@ def test_outbox_payload_is_immutable_while_delivery_state_can_advance(tmp_path):
             db.execute("UPDATE execution_outbox SET payload_json='{}'")
         db.execute("UPDATE execution_outbox SET status='DELIVERED', attempts=1")
         assert db.execute("SELECT status,attempts FROM execution_outbox").fetchone() == ("DELIVERED", 1)
+
+
+def test_executor_rolls_back_if_in_memory_policy_changes_inside_handler(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys)
+    executor = AuthorizedActionExecutor(str(tmp_path / "executor-policy-change.db"))
+
+    def mutating_handler(db, request, decision):
+        db.execute("CREATE TABLE protected_effects (request_id TEXT NOT NULL)")
+        db.execute("INSERT INTO protected_effects VALUES(?)", (request.event["payload"]["request_id"],))
+        policy.register_rule(AuthorizationRule(
+            "rule:changed-during-execution", "tenant:one", "ALLOW",
+            "TOKEN_MINT", "TOKEN", ("org:requester",), (), 0, "token:SYNA",
+        ))
+        return {"accepted": True}
+
+    with pytest.raises(ValueError, match="policy changed during action handler"):
+        executor.execute(request, [approval], policy, registry, mutating_handler, now())
+    assert executor.receipts() == ()
+    with sqlite3.connect(tmp_path / "executor-policy-change.db") as db:
+        table = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='protected_effects'"
+        ).fetchone()
+        assert table is None
