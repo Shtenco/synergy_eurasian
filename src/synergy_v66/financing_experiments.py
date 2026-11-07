@@ -500,6 +500,24 @@ def compare_regional_loss_waterfalls(
     }
 
 
+def make_synthetic_heterogeneous_cash_fixture(
+    base_cash: float = 80.0,
+    increment_per_cell: float = 5.0,
+) -> dict[str, float]:
+    """Deterministic synthetic opening-cash fixture for liquidity-cap stress tests."""
+    if (
+        isinstance(base_cash, bool) or not isinstance(base_cash, (int, float))
+        or not math.isfinite(float(base_cash)) or base_cash < 0
+        or isinstance(increment_per_cell, bool) or not isinstance(increment_per_cell, (int, float))
+        or not math.isfinite(float(increment_per_cell)) or increment_per_cell < 0
+    ):
+        raise ValueError("synthetic cash fixture parameters must be finite and non-negative")
+    return {
+        cell.cell_id: float(base_cash) + index * float(increment_per_cell)
+        for index, cell in enumerate(CELLS)
+    }
+
+
 def build_liquidity_capped_reserve_contributions(
     scheme: str,
     reserve_per_region: float,
