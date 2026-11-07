@@ -31,19 +31,22 @@ def test_production_uses_only_approved_bank_line_and_never_negative_cash():
 
 
 def test_mutual_credit_invoice_settles_and_internal_transfer_eliminates():
-    ledger = CreditLedger(initial_cash_per_cell=40.0, trade_credit_limit_per_cell=50.0)
+    ledger = CreditLedger(initial_cash_per_cell=20.0, bank_limit_per_cell=15.0, trade_credit_limit_per_cell=50.0)
     result = ledger.authorize_purchase(
         buyer="WEST-PR1", seller="WEST-AG1", amount=35.0,
         due_day=2, day=0, invoice_id="PO-001",
     )
     assert result["authorized"] is True
-    assert ledger.accounts["WEST-PR1"].trade_payable == pytest.approx(35.0)
-    assert ledger.accounts["WEST-AG1"].trade_receivable == pytest.approx(35.0)
+    assert result["cash_paid"] == pytest.approx(20.0)
+    assert result["trade_credit_extended"] == pytest.approx(15.0)
+    assert ledger.accounts["WEST-PR1"].trade_payable == pytest.approx(15.0)
+    assert ledger.accounts["WEST-AG1"].trade_receivable == pytest.approx(15.0)
     ledger.process_day(2)
     snap = ledger.snapshot()
     assert ledger.payables["PO-001"].status == "paid"
     assert snap["trade_payable_by_cell"]["WEST-PR1"] == pytest.approx(0.0)
     assert snap["trade_receivable_by_cell"]["WEST-AG1"] == pytest.approx(0.0)
+    assert snap["bank_debt_by_cell"]["WEST-PR1"] == pytest.approx(15.0)
     assert snap["internal_transfer_in"] == pytest.approx(35.0)
     assert snap["internal_transfer_out"] == pytest.approx(35.0)
     assert snap["internal_transfer_net"] == pytest.approx(0.0)
@@ -51,7 +54,7 @@ def test_mutual_credit_invoice_settles_and_internal_transfer_eliminates():
 
 
 def test_trade_credit_limit_blocks_new_purchase():
-    ledger = CreditLedger(initial_cash_per_cell=100.0, trade_credit_limit_per_cell=10.0)
+    ledger = CreditLedger(initial_cash_per_cell=0.0, trade_credit_limit_per_cell=10.0)
     first = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 8.0, 5, 0, "PO-1")
     second = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 3.0, 5, 0, "PO-2")
     assert first["authorized"] is True
@@ -146,3 +149,37 @@ def test_defaulted_supplier_cannot_receive_new_purchase_orders():
     assert ledger.accounts["WEST-AG1"].defaulted is True
     result = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 1.0, 1, 0, "PO-FROM-DEFAULT")
     assert result == {"authorized": False, "reason": "seller_defaulted"}
+
+
+def test_cash_purchase_works_without_any_trade_credit():
+    ledger = CreditLedger(initial_cash_per_cell=50.0, trade_credit_limit_per_cell=0.0)
+    result = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 30.0, 4, 0, "CASH-PO")
+    assert result["authorized"] is True
+    assert result["funding_mode"] == "cash"
+    assert result["cash_paid"] == pytest.approx(30.0)
+    assert result["trade_credit_extended"] == pytest.approx(0.0)
+    assert ledger.accounts["WEST-PR1"].cash == pytest.approx(20.0)
+    assert ledger.accounts["WEST-AG1"].cash == pytest.approx(50.0)
+    assert ledger.payables["CASH-PO"].status == "paid"
+    assert ledger.snapshot()["internal_transfer_net"] == pytest.approx(0.0)
+
+
+def test_bank_line_can_fund_immediate_purchase_without_trade_credit():
+    ledger = CreditLedger(initial_cash_per_cell=5.0, bank_limit_per_cell=20.0, trade_credit_limit_per_cell=0.0)
+    result = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 15.0, 4, 0, "BANK-PO")
+    assert result["authorized"] is True
+    assert result["funding_mode"] == "bank_funded_cash"
+    assert result["bank_draw"] == pytest.approx(10.0)
+    assert ledger.accounts["WEST-PR1"].cash == pytest.approx(0.0)
+    assert ledger.accounts["WEST-PR1"].bank_debt == pytest.approx(10.0)
+    assert ledger.payables["BANK-PO"].status == "paid"
+    assert ledger.snapshot()["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_purchase_rejection_does_not_spend_partial_cash():
+    ledger = CreditLedger(initial_cash_per_cell=5.0, bank_limit_per_cell=0.0, trade_credit_limit_per_cell=2.0)
+    result = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 10.0, 4, 0, "REJECT-PO")
+    assert result["authorized"] is False
+    assert ledger.accounts["WEST-PR1"].cash == pytest.approx(5.0)
+    assert ledger.accounts["WEST-AG1"].cash == pytest.approx(5.0)
+    assert "REJECT-PO" not in ledger.payables
