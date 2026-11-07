@@ -84,5 +84,5 @@ def test_monte_carlo_rejects_invalid_dimensions_distributions_and_overflow():
 
     bad = copy.deepcopy(cfg)
     bad["random_seed"] = 10**10000
-    with pytest.raises(ValueError, match="finite"):
+    with pytest.raises(ValueError, match="random_seed"):
         simulate_paths(bad, 0.01)
