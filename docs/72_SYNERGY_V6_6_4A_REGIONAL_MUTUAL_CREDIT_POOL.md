@@ -52,3 +52,10 @@ When a pool limit is configured, utilization must not exceed 1.0 (within numeric
 Only same-region internal credit invoices enter a regional pool. Cross-border trades remain bilateral and need a separate cross-border clearing design. There is no multilateral invoice novation, automatic net cash settlement, pooled guarantee reserve, loss waterfall, voting or member governance. A regional pool limit is a risk ceiling, not an automatic credit issuance decision.
 
 The paired financing experiment enables the regional pool in mutual-credit and hybrid modes so its effects can be tested under common shocks.
+
+
+## 6. Member-funded guarantee reserve extension
+
+The integrated credit ledger can hold a separate regional guarantee reserve. Its initial balance is transferred from member opening cash (equal contribution per cell in the current synthetic fixture); it is not minted or added on top of system cash. When a same-region buyer defaults on a trade-credit invoice, the reserve covers the seller up to the available reserve balance. Any uncovered residual is written off as seller trade bad debt. Buyer AP, seller AR and the corresponding regional net positions are reduced symmetrically.
+
+The reserve balance is included in consolidated cash conservation. A reserve payment moves cash from the reserve account to the seller; it does not create new system cash. Cross-region defaults are not covered by a local regional reserve. The reserve is a guarantee mechanism, distinct from the memorandum mutual-credit positions.
