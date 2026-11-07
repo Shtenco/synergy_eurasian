@@ -41,6 +41,8 @@ def _state_fingerprint(ledger: CreditLedger, period_id: str) -> str:
         "defaulted": {key: ledger.accounts[key].defaulted for key in sorted(ledger.accounts)},
         "regional_reserves": {key: ledger.regional_pool_reserve_by_region[key] for key in REGIONS},
         "federation_reserve": ledger.federation_pool_reserve_balance,
+        "reserve_recovery_contribution_fraction": ledger.reserve_recovery_contribution_fraction,
+        "minimum_post_contribution_cash": ledger.minimum_post_contribution_cash,
         "period_contributions": _period_contributions(ledger, period_id),
     }
     raw = json.dumps(state, sort_keys=True, separators=(",", ":"), allow_nan=False)
