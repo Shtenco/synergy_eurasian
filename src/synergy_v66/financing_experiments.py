@@ -406,6 +406,11 @@ def run_targeted_regional_default_stress_cases() -> dict[str, Any]:
         },
         "cross_region_assessment_ineligible": {
             "seller": "EAST-AG1", "assessment_rate": 0.10, "assessment_cap": 2.0,
+            "federation_reserve": 0.0,
+        },
+        "cross_region_federation_pool": {
+            "seller": "EAST-AG1", "assessment_rate": 0.0, "assessment_cap": 0.0,
+            "federation_reserve": 5.0,
         },
     }
     reports = {}
@@ -415,6 +420,7 @@ def run_targeted_regional_default_stress_cases() -> dict[str, Any]:
             trade_credit_limit_per_cell=50.0,
             regional_pool_limit_per_region=100.0,
             regional_pool_reserve_per_region=5.0,
+            federation_pool_reserve_total=settings.get("federation_reserve", 0.0),
             regional_assessment_rate=settings["assessment_rate"],
             regional_assessment_limit_per_cell=settings["assessment_cap"],
             grace_days=0,
@@ -431,6 +437,7 @@ def run_targeted_regional_default_stress_cases() -> dict[str, Any]:
             "seller": settings["seller"],
             "purchase": purchase,
             "guarantee_paid": invoice.guarantee_paid,
+            "federation_guarantee_paid": invoice.federation_guarantee_paid,
             "member_assessment_paid": invoice.member_assessment_paid,
             "written_off": invoice.written_off,
             "regional_assessment_attempt_count": snapshot["regional_assessment_attempt_count"],
@@ -440,6 +447,8 @@ def run_targeted_regional_default_stress_cases() -> dict[str, Any]:
             "trade_bad_debt_by_cell": snapshot["trade_bad_debt_by_cell"],
             "external_supplier_bad_debt": snapshot["external_supplier_bad_debt"],
             "regional_pool_reserve_by_region": snapshot["regional_pool_reserve_by_region"],
+            "federation_pool_reserve_balance": snapshot["federation_pool_reserve_balance"],
+            "federation_pool_guarantee_paid": snapshot["federation_pool_guarantee_paid"],
             "cash_conservation_error": snapshot["cash_conservation_error"],
         }
     return {
