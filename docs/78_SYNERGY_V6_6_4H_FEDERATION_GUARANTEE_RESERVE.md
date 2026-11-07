@@ -52,7 +52,7 @@ Federation reserve contributions are debited from member opening cash, including
 
 ## 6. CI validation
 
-CI on code commit `633a7568978820a5176174c1d2dc74319230c327` completed successfully with **138 tests passed**. The targeted federation fixtures confirmed:
+CI on code commit `633a7568978820a5176174c1d2dc74319230c327` completed successfully with **138 tests passed**. The later V6.6.4-I validation run on commit `c5f094f3ea46c62fb50e1ac26f48c78e320d331a` passed **148 tests**, including deterministic multi-default reserve exhaustion. The targeted federation fixtures confirmed:
 - cross-region claim with a federation reserve: federation guarantee paid 5.0, seller write-off 5.75, cash-conservation residual 0.0;
 - same-region claim: local reserve paid 5.0, federation reserve paid 3.0, local member assessment paid 2.65, residual write-off 0.0, cash-conservation residual 0.0.
 
