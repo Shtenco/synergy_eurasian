@@ -351,6 +351,9 @@ V6.6 is an additive research specification for comparing independent firms, mark
 - [V6.6 economic-cell state schema](interfaces/synergy_v66_cell_state.schema.json)
 - [Minimal economic-cell fixture](examples/synergy_v6_6_cell_state_minimal.json)
 - [V6.6 schema contract tests](tests/test_synergy_v66_contract.py)
-- [Draft implementation PR #16](https://github.com/Shtenco/synergy_eurasian/pull/16)
+- [V6.6.1 seven-cell compatibility kernel](src/synergy_v66/compatibility.py)
+- [V6.6.1 experiment and limitations](docs/65_SYNERGY_V6_6_1_SEVEN_CELL_COMPATIBILITY.md)
+- [V6.6.1 kernel tests](tests/test_synergy_v66_compatibility.py)
+- [Pull request #16](https://github.com/Shtenco/synergy_eurasian/pull/16)
 
-The first increment defines cell state, decision rights, evidence classes, accounting and physical conservation invariants, eight coordination baselines, staged scale-up from 7 to 200 cells, governance attack scenarios and calibration gates. The schema/fixture/tests are scaffolding; the simulator is not implemented yet. All scenario outputs remain research-only until tested against real, lawful, independently reviewed data.
+V6.6.0 defines cell state, decision rights, evidence classes, conservation invariants, coordination baselines, staged scale-up, governance attack scenarios and calibration gates. V6.6.1 adds a deterministic seven-cell make-to-order compatibility kernel and paired policy replay. Its DAO label is only a legacy greedy capacity-balancing proxy; CA and market are also deliberately narrow heuristics. Persistent inventory, lead times, credit, FX and real governance remain unimplemented. All scenario outputs remain synthetic research results, not forecasts or proof of policy superiority.
