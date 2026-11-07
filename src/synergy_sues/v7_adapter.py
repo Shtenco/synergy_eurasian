@@ -272,8 +272,11 @@ def adapt_v7_realization_chain(
             entity: str = "", project: str = "", benefit: str = "", period: str = "",
             quantity_field: str | None = None, unit_field: str = "",
             amount_field: str | None = None, currency_field: str = "",
-            status_field: str = "") -> None:
+            status_field: str = "", numeric_fields: tuple[str, ...] = ()) -> None:
         data = _record_dict(row)
+        for numeric_field in numeric_fields:
+            if data.get(numeric_field) is not None:
+                _decimal(data[numeric_field], f"{record_type} {numeric_field}")
         record_id = str(data.get(id_field, ""))
         if not record_id:
             raise ValueError(f"{record_type} is missing {id_field}")
@@ -310,7 +313,8 @@ def adapt_v7_realization_chain(
     for row in output_rows:
         add(row, "OUTPUT_OBSERVATION", "output_id", None, "evidence_id", ("evidence_id",), (),
             "enterprise_id", "project_id", "benefit_stream_id", "period",
-            "observed_quantity", "unit", status_field="source_class")
+            "observed_quantity", "unit", status_field="source_class",
+            numeric_fields=("baseline_quantity",))
     for row in delivery_rows:
         output = output_map.get(str(_value(row, "output_id")))
         if output is None:
