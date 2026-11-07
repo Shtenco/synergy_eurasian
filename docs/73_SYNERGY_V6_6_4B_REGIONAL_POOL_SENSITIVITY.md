@@ -72,3 +72,19 @@ A three-seed, 20-day severe-regime CI sample produced the following mean outcome
 The equal rejection rates at member cap 2, despite changing the pool cap from 5 to 150, indicate that the individual member limit is binding in that case. At member cap 80, reducing the regional ceiling to 5 produces rejections. The hybrid mode can substitute bank funding for some blocked mutual-credit purchases, but not all.
 
 The sample is too small to rank policies. It demonstrates that the two limits operate as distinct controls and that their interaction should be studied over longer horizons and larger seed sets. The reserve may cover part of a default, but uncovered trade debt remains with the seller; inspect guarantee-paid and seller bad-debt metrics alongside service level.
+
+
+## 8. Main CI sample: guarantee reserve and residual seller losses
+
+The paired 3-seed × 20-day experiment also reports default and reserve outcomes for the default pool cap (150 per region) and member cap (80). Mean values:
+
+| Shock regime | Financing mode | Defaulted cells | Reserve paid | Seller trade bad debt | Reserve remaining |
+|---|---|---:|---:|---:|---:|
+| Normal | Mutual credit | 1.00 | 9.90 | 7.62 | 30.10 |
+| Normal | Hybrid | 2.00 | 23.45 | 30.17 | 16.55 |
+| Volatile | Mutual credit | 0.67 | 4.97 | 2.87 | 35.03 |
+| Volatile | Hybrid | 2.00 | 18.78 | 27.06 | 21.22 |
+| Severe | Mutual credit | 1.00 | 5.11 | 6.83 | 34.89 |
+| Severe | Hybrid | 1.00 | 12.74 | 7.87 | 27.26 |
+
+The guarantee reserve is not a complete loss mutualization system: it covers only the amount available, and the seller bears the residual. In this sample the hybrid mode has higher guarantee payouts and, in normal/volatile regimes, larger residual seller losses. This is a risk-transfer observation under the chosen synthetic funding limits, not evidence that hybrid financing is generally worse. Longer horizons, larger seed sets and different reserve contribution rules are required.
