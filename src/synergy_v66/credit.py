@@ -832,8 +832,6 @@ class CreditLedger:
         """Transfer explicit member cash into the federation reserve atomically."""
         if not isinstance(day, int) or isinstance(day, bool) or day < self.current_day:
             raise ValueError("replenishment day must be an integer not earlier than current_day")
-        if day > self.current_day:
-            self.process_day(day)
         if not isinstance(replenishment_id, str) or not replenishment_id.strip():
             raise ValueError("replenishment_id must be a non-empty string")
         if replenishment_id in self.federation_replenishment_ids:
@@ -841,7 +839,7 @@ class CreditLedger:
         if not isinstance(contributions_by_cell, dict) or set(contributions_by_cell) != set(CELL_BY_ID):
             raise ValueError("replenishment map must contain every known cell exactly once")
 
-        normalized: dict[str, float] = {}
+        normalized: dict[str, float] = {};
         for cell_id, amount in contributions_by_cell.items():
             if (
                 isinstance(amount, bool)
@@ -855,6 +853,8 @@ class CreditLedger:
         total = sum(normalized.values())
         if total <= EPS:
             raise ValueError("replenishment must transfer a positive amount")
+        if day > self.current_day:
+            self.process_day(day)
         # Validate every contributor before moving any cash: failure is all-or-nothing.
         for cell_id, amount in normalized.items():
             if amount <= EPS:
