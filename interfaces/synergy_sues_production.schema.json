@@ -10,6 +10,7 @@
     { "$ref": "#/$defs/bom_component" },
     { "$ref": "#/$defs/production_order" },
     { "$ref": "#/$defs/production_cost_event" },
+    { "$ref": "#/$defs/production_input_consumption" },
     { "$ref": "#/$defs/production_completion_evidence" },
     { "$ref": "#/$defs/production_execution" }
   ],
@@ -142,15 +143,29 @@
         "evidence_ref": { "type": "string", "minLength": 1 }
       }
     },
+    "production_input_consumption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item_id", "quantity", "evidence_ref"],
+      "properties": {
+        "item_id": { "type": "string", "minLength": 1 },
+        "quantity": { "$ref": "#/$defs/quantity" },
+        "evidence_ref": { "type": "string", "minLength": 1 }
+      }
+    },
     "production_completion_evidence": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["order_id", "output_quantity", "completed_at", "evidence_ref"],
+      "required": ["order_id", "output_quantity", "completed_at", "evidence_ref", "input_consumption"],
       "properties": {
         "order_id": { "type": "string", "minLength": 1 },
         "output_quantity": { "$ref": "#/$defs/quantity" },
         "completed_at": { "type": "string", "format": "date-time" },
-        "evidence_ref": { "type": "string", "minLength": 1 }
+        "evidence_ref": { "type": "string", "minLength": 1 },
+        "input_consumption": {
+          "type": "array", "minItems": 1,
+          "items": { "$ref": "#/$defs/production_input_consumption" }
+        }
       }
     },
     "production_execution": {
