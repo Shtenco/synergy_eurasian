@@ -431,7 +431,7 @@ The regional guarantee reserve is funded by an equal member-cash contribution at
 
 - [V6.6.4-D regional reserve contribution allocation](docs/74_SYNERGY_V6_6_4D_RESERVE_CONTRIBUTION_ALLOCATION.md)
 
-The guarantee reserve ledger accepts an explicit per-cell contribution map. Equal-all-member funding remains the default; a paired research experiment compares it with production-capacity-weighted contributions while holding the regional reserve size and exogenous paths constant.
+The guarantee reserve ledger accepts an explicit per-cell contribution map. Paired experiments compare equal-all-member, production-capacity-weighted and opening-cash-weighted contributions on common exogenous paths. A separate liquidity-capped allocator constrains each member's combined reserve burden to a declared fraction of opening cash.
 
 The CI experiment now also compares equal-all-member and production-capacity-weighted guarantee-reserve contributions on paired severe-shock paths, keeping total reserve capital fixed.
 
