@@ -127,3 +127,21 @@ def test_dynamic_model_labels_non_ten_year_horizons_correctly():
     assert result["final_year"] == 5
     assert result["final_year_residual_usd"] == result["annual"][-1]["residual_after_replacement_and_project_returns_usd"]
     assert result["year_10_residual_usd"] is None
+
+
+
+def test_dynamic_flywheel_rejects_unknown_allocation_funds_and_derived_overflow():
+    cfg = load_config()
+    bad = copy.deepcopy(cfg)
+    bad["allocation"]["unmodeled_fund"] = 0.1
+    bad["allocation"]["resilience_reserve"] -= 0.1
+    with pytest.raises(ValueError, match="exactly productive_automation"):
+        simulate_case(bad, 0.02, 0.02)
+
+    bad = copy.deepcopy(cfg)
+    bad["starting_point"]["gross_cashflow_after_opex_before_replacement_usd"] = 1e308
+    with pytest.raises(ValueError, match="year 1 gross cashflow"):
+        simulate_case(bad, 1e308, 0.02)
+
+    with pytest.raises(ValueError, match="Break-even projection"):
+        break_even_cashflow_growth(100, 1e308, 1e308, 10)
