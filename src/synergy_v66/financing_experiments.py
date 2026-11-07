@@ -7,6 +7,7 @@ from typing import Any, Iterable
 
 from .network import make_environment, simulate
 from .network_topology import CELLS
+from .credit import CreditLedger
 
 FINANCING_MODES = {
     "unconstrained_reference": None,
@@ -379,6 +380,69 @@ def compare_reserve_contribution_schemes(
     }
 
 
+
+
+def run_targeted_regional_default_stress_cases() -> dict[str, Any]:
+    """Force local and cross-region defaults to verify each loss-waterfall boundary."""
+    cases = {
+        "local_reserve_only": {
+            "seller": "WEST-AG1", "assessment_rate": 0.0, "assessment_cap": 2.0,
+        },
+        "local_reserve_plus_assessment": {
+            "seller": "WEST-AG1", "assessment_rate": 0.10, "assessment_cap": 2.0,
+        },
+        "local_tightly_capped_assessment": {
+            "seller": "WEST-AG1", "assessment_rate": 0.10, "assessment_cap": 0.25,
+        },
+        "cross_region_assessment_ineligible": {
+            "seller": "EAST-AG1", "assessment_rate": 0.10, "assessment_cap": 2.0,
+        },
+    }
+    reports = {}
+    for name, settings in cases.items():
+        ledger = CreditLedger(
+            initial_cash_per_cell=20.0,
+            trade_credit_limit_per_cell=50.0,
+            regional_pool_limit_per_region=100.0,
+            regional_pool_reserve_per_region=5.0,
+            regional_assessment_rate=settings["assessment_rate"],
+            regional_assessment_limit_per_cell=settings["assessment_cap"],
+            grace_days=0,
+        )
+        purchase = ledger.authorize_purchase(
+            "WEST-PR1", settings["seller"], 30.0, 0, 0, f"TARGETED-{name.upper()}"
+        )
+        if not purchase["authorized"]:
+            raise RuntimeError(f"targeted stress purchase was unexpectedly rejected: {name}")
+        ledger.process_day(0)
+        snapshot = ledger.snapshot()
+        invoice = ledger.payables[purchase["invoice_id"]]
+        reports[name] = {
+            "seller": settings["seller"],
+            "purchase": purchase,
+            "guarantee_paid": invoice.guarantee_paid,
+            "member_assessment_paid": invoice.member_assessment_paid,
+            "written_off": invoice.written_off,
+            "regional_assessment_attempt_count": snapshot["regional_assessment_attempt_count"],
+            "regional_assessment_requested_by_region": snapshot["regional_assessment_requested_by_region"],
+            "regional_assessment_eligible_capacity_by_region": snapshot["regional_assessment_eligible_capacity_by_region"],
+            "regional_assessment_contributed_by_cell": snapshot["regional_assessment_contributed_by_cell"],
+            "trade_bad_debt_by_cell": snapshot["trade_bad_debt_by_cell"],
+            "external_supplier_bad_debt": snapshot["external_supplier_bad_debt"],
+            "regional_pool_reserve_by_region": snapshot["regional_pool_reserve_by_region"],
+            "cash_conservation_error": snapshot["cash_conservation_error"],
+        }
+    return {
+        "model_id": "SYNERGY_V6.6.4F_TARGETED_DEFAULT_STRESS",
+        "synthetic_fixture": True,
+        "days": 1,
+        "cases": reports,
+        "interpretation_guard": (
+            "Deliberately forced deterministic defaults verify ledger mechanics only; they are not "
+            "probability estimates or evidence about real regional default frequency."
+        ),
+    }
+
 def compare_regional_loss_waterfalls(
     seeds: Iterable[int],
     days: int = 45,
@@ -428,6 +492,7 @@ def compare_regional_loss_waterfalls(
         "assessment_rate": float(assessment_rate),
         "assessment_limit_per_cell": float(assessment_limit_per_cell),
         "reports_by_waterfall": reports,
+        "targeted_default_stress": run_targeted_regional_default_stress_cases(),
         "interpretation_guard": (
             "Synthetic loss-waterfall comparison. Member assessments are cash transfers, not new "
             "money; the model does not establish legal authority or normative fairness."
