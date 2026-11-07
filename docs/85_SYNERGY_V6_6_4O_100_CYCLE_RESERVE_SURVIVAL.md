@@ -58,6 +58,7 @@ For each seed and policy, the experiment records:
 - cycles ending with both regional reserves and the federation reserve restored to target;
 - member cash floor breaches and minimum closing member cash;
 - final member-cash Gini coefficient;
+- cumulative contribution Gini, top-20% contribution share, maximum member contribution and contribution-to-opening-cash ratio;
 - final regional and federation reserve balances;
 - maximum cash-conservation residual;
 - maximum excess over the ledger-owned 30-day member contribution cap;
@@ -65,7 +66,7 @@ For each seed and policy, the experiment records:
 - measured customer-collection inflows and external-supplier outflows;
 - bank draws and external inflows.
 
-The output preserves per-cycle observations as well as paired summaries across seeds. Paired path fingerprints must match across all five policies for each seed. Water-filling sums and ledger settlement iteration are explicitly sorted so repeated runs with the same inputs are bitwise reproducible. Recovery-plan fingerprints also bind the opening-cash capacity schedule, not just current cash and reserve balances.
+The output preserves per-cycle observations as well as paired summaries across seeds, including cumulative member burden and contribution concentration. Paired path fingerprints must match across all five policies for each seed. Water-filling sums and ledger settlement iteration are explicitly sorted so repeated runs with the same inputs are bitwise reproducible. Recovery-plan fingerprints also bind the opening-cash capacity schedule, not just current cash and reserve balances.
 
 ## 5. Accounting invariant
 
