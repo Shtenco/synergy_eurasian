@@ -97,3 +97,32 @@ def test_regional_pool_sensitivity_rejects_empty_limit_grids():
         compare_regional_pool_sensitivities([1], pool_limits=[])
     with pytest.raises(ValueError):
         compare_regional_pool_sensitivities([1], member_limits=[])
+
+
+def test_reserve_contribution_scheme_comparison_uses_paired_paths_and_fixed_reserve_size():
+    from synergy_v66.financing_experiments import compare_reserve_contribution_schemes
+
+    report = compare_reserve_contribution_schemes(
+        [51], days=8, shock_regime="severe", reserve_per_region=12.0,
+    )
+    assert report["model_id"] == "SYNERGY_V6.6.4D_RESERVE_CONTRIBUTION_FAIRNESS"
+    schemes = report["reports_by_contribution_scheme"]
+    assert set(schemes) == {"equal_all_members", "production_capacity_weighted"}
+    for scheme, payload in schemes.items():
+        contributions = payload["contributions_by_cell"]
+        for region in ("WEST", "EAST"):
+            assert sum(v for k, v in contributions.items() if k.startswith(region + "-")) == pytest.approx(12.0)
+        comparison = payload["comparison"]
+        assert comparison["base_config"]["regional_pool_reserve_per_region"] == pytest.approx(12.0)
+        assert len(set(comparison["paired_environment_hashes"][0]["environment_hashes"].values())) == 1
+        for mode in ("mutual_credit", "hybrid"):
+            row = comparison["observations"][mode][0]
+            assert row["cash_conservation_error"] < 1e-6
+            assert row["regional_pool_reserve_balance"] <= 24.0 + 1e-9
+
+
+def test_reserve_contribution_scheme_rejects_unknown_rule():
+    from synergy_v66.financing_experiments import build_regional_reserve_contributions
+
+    with pytest.raises(ValueError):
+        build_regional_reserve_contributions("equal_but_not_equal")
