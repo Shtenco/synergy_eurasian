@@ -7,13 +7,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 from .network import CELLS, CELL_BY_ID
-
-TRANSFER_PRICE={"grain":2.0,"oilseed":2.5,"flour":4.0,"oil":5.0,"energy":0.8}
-EXTERNAL_SALE_PRICE={"bread":10.0,"packed_food":15.0}
-EXTERNAL_PRODUCTION_COST={
-    "grain":0.8,"oilseed":0.9,"energy":0.5,"flour":2.0,
-    "oil":2.5,"bread":3.2,"packed_food":4.0,
-}
+from .credit import TRANSFER_PRICE, EXTERNAL_SALE_PRICE, EXTERNAL_PRODUCTION_COST
 
 def replay_settlement(
     physical_result:dict[str,Any],
