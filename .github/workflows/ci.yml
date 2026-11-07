@@ -5,6 +5,7 @@ on:
     branches: [main, eiiom-masterplan-2045, eiiom-v4-federation-megasystem, research/synergy-v6.6-foundation]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
