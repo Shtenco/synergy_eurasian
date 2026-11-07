@@ -535,3 +535,75 @@ def test_zero_contribution_is_supported_for_non_producing_support_cells():
     assert contributions["EAST-WH"] == pytest.approx(0.0)
     assert contributions["EAST-LG"] == pytest.approx(0.0)
     assert sum(v for k, v in contributions.items() if k.startswith("EAST-")) == pytest.approx(20.0)
+
+
+def test_regional_member_assessment_covers_local_residual_loss_pro_rata():
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        trade_credit_limit_per_cell=50.0,
+        regional_assessment_rate=0.10,
+        regional_assessment_limit_per_cell=2.0,
+        grace_days=0,
+    )
+    ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 30.0, 0, 0, "ASSESSMENT-FULL")
+    ledger.process_day(0)
+    invoice = ledger.payables["ASSESSMENT-FULL"]
+    snap = ledger.snapshot()
+    assert invoice.guarantee_paid == pytest.approx(0.0)
+    assert invoice.member_assessment_paid == pytest.approx(10.0)
+    assert invoice.written_off == pytest.approx(0.0)
+    assert snap["regional_assessment_paid_by_region"]["WEST"] == pytest.approx(10.0)
+    assert snap["trade_bad_debt_by_cell"]["WEST-AG1"] == pytest.approx(0.0)
+    contributions = snap["regional_assessment_contributed_by_cell"]
+    assert contributions["WEST-PR1"] == pytest.approx(0.0)
+    assert contributions["WEST-AG1"] == pytest.approx(0.0)
+    assert max(contributions.values()) <= 2.0 + 1e-9
+    assert sum(contributions.values()) == pytest.approx(10.0)
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_regional_member_assessment_cap_leaves_residual_seller_loss():
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        trade_credit_limit_per_cell=50.0,
+        regional_assessment_rate=0.10,
+        regional_assessment_limit_per_cell=1.0,
+        grace_days=0,
+    )
+    ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 30.0, 0, 0, "ASSESSMENT-CAPPED")
+    ledger.process_day(0)
+    invoice = ledger.payables["ASSESSMENT-CAPPED"]
+    snap = ledger.snapshot()
+    assert invoice.member_assessment_paid == pytest.approx(8.0)
+    assert invoice.written_off == pytest.approx(2.0)
+    assert snap["trade_bad_debt_by_cell"]["WEST-AG1"] == pytest.approx(2.0)
+    assert sum(snap["regional_assessment_contributed_by_cell"].values()) == pytest.approx(8.0)
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_member_assessment_is_disabled_by_default_and_rejects_invalid_parameters():
+    disabled = CreditLedger(initial_cash_per_cell=20.0, trade_credit_limit_per_cell=50.0, grace_days=0)
+    disabled.authorize_purchase("WEST-PR1", "WEST-AG1", 30.0, 0, 0, "ASSESSMENT-OFF")
+    disabled.process_day(0)
+    assert disabled.payables["ASSESSMENT-OFF"].member_assessment_paid == pytest.approx(0.0)
+    with pytest.raises(ValueError):
+        CreditLedger(regional_assessment_rate=1.01)
+    with pytest.raises(ValueError):
+        CreditLedger(regional_assessment_limit_per_cell=-1.0)
+
+
+def test_cross_region_default_does_not_trigger_local_member_assessment():
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        trade_credit_limit_per_cell=50.0,
+        regional_assessment_rate=0.50,
+        regional_assessment_limit_per_cell=5.0,
+        grace_days=0,
+    )
+    ledger.authorize_purchase("WEST-PR1", "EAST-AG1", 30.0, 0, 0, "ASSESSMENT-CROSS")
+    ledger.process_day(0)
+    snap = ledger.snapshot()
+    assert ledger.payables["ASSESSMENT-CROSS"].member_assessment_paid == pytest.approx(0.0)
+    assert snap["regional_assessment_paid_by_region"]["WEST"] == pytest.approx(0.0)
+    assert snap["regional_assessment_paid_by_region"]["EAST"] == pytest.approx(0.0)
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
