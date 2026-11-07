@@ -248,7 +248,7 @@ class AuthorizedActionExecutor:
         registry: TrustedKeyRegistry,
         handler: Callable[[_HandlerConnection, SignedEventEnvelope, AuthorizationDecision], Any],
         received_at: datetime | str | None = None,
-        scope_guard: Callable[[_HandlerConnection, SignedEventEnvelope, AuthorizationDecision], None] | None = None,
+        scope_guard: Callable[[_HandlerConnection, SignedEventEnvelope, AuthorizationDecision], bool] | None = None,
     ) -> ExecutionResult:
         if not callable(handler):
             raise ValueError("handler must be callable")
@@ -396,7 +396,9 @@ class AuthorizedActionExecutor:
                 try:
                     handler_connection = _HandlerConnection(db)
                     if scope_guard is not None:
-                        scope_guard(handler_connection, handler_request, decision)
+                        guard_approved = scope_guard(handler_connection, handler_request, decision)
+                        if guard_approved is not True:
+                            raise ValueError("scope_guard must return literal True to approve execution")
                     result = handler(handler_connection, handler_request, decision)
                 finally:
                     db.set_authorizer(None)
