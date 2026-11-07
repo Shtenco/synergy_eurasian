@@ -615,3 +615,42 @@ def test_cross_region_default_does_not_trigger_local_member_assessment():
     assert snap["regional_assessment_paid_by_region"]["WEST"] == pytest.approx(0.0)
     assert snap["regional_assessment_paid_by_region"]["EAST"] == pytest.approx(0.0)
     assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_heterogeneous_member_opening_cash_is_reconciled_with_reserve_contributions():
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 40.0 + index * 3.0 for index, cell in enumerate(CELLS)}
+    contributions = {cell.cell_id: 0.0 for cell in CELLS}
+    for region in ("WEST", "EAST"):
+        members = [cell for cell in CELLS if cell.region == region]
+        contributions[members[0].cell_id] = 5.0
+        contributions[members[1].cell_id] = 5.0
+    ledger = CreditLedger(
+        initial_cash_by_cell=cash,
+        regional_pool_reserve_per_region=10.0,
+        regional_reserve_contributions_by_cell=contributions,
+    )
+    snapshot = ledger.snapshot()
+    assert snapshot["initial_cash_by_cell"] == cash
+    assert sum(snapshot["cash_by_cell"].values()) + sum(snapshot["regional_pool_reserve_by_region"].values()) == pytest.approx(sum(cash.values()))
+    for cell_id, contribution in contributions.items():
+        assert contribution <= cash[cell_id]
+
+
+def test_heterogeneous_opening_cash_rejects_incomplete_and_underfunded_member_maps():
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 50.0 for cell in CELLS}
+    cash.pop(CELLS[0].cell_id)
+    with pytest.raises(ValueError):
+        CreditLedger(initial_cash_by_cell=cash)
+    cash = {cell.cell_id: 50.0 for cell in CELLS}
+    contributions = {cell.cell_id: 0.0 for cell in CELLS}
+    contributions["WEST-AG1"] = 10.0
+    with pytest.raises(ValueError):
+        CreditLedger(
+            initial_cash_by_cell=cash,
+            regional_pool_reserve_per_region=10.0,
+            regional_reserve_contributions_by_cell=contributions,
+        )
