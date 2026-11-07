@@ -54,3 +54,8 @@ The three-seed, 20-day severe-regime CI run used the five reserve levels below. 
 The sample illustrates the trade-off rather than a monotonic improvement. For mutual credit, increasing reserve from 5 to 10 units per region eliminated seller bad debt in this particular sample, but service level did not improve at that step. At 40 units per region, the reserve remained mostly unused and service level was lower than at 20, consistent with a larger amount of member cash being immobilized. In hybrid mode, substantial seller bad debt remained because the local guarantee does not cover cross-region exposures.
 
 These are three-seed synthetic observations, not statistically stable estimates, not an optimized reserve level and not evidence that 10 units per region is suitable outside this fixture. Maximum cash-conservation residuals across the grid remained below 1.4×10⁻¹².
+
+
+## 4. Absolute member cash floor
+
+The reserve-size sensitivity accepts `minimum_post_contribution_cash` in addition to the optional fractional cap. Each tested reserve level must be funded without pushing any contributing cell below that nominal opening-cash floor. The CI fixture applies a 75-unit floor alongside the 10% contribution cap. This is a mechanical guardrail, not an estimate of operating liquidity or a recommended reserve level.
