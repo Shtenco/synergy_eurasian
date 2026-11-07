@@ -1,6 +1,6 @@
 # SYNERGY V6.6.4-O — 100-cycle reserve survival experiment
 
-**Status:** research implementation added; 21 focused reserve-recovery tests are present, including a repeated-run determinism check. Full EIIOM CI on the exact current V6.6.4-O head is pending.  
+**Status:** research implementation added; 22 focused reserve-recovery tests are present, including a repeated-run determinism check. Full EIIOM CI on the exact current V6.6.4-O head is pending.  
 **Purpose:** compare no-replenishment and four contribution-allocation policies over 100 repeated reserve-claim / recovery cycles with paired exogenous paths and no external cash inflows.
 
 ## 1. What is being tested
