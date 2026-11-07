@@ -58,7 +58,7 @@ This release accepts explicit targets. A stress-quantile / CVaR target-calibrati
 
 The ledger requires the canonical ledger-derived period ID and the complete per-member period ceiling map; direct callers cannot omit the cumulative-cap control or choose a fresh arbitrary period label. The ledger then debits member cash and credits the matching regional and federation reserve accounts. Regional contributions can only be credited to the contributor's own region. Each leg is recorded as an audit event.
 
-The older `replenish_federation_reserve(...)` API remains available for compatibility with V6.6.4-K.
+The older `replenish_federation_reserve(...)` API remains available for compatibility with V6.6.4-K, but delegates to the same ledger-defined 30-day window control. Its default per-period cap is 10% of opening cash (configurable at the call boundary); a second top-up with a new replenishment ID cannot reset already-used period capacity.
 
 ## 5. Accounting invariants
 
