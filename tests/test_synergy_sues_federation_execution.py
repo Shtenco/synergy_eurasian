@@ -341,7 +341,7 @@ def test_handler_cannot_commit_or_rollback_executor_transaction(tmp_path):
         executor.execute(request, [approval], policy, registry, committing_handler, now())
     assert executor.receipts() == ()
     with sqlite3.connect(path) as db:
-        assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='protected_effects'").fetchone()[0] == 0
 
 
 def test_handler_cannot_issue_sql_transaction_control_or_drop_receipt_triggers(tmp_path):
