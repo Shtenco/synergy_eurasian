@@ -82,3 +82,24 @@ def test_optimizer_rejects_nonfinite_budget_and_overcommitted_sector_minimums():
     cfg["sector_min_investment_usd"]["FOOD"] = 1_000_000
     with pytest.raises(ValueError, match="exceeds available project capacity"):
         optimize_portfolio(cfg, 100_000)
+
+
+def test_sector_optimizer_rejects_booleans_and_numeric_strings():
+    cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
+    with pytest.raises(ValueError, match="not a boolean or string"):
+        optimize_portfolio(cfg, True)
+
+    bad = json.loads(json.dumps(cfg))
+    bad["objective_weights"]["annual_net_residual_yield"] = True
+    with pytest.raises(ValueError, match="not a boolean or string"):
+        optimize_portfolio(bad, 250_000)
+
+    bad = json.loads(json.dumps(cfg))
+    bad["normalization"]["annual_net_residual_yield"] = "1000"
+    with pytest.raises(ValueError, match="not a boolean or string"):
+        optimize_portfolio(bad, 250_000)
+
+    bad = json.loads(json.dumps(cfg))
+    bad["projects"][0]["max_investment_usd"] = "10000"
+    with pytest.raises(ValueError, match="not a boolean or string"):
+        optimize_portfolio(bad, 250_000)
