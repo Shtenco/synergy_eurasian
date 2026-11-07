@@ -43,3 +43,8 @@ Deterministic synthetic fixtures verify:
 ## 4. Scope and exclusions
 
 This is a two-region synthetic accounting experiment, not a legally constituted supranational guarantee institution. It does not yet model FX conversion, currency mismatch, cross-border settlement delays, sovereign or jurisdictional risk, customs/tax, capital adequacy, legal priority, dispute resolution, or federation governance. The federation reserve is not automatically replenished. No real-world EAEU reserve size or cross-border risk estimate is implied.
+
+
+## 5. Liquidity feedback from reserve funding
+
+Federation reserve contributions are debited from member opening cash, including the buyer and seller in a later default scenario unless an explicit contribution map exempts them. This can reduce the buyer's ability to settle its invoice before default and therefore increase the residual claim presented to the guarantee waterfall. The reserve's gross payout cannot be interpreted in isolation from this funding-side liquidity effect. A production design would need to test alternative contribution timing, exemptions, replenishment rules and liquidity floors without assuming that any one rule is fair.
