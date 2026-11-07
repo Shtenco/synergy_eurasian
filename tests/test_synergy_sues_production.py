@@ -224,3 +224,20 @@ def test_production_json_schema_validates_all_procurement_and_production_contrac
     ]
     for sample in samples:
         validator.validate(sample)
+
+
+def test_grni_invoice_cannot_predate_the_receipt_supporting_it():
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-date", "co1", "supplier", "steel",
+            Quantity("5", "kg"), Money("2", "USD"), date(2026, 11, 1), "po:date")
+    ])
+    matcher.record_receipt(GoodsReceipt(
+        "receipt-date", "po-date", Quantity("3", "kg"),
+        date(2026, 11, 5), "warehouse:receipt-date",
+    ))
+    with pytest.raises(ValueError, match="precedes the physical receipt"):
+        matcher.record_invoice(SupplierInvoiceLine(
+            "invoice-date", "po-date", Quantity("2", "kg"),
+            Money("4", "USD"), date(2026, 11, 4), "supplier:invoice-date",
+        ))
+    assert matcher.report("po-date")["invoiced_quantity"] == "0"
