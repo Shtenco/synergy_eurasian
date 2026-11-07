@@ -467,7 +467,6 @@ def execute_production_order(
         journal.post_many(entries)
         inventory._mark_journal_posted(
             [movement.movement_id for movement in input_movements] + [output_movement.movement_id],
-            order.entity_id,
         )
     except Exception:
         inventory._restore(inventory_snapshot)
