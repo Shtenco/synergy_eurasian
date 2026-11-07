@@ -391,6 +391,8 @@ class SQLiteAuthorizationPolicyStore:
                      event_id, event_hash, envelope_json, "REJECTED", reason,
                      previous_hash, digest))
                 db.commit()
+        except Exception:
+            raise
 
     def apply_change(
         self,
