@@ -183,3 +183,70 @@ def test_purchase_rejection_does_not_spend_partial_cash():
     assert ledger.accounts["WEST-PR1"].cash == pytest.approx(5.0)
     assert ledger.accounts["WEST-AG1"].cash == pytest.approx(5.0)
     assert "REJECT-PO" not in ledger.payables
+
+
+def test_partial_payments_reduce_buyer_ap_and_seller_ar_symmetrically():
+    ledger = CreditLedger(
+        initial_cash_per_cell=10.0,
+        bank_limit_per_cell=0.0,
+        trade_credit_limit_per_cell=20.0,
+        grace_days=2,
+    )
+    purchase = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 20.0, 1, 0, "PARTIAL-PO")
+    assert purchase["cash_paid"] == pytest.approx(10.0)
+    assert purchase["trade_credit_extended"] == pytest.approx(10.0)
+    ledger.issue_customer_invoice("WEST-PR1", 6.0, 1, 0, "CUSTOMER-PAY-1")
+    ledger.process_day(1)
+    assert ledger.payables["PARTIAL-PO"].status == "partial"
+    assert ledger.payables["PARTIAL-PO"].remaining == pytest.approx(4.0)
+    assert ledger.accounts["WEST-PR1"].trade_payable == pytest.approx(4.0)
+    assert ledger.accounts["WEST-AG1"].trade_receivable == pytest.approx(4.0)
+    ledger.issue_customer_invoice("WEST-PR1", 4.0, 2, 1, "CUSTOMER-PAY-2")
+    ledger.process_day(2)
+    snap = ledger.snapshot()
+    assert ledger.payables["PARTIAL-PO"].status == "paid"
+    assert snap["trade_payable_by_cell"]["WEST-PR1"] == pytest.approx(0.0)
+    assert snap["trade_receivable_by_cell"]["WEST-AG1"] == pytest.approx(0.0)
+    assert snap["internal_transfer_in"] == pytest.approx(20.0)
+    assert snap["internal_transfer_out"] == pytest.approx(20.0)
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_supplier_receivable_exposure_limit_blocks_only_unsecured_remainder():
+    ledger = CreditLedger(
+        initial_cash_per_cell=0.0,
+        trade_credit_limit_per_cell=100.0,
+        trade_receivable_limit_per_cell=5.0,
+    )
+    blocked = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 10.0, 3, 0, "EXPOSURE-BLOCK")
+    assert blocked == {"authorized": False, "reason": "seller_exposure_limit"}
+    assert ledger.accounts["WEST-PR1"].cash == pytest.approx(0.0)
+    assert ledger.accounts["WEST-AG1"].trade_receivable == pytest.approx(0.0)
+    assert "EXPOSURE-BLOCK" not in ledger.payables
+
+    cash_ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        trade_credit_limit_per_cell=0.0,
+        trade_receivable_limit_per_cell=0.0,
+    )
+    cash_purchase = cash_ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 10.0, 3, 0, "EXPOSURE-CASH")
+    assert cash_purchase["authorized"] is True
+    assert cash_purchase["trade_credit_extended"] == pytest.approx(0.0)
+
+
+def test_partial_payment_default_only_applies_to_unpaid_residual_after_grace():
+    ledger = CreditLedger(
+        initial_cash_per_cell=0.0,
+        trade_credit_limit_per_cell=100.0,
+        grace_days=2,
+    )
+    ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 20.0, 1, 0, "GRACE-PO")
+    ledger.issue_customer_invoice("WEST-PR1", 5.0, 2, 0, "GRACE-CUSTOMER")
+    ledger.process_day(1)
+    assert ledger.accounts["WEST-PR1"].defaulted is False
+    ledger.process_day(2)
+    assert ledger.payables["GRACE-PO"].remaining == pytest.approx(15.0)
+    assert ledger.accounts["WEST-PR1"].defaulted is False
+    ledger.process_day(3)
+    assert ledger.accounts["WEST-PR1"].defaulted is True
+    assert ledger.payables["GRACE-PO"].status == "defaulted"
