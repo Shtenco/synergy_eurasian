@@ -41,10 +41,14 @@ def _number(value: Any, field: str) -> float:
 
 
 def _validate(cfg: dict[str, Any], budget: float) -> None:
+    if not isinstance(cfg, dict):
+        raise ValueError("Sector optimizer config must be an object")
     budget = _number(budget, "investment budget")
     if budget <= 0:
         raise ValueError("Investment budget must be finite and positive.")
-    weights = cfg["objective_weights"]
+    weights = cfg.get("objective_weights")
+    if not isinstance(weights, dict) or set(weights) != set(METRICS):
+        raise ValueError("objective_weights must define exactly the modeled metrics")
     weight_values = {}
     for key in METRICS:
         value = _number(weights[key], f"objective_weights.{key}")
@@ -54,15 +58,17 @@ def _validate(cfg: dict[str, Any], budget: float) -> None:
     if abs(sum(weight_values.values()) - 1.0) > 1e-9:
         raise ValueError("Objective weights must sum to 1.0.")
 
-    norms = cfg["normalization"]
+    norms = cfg.get("normalization")
+    if not isinstance(norms, dict) or set(norms) != set(METRICS):
+        raise ValueError("normalization must define exactly the modeled metrics")
     for key in METRICS:
         value = _number(norms[key], f"normalization.{key}")
         if value <= 0:
             raise ValueError(f"Normalization value {key} must be finite and strictly positive.")
 
-    projects = cfg["projects"]
-    if not projects:
-        raise ValueError("At least one project is required.")
+    projects = cfg.get("projects")
+    if not isinstance(projects, list) or not projects or any(not isinstance(p, dict) for p in projects):
+        raise ValueError("projects must be a non-empty array of project objects")
     ids = [p.get("project_id") for p in projects]
     if any(not isinstance(project_id, str) or not project_id.strip() for project_id in ids):
         raise ValueError("Every project requires a non-empty project_id.")
@@ -94,6 +100,8 @@ def _validate(cfg: dict[str, Any], budget: float) -> None:
                 raise ValueError(f"Project {p['project_id']} field {field} must be a non-negative integer.")
 
     sector_caps = cfg.get("sector_max_share_of_budget", {})
+    if not isinstance(sector_caps, dict):
+        raise ValueError("sector_max_share_of_budget must be an object")
     for sector, raw_share in sector_caps.items():
         share = _number(raw_share, f"sector_max_share_of_budget.{sector}")
         if sector not in sectors or not 0 <= share <= 1:
@@ -106,6 +114,8 @@ def _validate(cfg: dict[str, Any], budget: float) -> None:
             raise ValueError("Shared project budget share must be between 0 and 1.")
 
     minimums = cfg.get("sector_min_investment_usd", {})
+    if not isinstance(minimums, dict):
+        raise ValueError("sector_min_investment_usd must be an object")
     total_minimum = 0.0
     for sector, raw_minimum in minimums.items():
         minimum = _number(raw_minimum, f"sector_min_investment_usd.{sector}")
