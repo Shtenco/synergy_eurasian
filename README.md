@@ -455,7 +455,7 @@ A separately funded federation reserve now forms the second tier of the guarante
 
 - [V6.6.4-I liquidity-capped federation reserve contributions](docs/79_SYNERGY_V6_6_4I_LIQUIDITY_CAPPED_FEDERATION_RESERVE.md)
 
-The federation reserve allocator now accounts for each member's existing regional-reserve contribution before assigning its federal contribution, enforcing a combined per-member opening-cash cap rather than applying two independent caps.
+The federation reserve allocator now accounts for each member's existing regional-reserve contribution before assigning its federal contribution, enforcing a combined per-member opening-cash cap rather than applying two independent caps. Both regional and federation allocators also support an absolute post-contribution cash floor, which the credit ledger independently enforces after both reserve contributions are applied.
 
 The federation reserve is also tested under multiple cross-region defaults: claims are resolved deterministically, the finite reserve is exhausted once, and subsequent uncovered losses remain with sellers. This ordering is a software determinism rule, not a legal creditor-priority rule.
 
