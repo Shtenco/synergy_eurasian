@@ -422,8 +422,21 @@ class InventoryLedger:
         inventory_account = accounts.get(inventory_account_id)
         if inventory_account is None or inventory_account.account_type != AccountType.ASSET or inventory_account.normal_balance != NormalBalance.DEBIT:
             raise ValueError("Inventory account must be a debit-normal asset account")
-        if offset_account_id not in accounts or offset_account_id == inventory_account_id:
+        offset_account = accounts.get(offset_account_id)
+        if offset_account is None or offset_account_id == inventory_account_id:
             raise ValueError("Inventory offset account must exist and differ from inventory account")
+        if movement.movement_type == InventoryMovementType.RECEIPT:
+            if (offset_account.normal_balance != NormalBalance.CREDIT
+                    or offset_account.account_type not in {AccountType.LIABILITY, AccountType.EQUITY}):
+                raise ValueError("Inventory receipt offset must be a credit-normal liability or equity account")
+        elif movement.movement_type == InventoryMovementType.ISSUE:
+            if (offset_account.normal_balance != NormalBalance.DEBIT
+                    or offset_account.account_type not in {AccountType.ASSET, AccountType.EXPENSE}):
+                raise ValueError("Inventory issue offset must be a debit-normal asset or expense account")
+        elif movement.movement_type == InventoryMovementType.WRITEOFF:
+            if (offset_account.account_type != AccountType.EXPENSE
+                    or offset_account.normal_balance != NormalBalance.DEBIT):
+                raise ValueError("Inventory writeoff offset must be a debit-normal expense account")
         if movement.cost.amount <= 0:
             raise ValueError("Zero-cost inventory movement cannot create a monetary journal entry")
         money = movement.cost
