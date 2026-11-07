@@ -10,23 +10,16 @@ FINANCING_MODES = {
     "unconstrained_reference": None,
     "cash_only": {"bank_limit_per_cell": 0.0, "trade_credit_limit_per_cell": 0.0},
     "bank_only": {"bank_limit_per_cell": 80.0, "trade_credit_limit_per_cell": 0.0},
-    "mutual_credit": {
-        "bank_limit_per_cell": 0.0, "trade_credit_limit_per_cell": 80.0,
-        "regional_pool_limit_per_region": 150.0,
-        "regional_member_debit_limit_per_cell": 80.0,
-        "regional_member_credit_limit_per_cell": 80.0,
-    },
-    "hybrid": {
-        "bank_limit_per_cell": 80.0, "trade_credit_limit_per_cell": 80.0,
-        "regional_pool_limit_per_region": 150.0,
-        "regional_member_debit_limit_per_cell": 80.0,
-        "regional_member_credit_limit_per_cell": 80.0,
-    },
+    "mutual_credit": {"bank_limit_per_cell": 0.0, "trade_credit_limit_per_cell": 80.0},
+    "hybrid": {"bank_limit_per_cell": 80.0, "trade_credit_limit_per_cell": 80.0},
 }
 
 BASE_CONFIG = {
     "initial_cash_per_cell": 150.0,
     "trade_receivable_limit_per_cell": 100.0,
+    "regional_pool_limit_per_region": 150.0,
+    "regional_member_debit_limit_per_cell": 80.0,
+    "regional_member_credit_limit_per_cell": 80.0,
     "customer_receivable_limit_per_cell": 250.0,
     "customer_recovery_rate": 0.90,
     "customer_grace_days": 2,
@@ -217,5 +210,59 @@ def compare_all_shock_regimes(
         "interpretation_guard": (
             "Synthetic paired multi-regime experiment. Compare paired distributions and downside "
             "metrics; this report does not establish real-world policy superiority."
+        ),
+    }
+
+
+
+def compare_regional_pool_sensitivities(
+    seeds: Iterable[int],
+    days: int = 45,
+    shock_regime: str = "volatile",
+    pool_limits: Iterable[float] = (10.0, 25.0, 150.0),
+    member_limits: Iterable[float] = (5.0, 15.0, 80.0),
+    base_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Compare mutual-credit/hybrid outcomes over regional pool and member caps."""
+    seed_list = list(seeds)
+    pool_values = list(pool_limits)
+    member_values = list(member_limits)
+    if not seed_list:
+        raise ValueError("at least one seed is required")
+    if not pool_values or not member_values:
+        raise ValueError("pool_limits and member_limits must be non-empty")
+    for value in pool_values + member_values:
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
+            raise ValueError("pool and member limits must be non-negative numbers")
+
+    reports = []
+    for pool_limit in pool_values:
+        for member_limit in member_values:
+            config = dict(base_config or {})
+            config.update({
+                "regional_pool_limit_per_region": float(pool_limit),
+                "regional_member_debit_limit_per_cell": float(member_limit),
+                "regional_member_credit_limit_per_cell": float(member_limit),
+            })
+            report = compare_financing_modes(seed_list, days, shock_regime, config)
+            reports.append({
+                "pool_limit_per_region": float(pool_limit),
+                "member_debit_and_credit_limit_per_cell": float(member_limit),
+                "summary": report["summary"],
+                "paired_delta_summary_vs_unconstrained_reference": report["paired_delta_summary_vs_unconstrained_reference"],
+                "observations": report["observations"],
+                "paired_environment_hashes": report["paired_environment_hashes"],
+            })
+    return {
+        "model_id": "SYNERGY_V6.6.4B_REGIONAL_POOL_SENSITIVITY",
+        "days": days,
+        "shock_regime": shock_regime,
+        "seeds": seed_list,
+        "pool_limits": [float(x) for x in pool_values],
+        "member_limits": [float(x) for x in member_values],
+        "sensitivity_reports": reports,
+        "interpretation_guard": (
+            "Synthetic sensitivity grid only. Pool ceilings and member caps are design parameters, "
+            "not empirically calibrated limits or policy recommendations."
         ),
     }
