@@ -256,7 +256,8 @@ def _run_one_path(
         "final_system_cash": final_cash_and_reserves,
         "system_cash_change": final_cash_and_reserves - total_initial_cash_and_reserves,
         "bank_draws": float(final["bank_draws"]),
-        "external_inflows": 0.0,
+        "external_inflows": float(final["customer_collections"]),
+        "external_outflows": float(final["external_supplier_payments"]),
         "cycle_rows": cycle_rows,
         "interpretation_guard": (
             "Synthetic exogenous claim stress only, not borrower-default simulation. Claims transfer "
@@ -315,6 +316,9 @@ def run_paired_reserve_recovery_experiment(
         "max_cash_conservation_error",
         "max_period_cap_excess",
         "system_cash_change",
+        "bank_draws",
+        "external_inflows",
+        "external_outflows",
     )
     summary = {
         rule: {
