@@ -162,7 +162,8 @@ def test_zero_cost_bom_is_rejected_before_inventory_mutation():
         date(2026, 11, 6), "production-order:free",
     )
     with pytest.raises(ValueError, match="Zero-cost production batch"):
-        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW)
+        execute_production_order(order, inventory, journal, "raw", "wip", "finished", NOW,
+            completion=completion_for(order))
     assert inventory.summary() == before
     assert journal.entries == ()
 
@@ -293,3 +294,61 @@ def test_grni_invoice_cannot_clear_forged_journal_entry_with_receipt_id():
     ))
     with pytest.raises(ValueError, match="cannot clear more GRNI"):
         post_grni_invoice(invoice, matcher, journal, "grni", "ap", "co1", NOW)
+
+
+def test_production_books_measured_partial_output_not_planned_output():
+    journal = production_journal()
+    inventory = InventoryLedger("USD")
+    inventory.receive("steel-partial", "steel-lot-partial", "steel", "factory",
+        Quantity("20", "kg"), Money("200", "USD"), date(2026, 11, 1), "receipt:steel-partial")
+    order = ProductionOrder(
+        "batch-partial", "co1", "part", Quantity("10", "unit"), "factory",
+        (BOMComponent("steel", Quantity("2", "kg")),),
+        date(2026, 11, 5), "production:plan-partial",
+    )
+    completion = completion_for(
+        order, Quantity("6", "unit"), {"steel": Quantity("12", "kg")},
+        "quality:accepted-six",
+    )
+    result = execute_production_order(
+        order, inventory, journal, "raw", "wip", "finished", NOW,
+        completion=completion,
+    )
+    assert result.output_quantity == Quantity("6", "unit")
+    assert result.output_movement.quantity == Quantity("6", "unit")
+    assert result.completion_evidence_ref == "quality:accepted-six"
+    pools = {(x["item_id"], x["location_id"]): x for x in inventory.summary()["pools"]}
+    assert pools[("steel", "factory")]["quantity"] == "8"
+    assert pools[("part", "factory")]["quantity"] == "6"
+
+
+def test_production_journal_failure_rolls_back_all_inventory_mutations():
+    from synergy_sues.journal import JournalEntry, JournalLine, PostingSide
+    journal = production_journal()
+    inventory = InventoryLedger("USD")
+    inventory.receive("steel-rollback", "steel-lot-rollback", "steel", "factory",
+        Quantity("5", "kg"), Money("50", "USD"), date(2026, 11, 1), "receipt:steel-rollback")
+    conflicting_source = "production-consumption:production:batch-rollback:issue:steel"
+    journal.post(JournalEntry(
+        "preexisting-conflict", date(2026, 11, 5), NOW, "USD",
+        (
+            JournalLine("conflict-dr", "raw", PostingSide.DEBIT,
+                Money("1", "USD"), Money("1", "USD"), "co1", "conflict:raw"),
+            JournalLine("conflict-cr", "grni", PostingSide.CREDIT,
+                Money("1", "USD"), Money("1", "USD"), "co1", "conflict:grni"),
+        ),
+        conflicting_source, "other-idempotency", "Create source-event collision",
+    ))
+    before = inventory.summary()
+    order = ProductionOrder(
+        "batch-rollback", "co1", "part", Quantity("1", "unit"), "factory",
+        (BOMComponent("steel", Quantity("1", "kg")),),
+        date(2026, 11, 5), "production:rollback",
+    )
+    with pytest.raises(ValueError, match="source_event_id"):
+        execute_production_order(
+            order, inventory, journal, "raw", "wip", "finished", NOW,
+            completion=completion_for(order),
+        )
+    assert inventory.summary() == before
+    assert len(journal.entries) == 1
