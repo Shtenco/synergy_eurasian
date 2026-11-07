@@ -215,3 +215,23 @@ def test_sqlite_trust_registry_detects_direct_key_state_tampering(tmp_path):
     assert not registry.verify_audit()
     with pytest.raises(ValueError, match="state/audit"):
         registry.verify(signed, "2026-11-06T10:01:00+00:00")
+
+
+
+def test_sqlite_historical_verification_refreshes_cross_instance_revocation(tmp_path):
+    path = str(tmp_path / "historical-refresh.db")
+    private, public = generate_ed25519_keypair()
+    first = SQLiteTrustedKeyRegistry(path)
+    first.register_identity(FederationIdentity("org:historical", "tenant:h", "ORGANIZATION"))
+    first.register_key(TrustedSigningKey(
+        "org:historical", "tenant:h", "key-1", ALGORITHM, public,
+        "2026-01-01T00:00:00+00:00",
+    ))
+    second = SQLiteTrustedKeyRegistry(path)
+    signed = sign_event(
+        event(tmp_path, "historical-event.db"), "org:historical", "tenant:h",
+        "key-1", private, "2026-11-06T10:00:00+00:00",
+    )
+    first.revoke_key("org:historical", "key-1", "2026-11-06T09:59:00+00:00")
+    with pytest.raises(ValueError, match="revoked at signing time"):
+        second.verify_historical(signed, "2026-11-06T10:01:00+00:00")
