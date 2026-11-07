@@ -420,3 +420,7 @@ The repository CI now runs a paired three-regime, three-seed financing stress sa
 - [V6.6.4-A regional mutual-credit pool specification](docs/72_SYNERGY_V6_6_4A_REGIONAL_MUTUAL_CREDIT_POOL.md)
 
 The credit ledger now tracks local regional net debtor/creditor positions, per-member debit/credit caps and regional pool ceilings. These are memorandum credit claims, not cash or tokens; cross-border clearing and loss allocation remain separate future work.
+
+- [V6.6.4-B regional pool sensitivity specification](docs/73_SYNERGY_V6_6_4B_REGIONAL_POOL_SENSITIVITY.md)
+
+The financing experiment module now includes `compare_regional_pool_sensitivities(...)` to sweep regional pool ceilings and member debit/credit caps under paired shocks.
