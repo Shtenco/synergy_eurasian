@@ -78,6 +78,7 @@ class CreditLedger:
         customer_grace_days: int = 0,
         regional_pool_limit_per_region: float | None = None,
         regional_pool_reserve_per_region: float = 0.0,
+        regional_reserve_contributions_by_cell: dict[str, float] | None = None,
         regional_member_debit_limit_per_cell: float | None = None,
         regional_member_credit_limit_per_cell: float | None = None,
         grace_days: int = 2,
@@ -107,13 +108,37 @@ class CreditLedger:
         if not math.isfinite(float(regional_pool_reserve_per_region)) or regional_pool_reserve_per_region < 0:
             raise ValueError("regional_pool_reserve_per_region must be finite and >= 0")
         cells_per_region = {r: sum(c.region == r for c in CELLS) for r in REGIONS}
-        if any(float(regional_pool_reserve_per_region) > float(initial_cash_per_cell) * cells_per_region[r] + EPS for r in REGIONS):
-            raise ValueError("regional pool reserve cannot exceed member cash contributed in that region")
+        if regional_reserve_contributions_by_cell is None:
+            reserve_contributions = {
+                cell.cell_id: float(regional_pool_reserve_per_region) / cells_per_region[cell.region]
+                for cell in CELLS
+            }
+        else:
+            if set(regional_reserve_contributions_by_cell) != set(CELL_BY_ID):
+                raise ValueError("reserve contribution map must contain every known cell exactly once")
+            reserve_contributions = {}
+            for cell_id, contribution in regional_reserve_contributions_by_cell.items():
+                if isinstance(contribution, bool) or not isinstance(contribution, (int, float)):
+                    raise ValueError("reserve contributions must be finite non-negative numbers")
+                if not math.isfinite(float(contribution)) or contribution < 0:
+                    raise ValueError("reserve contributions must be finite non-negative numbers")
+                if contribution > float(initial_cash_per_cell) + EPS:
+                    raise ValueError("a member contribution cannot exceed its initial cash")
+                reserve_contributions[cell_id] = float(contribution)
+            for region in REGIONS:
+                contributed = sum(
+                    reserve_contributions[cell.cell_id]
+                    for cell in CELLS if cell.region == region
+                )
+                if abs(contributed - float(regional_pool_reserve_per_region)) > EPS:
+                    raise ValueError(
+                        f"regional contributions for {region} must sum to regional_pool_reserve_per_region"
+                    )
         if grace_days < 0:
             raise ValueError("grace_days must be >= 0")
         self.accounts = {
             c.cell_id: CellAccount(
-                cash=float(initial_cash_per_cell) - float(regional_pool_reserve_per_region) / cells_per_region[c.region],
+                cash=float(initial_cash_per_cell) - reserve_contributions[c.cell_id],
                 bank_limit=float(bank_limit_per_cell),
                 trade_credit_limit=float(trade_credit_limit_per_cell),
                 trade_receivable_limit=(
@@ -145,6 +170,7 @@ class CreditLedger:
             float(regional_member_credit_limit_per_cell)
             if regional_member_credit_limit_per_cell is not None else None
         )
+        self.regional_reserve_contributions_by_cell = dict(reserve_contributions)
         self.regional_pool_reserve_initial_by_region = {
             r: float(regional_pool_reserve_per_region) for r in REGIONS
         }
@@ -525,6 +551,7 @@ class CreditLedger:
             "customer_bad_debt": self.customer_bad_debt,
             "trade_bad_debt_by_cell": dict(self.trade_bad_debt_by_cell),
             "external_supplier_bad_debt": self.external_supplier_bad_debt,
+            "regional_reserve_contributions_by_cell": dict(self.regional_reserve_contributions_by_cell),
             "regional_pool_reserve_initial_by_region": dict(self.regional_pool_reserve_initial_by_region),
             "regional_pool_reserve_by_region": dict(self.regional_pool_reserve_by_region),
             "regional_pool_guarantee_paid_by_region": dict(self.regional_pool_guarantee_paid_by_region),
