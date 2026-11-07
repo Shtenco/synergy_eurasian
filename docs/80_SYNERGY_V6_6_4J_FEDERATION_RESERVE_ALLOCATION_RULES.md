@@ -87,3 +87,5 @@ The latest successful EIIOM CI on commit `d95383f568c48958e33b39a9b8390f3a29e949
 - the remaining seller losses and consolidated cash balances reconcile exactly within numerical tolerance.
 
 The batch policy is covered by unit tests and the full CI test suite. The CI allocation-report fixture remains a pure side-by-side FCFS/pro-rata arithmetic comparison; the targeted ledger tests exercise the integrated policy.
+
+Analytical extensions add explicit claim classes and priority-order alternatives (priority-class-then-FCFS and priority-class-then-batch-pro-rata). They are documented separately in [V6.6.4-L](82_SYNERGY_V6_6_4L_FEDERATION_CLAIM_PRIORITY.md) and are not enabled in the operational ledger.
