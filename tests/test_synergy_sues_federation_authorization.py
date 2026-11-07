@@ -222,3 +222,29 @@ def test_approval_cannot_be_replayed_against_a_different_signed_request_event(tm
         "2026-11-06T10:02:00+00:00")
     assert decision.allowed is False
     assert decision.reason == "insufficient_approvals"
+
+
+def test_same_approval_event_id_with_conflicting_signed_hash_is_rejected(tmp_path):
+    registry, keys = setup_registry()
+    request = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
+        keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "request")
+    signed_approvals = []
+    for suffix, decision_value in (("approve", "APPROVE"), ("reject", "REJECT")):
+        payload = approval_payload(request, decision_value)
+        source = AuthorizationEvent(
+            "evt-shared-approval", "AUTHORIZATION", "req-1", 1,
+            "AUTHORIZATION_APPROVAL", "2026-11-06T10:01:00+00:00",
+            "2026-11-06T10:01:00+00:00", payload, f"source:{suffix}",
+            (f"evidence:{suffix}",), f"idem:{suffix}",
+        )
+        stored = DurableEventStore(str(tmp_path / f"{suffix}.db")).append(
+            source, now=datetime(2026, 11, 6, 10, 1, tzinfo=timezone.utc)
+        )
+        signed_approvals.append(sign_event(
+            stored, "org:approver", "tenant:one", "key-1",
+            keys["org:approver"], "2026-11-06T10:01:00+00:00",
+        ))
+    assert signed_approvals[0].event["event_id"] == signed_approvals[1].event["event_id"]
+    assert signed_approvals[0].event["event_hash"] != signed_approvals[1].event["event_hash"]
+    with pytest.raises(ValueError, match="collision with conflicting event hash"):
+        policy().authorize(request, signed_approvals, registry, "2026-11-06T10:02:00+00:00")
