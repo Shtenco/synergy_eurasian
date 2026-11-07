@@ -499,7 +499,7 @@ def test_trial_balance_translation_rejects_missing_historical_rate_and_future_ra
 
 
 def test_trade_subledger_posts_invoices_and_settlements_to_balanced_gl():
-    journal = Journal("USD")
+    journal = Journal("USD", entity_id="co1")
     journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
     journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
     journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
