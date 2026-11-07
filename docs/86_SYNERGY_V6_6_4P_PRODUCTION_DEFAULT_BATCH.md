@@ -68,7 +68,7 @@ The JSON report includes:
 - number of defaulted borrowers and sellers;
 - cash settled before default;
 - claim amount, local guarantee payout, federation payout, member assessment, and seller write-off;
-- claim coverage and claim-reconciliation residual;
+- claim coverage, claim-reconciliation residual, and seller trade-bad-debt reconciliation against written-off invoice balances;
 - seller guarantee-payout Gini and per-seller payout map;
 - recovery requested, funded, unfunded and actual member contributions;
 - contribution Gini, top-20% contribution share and maximum contribution/opening-cash ratio;
