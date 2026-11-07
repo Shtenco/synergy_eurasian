@@ -200,31 +200,6 @@ class AuthorityScopeEngine:
                 or decision.resource_id != payload["resource_id"]
             ):
                 raise ValueError("authorization decision action/resource does not match signed request")
-            effective_at = request.event.get("effective_at")
-            if not isinstance(effective_at, str) or not effective_at.strip():
-                raise ValueError("signed request requires an effective_at timestamp")
-            try:
-                effective_instant = datetime.fromisoformat(effective_at.replace("Z", "+00:00"))
-            except ValueError as exc:
-                raise ValueError("effective_at must be an ISO-8601 timestamp") from exc
-            if effective_instant.tzinfo is None or effective_instant.utcoffset() is None:
-                raise ValueError("effective_at must be timezone-aware")
-            effective_date = effective_instant.astimezone(timezone.utc).date()
-            if scope.period_window == "DAY":
-                derived_period_key = effective_date.isoformat()
-            elif scope.period_window == "WEEK":
-                iso_year, iso_week, _ = effective_date.isocalendar()
-                derived_period_key = f"{iso_year}-W{iso_week:02d}"
-            elif scope.period_window == "MONTH":
-                derived_period_key = effective_date.strftime("%Y-%m")
-            else:
-                derived_period_key = str(effective_date.year)
-            if payload["period_key"] != derived_period_key:
-                raise ValueError("period_key does not match the signed request effective_at")
-            if committed_period_key != derived_period_key:
-                raise ValueError("committed period usage key does not match the derived period")
-            if committed_period_currency != payload["currency"]:
-                raise ValueError("committed period usage currency does not match request currency")
             amount = _decimal(payload["amount"], "amount")
             # Period usage is a same-currency bucket. Cross-currency totals require
             # a separately governed FX conversion and are never added implicitly.
@@ -253,6 +228,31 @@ class AuthorityScopeEngine:
             if len(candidates) > 1 and specificity(candidates[0]) == specificity(candidates[1]):
                 raise ValueError("ambiguous_authority_scope")
             scope = candidates[0]
+            effective_at = request.event.get("effective_at")
+            if not isinstance(effective_at, str) or not effective_at.strip():
+                raise ValueError("signed request requires an effective_at timestamp")
+            try:
+                effective_instant = datetime.fromisoformat(effective_at.replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise ValueError("effective_at must be an ISO-8601 timestamp") from exc
+            if effective_instant.tzinfo is None or effective_instant.utcoffset() is None:
+                raise ValueError("effective_at must be timezone-aware")
+            effective_date = effective_instant.astimezone(timezone.utc).date()
+            if scope.period_window == "DAY":
+                derived_period_key = effective_date.isoformat()
+            elif scope.period_window == "WEEK":
+                iso_year, iso_week, _ = effective_date.isocalendar()
+                derived_period_key = f"{iso_year}-W{iso_week:02d}"
+            elif scope.period_window == "MONTH":
+                derived_period_key = effective_date.strftime("%Y-%m")
+            else:
+                derived_period_key = str(effective_date.year)
+            if payload["period_key"] != derived_period_key:
+                raise ValueError("period_key does not match the signed request effective_at")
+            if committed_period_key != derived_period_key:
+                raise ValueError("committed period usage key does not match the derived period")
+            if committed_period_currency != payload["currency"]:
+                raise ValueError("committed period usage currency does not match request currency")
             if currency not in scope.currencies:
                 raise ValueError("currency_not_permitted")
             if amount > _decimal(scope.max_per_transaction, "max_per_transaction"):
