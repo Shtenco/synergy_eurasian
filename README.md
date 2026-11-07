@@ -428,3 +428,7 @@ The financing experiment module now includes `compare_regional_pool_sensitivitie
 The CI experiment also runs a compact regional-pool sensitivity grid (tight and loose regional/member caps) and writes a separate JSON report under `outputs/`.
 
 The regional guarantee reserve is funded by an equal member-cash contribution at initialization. It covers same-region default claims up to the available reserve; uncovered amounts become seller trade bad debt. Reserve transfers are included in cash conservation and do not mint new cash.
+
+- [V6.6.4-D regional reserve contribution allocation](docs/74_SYNERGY_V6_6_4D_RESERVE_CONTRIBUTION_ALLOCATION.md)
+
+The guarantee reserve ledger accepts an explicit per-cell contribution map. Equal-all-member funding remains the default; a paired research experiment compares it with production-capacity-weighted contributions while holding the regional reserve size and exogenous paths constant.
