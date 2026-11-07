@@ -4,9 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Iterable
+from types import MappingProxyType
+from typing import Iterable, Mapping
 
-from .contracts import FXRate, Money
+from .contracts import FXRate, Money, _calendar_date
 from .journal import AccountType
 
 
@@ -34,15 +35,23 @@ class TrialBalanceAccount:
 class TranslationPolicy:
     closing_rate: FXRate
     average_rate: FXRate
-    historical_equity_rates: dict[str, FXRate]
+    historical_equity_rates: Mapping[str, FXRate]
     reporting_date: date
     translation_adjustment_account_id: str
 
     def __post_init__(self) -> None:
         if not self.translation_adjustment_account_id:
             raise ValueError("Translation adjustment account ID is required")
-        if not isinstance(self.reporting_date, date):
-            raise ValueError("reporting_date must be a date")
+        _calendar_date(self.reporting_date, "translation reporting_date")
+        if not isinstance(self.closing_rate, FXRate) or not isinstance(self.average_rate, FXRate):
+            raise ValueError("closing_rate and average_rate must be FXRate objects")
+        if not isinstance(self.historical_equity_rates, Mapping):
+            raise ValueError("historical_equity_rates must be a mapping")
+        rates = dict(self.historical_equity_rates)
+        if any(not isinstance(key, str) or not key.strip() or not isinstance(value, FXRate)
+               for key, value in rates.items()):
+            raise ValueError("historical equity FX rates require non-empty account IDs and FXRate values")
+        object.__setattr__(self, "historical_equity_rates", MappingProxyType(rates))
 
 
 def translate_trial_balance(
