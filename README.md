@@ -367,3 +367,12 @@ V6.6.0 defines cell state, decision rights, evidence classes, conservation invar
 - [V6.6.2 physical-network tests](tests/test_synergy_v66_network.py)
 
 V6.6.2 adds a deterministic synthetic 20-cell / two-region network with three production sectors, multi-stage recipes, lot inventory, expiry-aware FIFO consumption, lead-time shipments, regional storage and transport constraints, shipment audit and per-SKU physical conservation. This is the physical submodel only: working capital, payment delays, contracts, FX and governance remain explicit next increments, not implemented capabilities. All parameters and outputs are synthetic research fixtures, not calibrated EAEU data or forecasts.
+
+
+### SYNERGY V6.6.2-B — dated settlement and working capital
+
+- [Settlement replay engine](src/synergy_v66/settlement.py)
+- [Commercial and working-capital specification](docs/67_SYNERGY_V6_6_2B_DATED_SETTLEMENT_AND_WORKING_CAPITAL.md)
+- [Settlement tests](tests/test_synergy_v66_settlement.py)
+
+V6.6.2-B adds dated internal invoices, customer receivables, external supplier payables, configurable payment terms, cell cash balances and explicit unfunded working-capital requirements. This is a replay overlay: negative cash is exposed but does not yet constrain production or shipment authorization. Synthetic prices, costs and payment terms are research parameters, not observed market data.
