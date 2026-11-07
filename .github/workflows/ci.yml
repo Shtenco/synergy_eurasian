@@ -2,7 +2,7 @@ name: EIIOM CI
 
 on:
   push:
-    branches: [main, eiiom-masterplan-2045, eiiom-v4-federation-megasystem]
+    branches: [main, eiiom-masterplan-2045, eiiom-v4-federation-megasystem, "fix/**"]
   pull_request:
     branches: [main]
 
