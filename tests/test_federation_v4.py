@@ -57,3 +57,24 @@ def test_forbidden_value_promotions_remain_explicit():
     assert "flash_principal_to_owned_capital" in forbidden
     assert "ai_recommendation_to_capital_authorization" in forbidden
     assert "blockchain_commitment_to_economic_truth" in forbidden
+
+
+def test_capital_authorization_owner_cannot_be_reassigned_to_research_or_project_sponsor():
+    config = load_config()
+    config["canonical_objects"]["CapitalAuthorization"]["authority"] = "Shtenco/midas_ai"
+    assert any("CapitalAuthorization authority mismatch" in error for error in audit(config))
+
+
+def test_all_forbidden_cross_domain_promotions_are_mandatory():
+    config = load_config()
+    config["forbidden_cross_domain_promotions"].remove("network_role_to_financial_authority")
+    config["forbidden_cross_domain_promotions"].remove("project_sponsor_claim_to_independent_evidence")
+    errors = audit(config)
+    assert any("network_role_to_financial_authority" in error for error in errors)
+    assert any("project_sponsor_claim_to_independent_evidence" in error for error in errors)
+
+
+def test_payment_intent_executor_must_be_canonical_settlement_authority():
+    config = load_config()
+    config["canonical_objects"]["PaymentIntent"]["executor"] = "Shtenco/midas_ai"
+    assert any("PaymentIntent executor" in error for error in audit(config))
