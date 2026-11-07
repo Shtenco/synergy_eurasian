@@ -247,3 +247,16 @@ def test_liquidity_capped_reserve_allocation_rejects_boolean_and_invalid_cash():
     cash[CELLS[0].cell_id] = True
     with pytest.raises(ValueError):
         build_liquidity_capped_reserve_contributions("equal_all_members", 5.0, cash)
+
+
+def test_synthetic_heterogeneous_cash_fixture_is_deterministic_and_validated():
+    from synergy_v66.financing_experiments import make_synthetic_heterogeneous_cash_fixture
+    from synergy_v66.network_topology import CELLS
+
+    first = make_synthetic_heterogeneous_cash_fixture(75.0, 2.5)
+    second = make_synthetic_heterogeneous_cash_fixture(75.0, 2.5)
+    assert first == second
+    assert set(first) == {cell.cell_id for cell in CELLS}
+    assert len(set(first.values())) == len(CELLS)
+    with pytest.raises(ValueError):
+        make_synthetic_heterogeneous_cash_fixture(float("nan"), 1.0)
