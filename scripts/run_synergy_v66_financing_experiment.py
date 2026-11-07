@@ -18,6 +18,7 @@ from synergy_v66.financing_experiments import (
     compare_liquidity_capped_reserve_contributions,
     make_synthetic_heterogeneous_cash_fixture,
     compare_regional_reserve_size_sensitivities,
+    compare_liquidity_capped_federation_contributions,
 )
 
 
@@ -32,6 +33,7 @@ def main() -> int:
     parser.add_argument("--loss-waterfall", action="store_true")
     parser.add_argument("--liquidity-capped-reserve", action="store_true")
     parser.add_argument("--reserve-sizing", action="store_true")
+    parser.add_argument("--federation-liquidity-cap", action="store_true")
     args = parser.parse_args()
     if args.seed_count < 1 or args.days < 1:
         parser.error("--seed-count and --days must be >= 1")
@@ -211,6 +213,41 @@ def main() -> int:
                     "cash_conservation_error_max": metrics["cash_conservation_error_max"],
                 }, sort_keys=True))
         print(f"RESERVE_SIZING_REPORT_WRITTEN: {sizing_path}")
+
+    if args.federation_liquidity_cap:
+        cash_fixture = make_synthetic_heterogeneous_cash_fixture()
+        federal_report = compare_liquidity_capped_federation_contributions(
+            seeds=range(args.seed_start, args.seed_start + args.seed_count),
+            initial_cash_by_cell=cash_fixture,
+            reserve_total=10.0,
+            max_combined_contribution_fraction=0.10,
+            scheme="production_capacity_weighted",
+            days=args.days,
+            shock_regime="severe",
+            base_config={
+                "regional_pool_reserve_per_region": 5.0,
+                "regional_reserve_contributions_by_cell": {
+                    cell_id: 0.5 for cell_id in cash_fixture
+                },
+            },
+        )
+        federal_path = output.with_name("synergy_v66_federation_liquidity_cap.json")
+        federal_path.write_text(json.dumps(federal_report, indent=2, allow_nan=False), encoding="utf-8")
+        comparison = federal_report["comparison"]
+        for mode in ("mutual_credit", "hybrid"):
+            metrics = comparison["summary"][mode]
+            print(json.dumps({
+                "federation_liquidity_cap": True,
+                "mode": mode,
+                "federation_reserve_total": federal_report["reserve_total"],
+                "federation_contribution_total": sum(federal_report["federation_contributions_by_cell"].values()),
+                "combined_contribution_cap_fraction": federal_report["max_combined_contribution_fraction"],
+                "service_level_mean": metrics["service_level"]["mean"],
+                "federation_guarantee_paid_mean": metrics["federation_pool_guarantee_paid"]["mean"],
+                "federation_reserve_remaining_mean": metrics["federation_pool_reserve_balance"]["mean"],
+                "cash_conservation_error_max": metrics["cash_conservation_error"]["max"],
+            }, sort_keys=True))
+        print(f"FEDERATION_LIQUIDITY_CAP_REPORT_WRITTEN: {federal_path}")
     return 0
 
 
