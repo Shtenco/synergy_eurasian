@@ -180,9 +180,18 @@ class InventoryLedger:
         self._lot_ids.add(lot_id)
         return self._add_movement(movement)
 
-    def available(self, item_id: str, location_id: str, unit: str) -> Quantity:
+    def available(
+        self, item_id: str, location_id: str, unit: str,
+        as_of_date: date | None = None,
+    ) -> Quantity:
+        """Return remaining stock, optionally excluding lots received after a date."""
+        if as_of_date is not None:
+            _calendar_date(as_of_date, "inventory availability date")
         key = self._check_pool(item_id, location_id, unit)
-        amount = sum((lot.remaining_quantity.amount for lot in self._lots.get(key, [])), Decimal("0"))
+        amount = sum((
+            lot.remaining_quantity.amount for lot in self._lots.get(key, [])
+            if as_of_date is None or lot.received_date <= as_of_date
+        ), Decimal("0"))
         return Quantity(amount, unit)
 
     def preview_issue_cost(
