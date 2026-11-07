@@ -555,6 +555,15 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
         self._refresh()
         return super().verify(envelope, received_at)
 
+    def verify_historical(
+        self, envelope: SignedEventEnvelope | Mapping[str, Any],
+        verified_at: datetime | str | None = None,
+    ) -> FederationIdentity:
+        if not self.verify_audit():
+            raise ValueError("trust registry state/audit verification failed")
+        self._refresh()
+        return super().verify_historical(envelope, verified_at)
+
     def audit_events(self) -> tuple[dict[str, Any], ...]:
         with self._session() as db:
             rows = db.execute("SELECT * FROM trust_audit ORDER BY sequence").fetchall()
