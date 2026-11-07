@@ -62,3 +62,18 @@ Do not rank regimes from one seed or one shock regime. Compare paired difference
 - Every credit-constrained mode preserves consolidated cash conservation.
 - Service level remains within [0, 1].
 - Invalid seed sets, horizons and regimes are rejected.
+
+
+## 6. Multi-regime wrapper
+
+`compare_all_shock_regimes(seeds, days, base_config)` runs the paired comparison under all three exogenous regimes: `normal`, `volatile` and `severe`. Each seed is reused in all financing modes within its regime. Environment hashes are reported separately by regime; hashes are not expected to match across different regimes.
+
+```python
+from synergy_v66.financing_experiments import compare_all_shock_regimes
+
+report = compare_all_shock_regimes(seeds=range(100, 120), days=45)
+for regime, comparison in report["reports_by_regime"].items():
+    print(regime, comparison["summary"])
+```
+
+The wrapper is still a synthetic scenario analysis. It provides a more complete robustness comparison, not empirical causal identification.
