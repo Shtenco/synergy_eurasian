@@ -266,6 +266,8 @@ class CreditLedger:
             r: float(regional_pool_reserve_per_region) for r in REGIONS
         }
         self.regional_pool_reserve_by_region = dict(self.regional_pool_reserve_initial_by_region)
+        self.regional_pool_reserve_replenished_by_region = {r: 0.0 for r in REGIONS}
+        self.regional_reserve_replenished_by_cell = {cell.cell_id: 0.0 for cell in CELLS}
         self.regional_pool_guarantee_paid_by_region = {r: 0.0 for r in REGIONS}
         self.trade_bad_debt_by_cell = {c.cell_id: 0.0 for c in CELLS}
         self.external_supplier_bad_debt = 0.0
@@ -823,6 +825,152 @@ class CreditLedger:
         if batch_default_buyers:
             self._resolve_buyer_defaults_batch(batch_default_buyers, day)
 
+    def replenish_reserves(
+        self,
+        regional_contributions_by_cell: dict[str, float],
+        federation_contributions_by_cell: dict[str, float],
+        day: int,
+        replenishment_id: str,
+        recovery_period_id: str | None = None,
+        contribution_limit_by_cell: dict[str, float] | None = None,
+    ) -> dict[str, Any]:
+        """Atomically transfer member cash into regional and federation reserves."""
+        if not isinstance(day, int) or isinstance(day, bool) or day < self.current_day:
+            raise ValueError("replenishment day must be an integer not earlier than current_day")
+        if not isinstance(replenishment_id, str) or not replenishment_id.strip():
+            raise ValueError("replenishment_id must be a non-empty string")
+        if replenishment_id in self.federation_replenishment_ids:
+            raise ValueError("replenishment_id has already been processed")
+        if recovery_period_id is not None and (
+            not isinstance(recovery_period_id, str) or not recovery_period_id.strip()
+        ):
+            raise ValueError("recovery_period_id must be a non-empty string when supplied")
+
+        expected_ids = set(CELL_BY_ID)
+        if not isinstance(regional_contributions_by_cell, dict) or set(regional_contributions_by_cell) != expected_ids:
+            raise ValueError("regional contribution map must contain every known cell exactly once")
+        if not isinstance(federation_contributions_by_cell, dict) or set(federation_contributions_by_cell) != expected_ids:
+            raise ValueError("federation contribution map must contain every known cell exactly once")
+        if contribution_limit_by_cell is not None and (
+            not isinstance(contribution_limit_by_cell, dict) or set(contribution_limit_by_cell) != expected_ids
+        ):
+            raise ValueError("contribution limit map must contain every known cell exactly once")
+
+        regional: dict[str, float] = {}
+        federation: dict[str, float] = {}
+        limits: dict[str, float] = {}
+        for cell_id in expected_ids:
+            for source, target in (
+                (regional_contributions_by_cell, regional),
+                (federation_contributions_by_cell, federation),
+            ):
+                amount = source[cell_id]
+                if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(float(amount)) or amount < 0:
+                    raise ValueError("reserve contributions must be finite non-negative numbers")
+                target[cell_id] = float(amount)
+            if contribution_limit_by_cell is not None:
+                limit = contribution_limit_by_cell[cell_id]
+                if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not math.isfinite(float(limit)) or limit < 0:
+                    raise ValueError("contribution limits must be finite non-negative numbers")
+                limits[cell_id] = float(limit)
+
+        total = sum(regional.values()) + sum(federation.values())
+        if total <= EPS:
+            raise ValueError("replenishment must transfer a positive amount")
+        if day > self.current_day:
+            self.process_day(day)
+
+        prior_period_contributions = {cell_id: 0.0 for cell_id in expected_ids}
+        if recovery_period_id is not None:
+            for event in self.events:
+                if event.get("recovery_period_id") != recovery_period_id:
+                    continue
+                if event.get("type") in {
+                    "regional_reserve_replenishment_contribution",
+                    "federation_reserve_replenishment_contribution",
+                }:
+                    prior_period_contributions[event["cell_id"]] += float(event["amount"])
+
+        # Validate every participant and both reserve legs before mutating any balance.
+        for cell_id in expected_ids:
+            amount = regional[cell_id] + federation[cell_id]
+            if amount <= EPS:
+                continue
+            account = self.accounts[cell_id]
+            if account.defaulted:
+                raise ValueError(f"defaulted member {cell_id} cannot replenish reserves")
+            if account.cash - amount < self.minimum_post_contribution_cash - EPS:
+                raise ValueError(f"replenishment would breach the cash floor for {cell_id}")
+            if contribution_limit_by_cell is not None and amount > limits[cell_id] + EPS:
+                raise ValueError(f"replenishment exceeds planned contribution capacity for {cell_id}")
+            if recovery_period_id is not None and contribution_limit_by_cell is not None:
+                if prior_period_contributions[cell_id] + amount > limits[cell_id] + EPS:
+                    raise ValueError(f"replenishment exceeds cumulative period limit for {cell_id}")
+
+        regional_by_region = {region: 0.0 for region in REGIONS}
+        for cell_id in expected_ids:
+            region = CELL_BY_ID[cell_id].region
+            local_amount = regional[cell_id]
+            federal_amount = federation[cell_id]
+            combined = local_amount + federal_amount
+            if combined <= EPS:
+                continue
+            self.accounts[cell_id].cash -= combined
+            if local_amount > EPS:
+                regional_by_region[region] += local_amount
+                self.regional_reserve_replenished_by_cell[cell_id] += local_amount
+                self.events.append({
+                    "day": day, "type": "regional_reserve_replenishment_contribution",
+                    "replenishment_id": replenishment_id, "recovery_period_id": recovery_period_id,
+                    "cell_id": cell_id, "region": region, "amount": local_amount,
+                })
+            if federal_amount > EPS:
+                self.federation_reserve_replenished_by_cell[cell_id] += federal_amount
+                self.events.append({
+                    "day": day, "type": "federation_reserve_replenishment_contribution",
+                    "replenishment_id": replenishment_id, "recovery_period_id": recovery_period_id,
+                    "cell_id": cell_id, "amount": federal_amount,
+                })
+
+        for region, amount in regional_by_region.items():
+            self.regional_pool_reserve_by_region[region] += amount
+            self.regional_pool_reserve_replenished_by_region[region] += amount
+            if amount > EPS:
+                self.events.append({
+                    "day": day, "type": "regional_reserve_replenished",
+                    "replenishment_id": replenishment_id, "recovery_period_id": recovery_period_id,
+                    "region": region, "amount": amount,
+                    "reserve_balance_after": self.regional_pool_reserve_by_region[region],
+                })
+        federation_total = sum(federation.values())
+        self.federation_pool_reserve_balance += federation_total
+        self.federation_pool_reserve_replenished_total += federation_total
+        if federation_total > EPS:
+            self.events.append({
+                "day": day, "type": "federation_reserve_replenished",
+                "replenishment_id": replenishment_id, "recovery_period_id": recovery_period_id,
+                "amount": federation_total,
+                "reserve_balance_after": self.federation_pool_reserve_balance,
+            })
+        self.federation_replenishment_ids.add(replenishment_id)
+        self.events.append({
+            "day": day, "type": "multi_level_reserve_replenishment_completed",
+            "replenishment_id": replenishment_id, "recovery_period_id": recovery_period_id,
+            "regional_amount": sum(regional_by_region.values()),
+            "federation_amount": federation_total, "total_amount": total,
+        })
+        return {
+            "replenishment_id": replenishment_id,
+            "recovery_period_id": recovery_period_id,
+            "day": day,
+            "regional_amount_by_region": regional_by_region,
+            "federation_amount": federation_total,
+            "total_amount": total,
+            "regional_reserve_balance_by_region": dict(self.regional_pool_reserve_by_region),
+            "federation_reserve_balance": self.federation_pool_reserve_balance,
+            "cash_conservation_error": self.snapshot()["cash_conservation_error"],
+        }
+
     def replenish_federation_reserve(
         self,
         contributions_by_cell: dict[str, float],
@@ -948,6 +1096,12 @@ class CreditLedger:
             "federation_pool_guarantee_paid": self.federation_pool_guarantee_paid,
             "regional_pool_reserve_initial_by_region": dict(self.regional_pool_reserve_initial_by_region),
             "regional_pool_reserve_by_region": dict(self.regional_pool_reserve_by_region),
+            "regional_pool_reserve_replenished_by_region": dict(self.regional_pool_reserve_replenished_by_region),
+            "regional_reserve_replenished_by_cell": dict(self.regional_reserve_replenished_by_cell),
+            "regional_pool_reserve_funded_total_by_region": {
+                r: self.regional_pool_reserve_initial_by_region[r] + self.regional_pool_reserve_replenished_by_region[r]
+                for r in REGIONS
+            },
             "regional_pool_guarantee_paid_by_region": dict(self.regional_pool_guarantee_paid_by_region),
             "defaulted_cells": sorted(k for k, v in self.accounts.items() if v.defaulted),
             "production_rejection_count": sum(e["type"] == "production_rejected" for e in self.events),
