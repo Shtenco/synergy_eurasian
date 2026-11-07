@@ -699,7 +699,7 @@ class CreditLedger:
         bank_debt = {cell: account.bank_debt for cell, account in self.accounts.items()}
         expected_cash = self.opening_cash + self.bank_draws + self.customer_collections - self.external_supplier_payments - self.bank_repayments
         return {
-            "model_id": "SYNERGY_V6.6.4E_REGIONAL_LOSS_WATERFALL_LEDGER",
+            "model_id": "SYNERGY_V6.6.4H_FEDERATED_GUARANTEE_LEDGER",
             "current_day": self.current_day,
             "cell_count": len(self.accounts),
             "cash_by_cell": cash,
@@ -811,6 +811,11 @@ class CreditLedger:
             "internal_transfer_in": self.internal_transfer_in,
             "internal_transfer_out": self.internal_transfer_out,
             "internal_transfer_net": self.internal_transfer_in - self.internal_transfer_out,
-            "cash_conservation_error": sum(cash.values()) + sum(self.regional_pool_reserve_by_region.values()) - expected_cash,
+            "cash_conservation_error": (
+                sum(cash.values())
+                + sum(self.regional_pool_reserve_by_region.values())
+                + self.federation_pool_reserve_balance
+                - expected_cash
+            ),
             "events": list(self.events),
         }
