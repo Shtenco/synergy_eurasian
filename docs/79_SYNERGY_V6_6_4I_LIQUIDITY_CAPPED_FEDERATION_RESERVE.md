@@ -74,3 +74,16 @@ The ledger also checks the absolute floor after combining both contribution maps
 
 
 **Additional validation:** 158 pytest tests passed and the full EIIOM CI completed successfully on commit `b9d767165ea55e4fb77c37266d5ee3b3614361fd`. This run included the ledger-level absolute cash-floor guard, reserve sizing with the floor, the heterogeneous reserve-allocation comparison and the federation liquidity-cap smoke experiment. Maximum consolidated cash-conservation residuals in the reserve experiments remained at approximately 10⁻¹².
+
+
+## 6. Absolute post-contribution operating-cash floor
+
+The federation allocator accepts `minimum_post_contribution_cash` in addition to the combined percentage cap. For each member, available federal contribution headroom is:
+
+[
+F_i leq maxleft(0,min(alpha C_i, C_i-M)-R_iight)
+]
+
+where (C_i) is opening cash, (M) is the absolute minimum cash floor, (R_i) is the regional reserve contribution and (alpha) is the combined contribution fraction. If the requested federation reserve cannot be funded within these remaining caps, allocation fails.
+
+The same floor is passed into the credit ledger, which independently checks regional plus federal contributions before initializing member cash. The floor therefore cannot be bypassed by calling the ledger directly or by supplying a contribution map generated elsewhere. It remains a synthetic liquidity safeguard, not an empirically calibrated operating-cash requirement.
