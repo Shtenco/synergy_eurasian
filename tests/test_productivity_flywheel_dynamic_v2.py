@@ -118,3 +118,12 @@ def test_break_even_and_sector_reconciliation_reject_invalid_inputs():
     with pytest.raises(ValueError, match="at least -100%"):
         from synergy_productivity_flywheel_dynamic_v2 import sector_reconciliation
         sector_reconciliation(cfg, 0.02, -1.01)
+
+
+def test_dynamic_model_labels_non_ten_year_horizons_correctly():
+    cfg = load_config()
+    cfg["horizon_years"] = 5
+    result = simulate_case(cfg, 0.02, 0.02)
+    assert result["final_year"] == 5
+    assert result["final_year_residual_usd"] == result["annual"][-1]["residual_after_replacement_and_project_returns_usd"]
+    assert result["year_10_residual_usd"] is None
