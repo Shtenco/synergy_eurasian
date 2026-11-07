@@ -37,8 +37,8 @@
         "quantity": {"type": "number", "minimum": 0},
         "unit": {"type": "string"},
         "time_horizon": {"type": "string"},
-        "price": {"type": ["number", "null"]},
-        "currency": {"type": ["string", "null"]},
+        "price": {"type": ["number", "null"], "minimum": 0},
+        "currency": {"type": ["string", "null"], "pattern": "^[A-Z]{3}$"},
         "contracted_pct": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
         "external_market": {"type": "boolean", "default": false}
       }
@@ -46,5 +46,16 @@
     "status": {"enum": ["OBSERVED", "CONTRACTED", "INDICATIVE", "FORECAST", "SCENARIO"]},
     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
     "notes": {"type": "string"}
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"demand": {"properties": {"price": {"type": "number"}}, "required": ["price"]}},
+        "required": ["demand"]
+      },
+      "then": {
+        "properties": {"demand": {"required": ["currency"], "properties": {"currency": {"type": "string", "pattern": "^[A-Z]{3}$"}}}}
+      }
+    }
+  ]
 }
