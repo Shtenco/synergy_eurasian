@@ -424,3 +424,21 @@ def test_recovery_plan_rejects_changed_opening_cash_capacity_schedule():
     after = ledger.snapshot()
     assert after["cash_by_cell"] == before["cash_by_cell"]
     assert after["regional_pool_reserve_by_region"] == before["regional_pool_reserve_by_region"]
+
+
+def test_recovery_planner_requires_initialized_nonnegative_ledger_day():
+    ledger = CreditLedger(initial_cash_per_cell=100.0)
+    with pytest.raises(ValueError, match="initialized with process_day"):
+        plan_reserve_recovery(
+            ledger,
+            target_regional_by_region={"WEST": 5.0, "EAST": 5.0},
+            target_federation=0.0,
+        )
+    with pytest.raises(ValueError, match="non-negative integer"):
+        ledger.apply_exogenous_guarantee_claim(
+            claim_id="NEGATIVE-DAY",
+            region="WEST",
+            beneficiary_cell="WEST-MF1",
+            amount=1.0,
+            day=-1,
+        )
