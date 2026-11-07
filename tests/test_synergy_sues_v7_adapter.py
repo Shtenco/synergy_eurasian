@@ -202,8 +202,16 @@ def test_v7_realization_adapter_preserves_output_to_cash_lineage_without_gl_post
     by_type = {row.record_type: row for row in bridge.links}
     assert by_type["OUTPUT_OBSERVATION"].quantity == 100
     assert by_type["DELIVERY_ACCEPTANCE"].related_record_ids == ("out-1",)
+    assert by_type["DELIVERY_ACCEPTANCE"].entity_id == "co-1"
+    assert by_type["DELIVERY_ACCEPTANCE"].project_id == "factory-1"
+    assert by_type["DELIVERY_ACCEPTANCE"].benefit_stream_id == "stream-1"
+    assert by_type["DELIVERY_ACCEPTANCE"].period_id == "2026-11"
     assert by_type["INVOICE_DELIVERY_ALLOCATION"].project_id == "factory-1"
     assert by_type["COLLECTION_ATTRIBUTION"].effective_date == date(2026, 11, 6)
+    assert by_type["COLLECTION_ATTRIBUTION"].entity_id == "co-1"
+    assert by_type["COLLECTION_ATTRIBUTION"].project_id == "factory-1"
+    assert by_type["COLLECTION_ATTRIBUTION"].benefit_stream_id == "stream-1"
+    assert by_type["COLLECTION_ATTRIBUTION"].period_id == "2026-11"
     assert by_type["COLLECTION_ATTRIBUTION"].related_record_ids == ("settlement-1", "alloc-1")
     assert by_type["COLLECTION_ATTRIBUTION"].amount.amount == 400
     assert by_type["COST_OBSERVATION"].evidence_status.value == "VERIFIED"
@@ -269,3 +277,25 @@ def test_v7_bridge_json_schema_validates_event_link_and_bridge_contracts():
     }
     for sample in (source_event, link, bridge):
         validator.validate(sample)
+
+
+def test_realization_adapter_rejects_duplicate_source_ids_and_nonfinite_quantities():
+    with pytest.raises(ValueError, match="duplicate output_id"):
+        adapt_v7_realization_chain(
+            lambda *args: {}, [Output(), Output()], [], [], [Invoice()],
+            [], [], [], "2026-11-06",
+        )
+    with pytest.raises(ValueError, match="finite and positive"):
+        adapt_v7_realization_chain(
+            lambda *args: {}, [Output(observed_quantity=float("nan"))], [], [], [Invoice()],
+            [], [], [], "2026-11-06",
+        )
+
+
+def test_realization_adapter_rejects_allocation_to_unknown_invoice():
+    orphan = Allocation(invoice_document_id="missing-invoice")
+    with pytest.raises(ValueError, match="unknown invoice"):
+        adapt_v7_realization_chain(
+            lambda *args: {}, [Output()], [Delivery()], [orphan], [Invoice()],
+            [Settlement()], [Collection()], [Cost()], "2026-11-06",
+        )
