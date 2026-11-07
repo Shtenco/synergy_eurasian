@@ -129,3 +129,11 @@ def test_bank_credit_can_be_repaid_only_from_available_cash():
     assert snap["bank_debt_by_cell"]["WEST-MF1"] == pytest.approx(2.0)
     assert snap["cash_by_cell"]["WEST-MF1"] == pytest.approx(3.0)
     assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_invalid_credit_command_does_not_advance_ledger_day():
+    ledger = CreditLedger()
+    with pytest.raises(ValueError):
+        ledger.authorize_purchase("WEST-PR1", "WEST-AG1", float("nan"), 9, 8, "PO-BAD")
+    assert ledger.current_day == -1
+    assert ledger.events == []
