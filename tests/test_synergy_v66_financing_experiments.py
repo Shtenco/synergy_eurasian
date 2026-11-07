@@ -107,7 +107,9 @@ def test_reserve_contribution_scheme_comparison_uses_paired_paths_and_fixed_rese
     )
     assert report["model_id"] == "SYNERGY_V6.6.4D_RESERVE_CONTRIBUTION_FAIRNESS"
     schemes = report["reports_by_contribution_scheme"]
-    assert set(schemes) == {"equal_all_members", "production_capacity_weighted"}
+    assert set(schemes) == {
+        "equal_all_members", "production_capacity_weighted", "opening_cash_weighted"
+    }
     for scheme, payload in schemes.items():
         contributions = payload["contributions_by_cell"]
         for region in ("WEST", "EAST"):
@@ -305,3 +307,45 @@ def test_regional_reserve_size_sensitivity_supports_liquidity_caps_and_rejects_i
     assert report["sensitivity_reports"][0]["total_initial_reserve"] == pytest.approx(10.0)
     with pytest.raises(ValueError):
         compare_regional_reserve_size_sensitivities([1], [float("nan")])
+
+
+def test_opening_cash_weighted_reserve_contributions_scale_with_member_liquidity():
+    from synergy_v66.financing_experiments import build_regional_reserve_contributions
+    from synergy_v66.network_topology import CELLS
+
+    cash = {
+        cell.cell_id: (100.0 if cell.cell_id.endswith(("AG1", "AG2", "PR1", "PR2", "MF1", "MF2")) else 20.0)
+        for cell in CELLS
+    }
+    contributions = build_regional_reserve_contributions(
+        "opening_cash_weighted", 20.0, cash
+    )
+    for region in ("WEST", "EAST"):
+        members = [cell for cell in CELLS if cell.region == region]
+        assert sum(contributions[cell.cell_id] for cell in members) == pytest.approx(20.0)
+        ratios = [
+            contributions[cell.cell_id] / cash[cell.cell_id]
+            for cell in members
+        ]
+        assert max(ratios) == pytest.approx(min(ratios))
+    assert contributions["WEST-AG1"] > contributions["WEST-WH"]
+    assert contributions["WEST-AG1"] / cash["WEST-AG1"] == pytest.approx(
+        contributions["WEST-WH"] / cash["WEST-WH"]
+    )
+
+
+def test_opening_cash_weighted_reserve_rejects_zero_capacity_and_bad_member_cash():
+    from synergy_v66.financing_experiments import build_regional_reserve_contributions
+    from synergy_v66.network_topology import CELLS
+
+    zero_cash = {cell.cell_id: 0.0 for cell in CELLS}
+    with pytest.raises(ValueError):
+        build_regional_reserve_contributions("opening_cash_weighted", 1.0, zero_cash)
+    incomplete = {cell.cell_id: 10.0 for cell in CELLS}
+    incomplete.pop(CELLS[0].cell_id)
+    with pytest.raises(ValueError):
+        build_regional_reserve_contributions("opening_cash_weighted", 1.0, incomplete)
+    invalid = {cell.cell_id: 10.0 for cell in CELLS}
+    invalid[CELLS[0].cell_id] = float("nan")
+    with pytest.raises(ValueError):
+        build_regional_reserve_contributions("opening_cash_weighted", 1.0, invalid)
