@@ -55,4 +55,7 @@ All amounts and labels are synthetic. No real-world EAEU claim priority or guara
 
 The CI allocation report ran all four rules on the three-claim, 60-unit batch with 25 units of reserve. Each rule allocated exactly 25 units, left zero reserve and 35 units uncovered. The targeted unit test verifies the distinct invoice-level payouts shown above, including the effect of priority overriding due-date order.
 
-The full EIIOM CI run on code commit `76cb2c4095a10fd906857a14b18a578fdca467e2` passed **169 pytest tests** and wrote `outputs/synergy_v66_federation_reserve_allocation_rules.json`. This validates the synthetic implementation and its accounting arithmetic, not the legitimacy of any real-world claim class.
+The full EIIOM CI run on code commit `4a55946af813ec44b7090ba7d684f233148dfb73` passed **170 pytest tests** and wrote `outputs/synergy_v66_federation_reserve_allocation_rules.json`. This validates the synthetic implementation and its accounting arithmetic, not the legitimacy of any real-world claim class.
+
+
+The CI runner now writes the four-rule comparison using the explicit `essential` then `ordinary` priority order. The full test suite also includes repeated reserve replenishment stress checks; no claim-class rule has been enabled in the operational ledger.
