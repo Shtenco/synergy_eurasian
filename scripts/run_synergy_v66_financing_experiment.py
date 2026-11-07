@@ -10,7 +10,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from synergy_v66.financing_experiments import compare_all_shock_regimes
+from synergy_v66.financing_experiments import (
+    compare_all_shock_regimes,
+    compare_regional_pool_sensitivities,
+)
 
 
 def main() -> int:
@@ -19,6 +22,7 @@ def main() -> int:
     parser.add_argument("--seed-count", type=int, default=10)
     parser.add_argument("--days", type=int, default=45)
     parser.add_argument("--output", default="outputs/synergy_v66_financing_experiment.json")
+    parser.add_argument("--sensitivity", action="store_true")
     args = parser.parse_args()
     if args.seed_count < 1 or args.days < 1:
         parser.error("--seed-count and --days must be >= 1")
@@ -52,6 +56,27 @@ def main() -> int:
                 "cash_conservation_error_max": metrics["cash_conservation_error"]["max"],
             }, sort_keys=True))
     print(f"REPORT_WRITTEN: {output}")
+
+    if args.sensitivity:
+        sensitivity = compare_regional_pool_sensitivities(
+            seeds=range(args.seed_start, args.seed_start + args.seed_count),
+            days=args.days,
+            shock_regime="severe",
+            pool_limits=(5.0, 150.0),
+            member_limits=(2.0, 80.0),
+        )
+        sensitivity_path = output.with_name("synergy_v66_regional_pool_sensitivity.json")
+        sensitivity_path.write_text(json.dumps(sensitivity, indent=2, allow_nan=False), encoding="utf-8")
+        for case in sensitivity["sensitivity_reports"]:
+            print(json.dumps({
+                "pool_limit_per_region": case["pool_limit_per_region"],
+                "member_limit_per_cell": case["member_debit_and_credit_limit_per_cell"],
+                "mutual_credit_pool_rejections_mean": case["summary"]["mutual_credit"]["regional_pool_rejections"]["mean"],
+                "hybrid_pool_rejections_mean": case["summary"]["hybrid"]["regional_pool_rejections"]["mean"],
+                "mutual_credit_service_level_mean": case["summary"]["mutual_credit"]["service_level"]["mean"],
+                "hybrid_service_level_mean": case["summary"]["hybrid"]["service_level"]["mean"],
+            }, sort_keys=True))
+        print(f"SENSITIVITY_REPORT_WRITTEN: {sensitivity_path}")
     return 0
 
 
