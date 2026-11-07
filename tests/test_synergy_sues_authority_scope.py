@@ -158,14 +158,6 @@ def test_one_identity_cannot_fill_two_distinct_control_roles():
 def test_equal_specificity_matching_scopes_are_rejected_as_ambiguous():
     first = scope(scope_id="scope:a")
     second = scope(scope_id="scope:b")
-    result = AuthorityScopeEngine(
-        [first, second],
-        {
-            "user:treasurer": ("TREASURER",),
-            "user:finance": ("FINANCE_DIRECTOR",),
-            "user:risk": ("RISK_OFFICER",),
-        },
-    )
     result = evaluate_scope(AuthorityScopeEngine([first, second], {
         "user:treasurer": ("TREASURER",),
         "user:finance": ("FINANCE_DIRECTOR",),
