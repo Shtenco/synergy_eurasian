@@ -1,5 +1,6 @@
 from dataclasses import replace
 from decimal import Decimal
+import sqlite3
 import pytest
 
 from synergy_sues.authority_scope import (
@@ -7,6 +8,7 @@ from synergy_sues.authority_scope import (
 )
 from synergy_sues.federation_authorization import AuthorizationDecision
 from synergy_sues.federation_identity import SignedEventEnvelope
+from synergy_sues.federation_execution import AuthorizedActionExecutor
 
 
 def scope(**overrides):
@@ -207,3 +209,105 @@ def test_scope_requires_period_usage_for_exact_authoritative_key_and_currency():
 def test_scope_rejects_decision_reused_for_same_request_id_but_different_action():
     result = evaluate_scope(engine(), request(), decision(action="TOKEN_MINT"), "0")
     assert result.reason == "authorization decision is not bound to this signed event and exact action/resource"
+
+
+def test_sqlite_scope_reservations_prevent_two_requests_spending_same_headroom(tmp_path):
+    configured = scope(max_per_transaction="100", period_limit="100")
+    scoped_engine = AuthorityScopeEngine(
+        [configured],
+        {
+            "user:treasurer": ("TREASURER",),
+            "user:finance": ("FINANCE_DIRECTOR",),
+            "user:risk": ("RISK_OFFICER",),
+        },
+    )
+    path = str(tmp_path / "scope-reservations.db")
+    AuthorizedActionExecutor(path)
+
+    first_request = request(amount="15", request_id="req:reserve-1")
+    first_decision = decision(request_id="req:reserve-1")
+    first_evaluation = evaluate_scope(scoped_engine, first_request, first_decision, "80")
+    assert first_evaluation.allowed
+
+    with sqlite3.connect(path) as db:
+        db.row_factory = sqlite3.Row
+        db.execute("BEGIN IMMEDIATE")
+        assert scoped_engine.reserve_in_transaction(
+            db, first_evaluation, "80", "signed-event:reserve-1"
+        )
+        db.commit()
+
+    second_request = request(amount="15", request_id="req:reserve-2")
+    second_request = replace(
+        second_request,
+        event={**second_request.event, "event_id": "evt:reserve-2"},
+    )
+    second_decision = decision(
+        request_id="req:reserve-2", request_event_id="evt:reserve-2"
+    )
+    second_evaluation = evaluate_scope(scoped_engine, second_request, second_decision, "80")
+    assert second_evaluation.allowed  # Stateless check alone sees 80 + 15 <= 100.
+
+    with sqlite3.connect(path) as db:
+        db.row_factory = sqlite3.Row
+        db.execute("BEGIN IMMEDIATE")
+        with pytest.raises(ValueError, match="including_active_reservations"):
+            scoped_engine.reserve_in_transaction(
+                db, second_evaluation, "80", "signed-event:reserve-2"
+            )
+        db.rollback()
+
+    with sqlite3.connect(path) as db:
+        rows = db.execute(
+            "SELECT request_id,event_type,amount FROM authority_scope_reservation_events ORDER BY rowid"
+        ).fetchall()
+        assert rows == [("req:reserve-1", "RESERVED", "15")]
+
+
+def test_scope_reservation_release_is_append_only_and_reuses_only_settled_headroom(tmp_path):
+    configured = scope(max_per_transaction="100", period_limit="100")
+    scoped_engine = AuthorityScopeEngine(
+        [configured],
+        {
+            "user:treasurer": ("TREASURER",),
+            "user:finance": ("FINANCE_DIRECTOR",),
+            "user:risk": ("RISK_OFFICER",),
+        },
+    )
+    path = str(tmp_path / "scope-release.db")
+    AuthorizedActionExecutor(path)
+    first = evaluate_scope(
+        scoped_engine, request(amount="15", request_id="req:release-1"),
+        decision(request_id="req:release-1"), "80",
+    )
+    with sqlite3.connect(path) as db:
+        db.row_factory = sqlite3.Row
+        db.execute("BEGIN IMMEDIATE")
+        scoped_engine.reserve_in_transaction(db, first, "80", "signed-event:1")
+        db.execute("CREATE TABLE settlement_records (settlement_ref TEXT PRIMARY KEY)")
+        db.execute("INSERT INTO settlement_records VALUES('bank:settlement-1')")
+        scoped_engine.release_in_transaction(db, "req:release-1", "bank:settlement-1")
+        db.commit()
+
+    next_evaluation = evaluate_scope(
+        scoped_engine, request(amount="5", request_id="req:release-2"),
+        decision(request_id="req:release-2"), "95",
+    )
+    with sqlite3.connect(path) as db:
+        db.row_factory = sqlite3.Row
+        db.execute("BEGIN IMMEDIATE")
+        assert scoped_engine.reserve_in_transaction(
+            db, next_evaluation, "95", "signed-event:2"
+        )
+        db.commit()
+    with sqlite3.connect(path) as db:
+        events = db.execute(
+            "SELECT event_type FROM authority_scope_reservation_events "
+            "WHERE request_id='req:release-1' ORDER BY rowid"
+        ).fetchall()
+        assert events == [("RESERVED",), ("RELEASED",)]
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            db.execute(
+                "UPDATE authority_scope_reservation_events SET amount='0' "
+                "WHERE request_id='req:release-1'"
+            )
