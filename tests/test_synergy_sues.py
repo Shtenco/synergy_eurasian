@@ -715,3 +715,35 @@ def test_fifo_inventory_never_consumes_lots_received_after_issue_date():
         date(2026, 11, 6), "production:valid")
     assert issue.cost == Money("10", "USD")
     assert ledger.summary()["pools"][0]["quantity"] == "9"
+
+
+def test_money_and_quantity_reject_binary_floats():
+    with pytest.raises(ValueError, match="binary floats"):
+        Money(0.1, "USD")
+    with pytest.raises(ValueError, match="binary floats"):
+        Quantity(1.25, "kg")
+    with pytest.raises(ValueError, match="binary floats"):
+        Money("1", "USD").scale(0.1)
+
+
+def test_journal_rejects_duplicate_source_event_even_with_new_entry_and_idempotency_ids():
+    journal = new_journal()
+    first = entry("source-event-first", "source-event-key-first")
+    journal.post(first)
+    duplicate_source = JournalEntry(
+        "source-event-second", first.effective_date, first.recorded_at, first.functional_currency,
+        first.lines, first.source_event_id, "source-event-key-second", "Replay same source event",
+    )
+    with pytest.raises(ValueError, match="Duplicate source_event_id"):
+        journal.post(duplicate_source)
+    assert len(journal.entries) == 1
+
+
+def test_journal_line_freezes_mutable_evidence_id_input():
+    evidence = ["meter:reading-1"]
+    line = JournalLine(
+        "evidence-line", "cash", "DEBIT", Money("1", "USD"), Money("1", "USD"),
+        "co1", "bank:1", evidence_ids=evidence,
+    )
+    evidence.append("attacker:injected")
+    assert line.evidence_ids == ("meter:reading-1",)
