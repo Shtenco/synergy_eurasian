@@ -486,3 +486,52 @@ def test_external_supplier_default_is_not_paid_from_local_member_guarantee_reser
     assert snap["external_supplier_bad_debt"] == pytest.approx(12.0)
     assert snap["regional_pool_reserve_by_region"]["WEST"] == pytest.approx(20.0)
     assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_weighted_regional_reserve_contributions_are_fully_funded_and_auditable():
+    from synergy_v66.financing_experiments import build_regional_reserve_contributions
+
+    contributions = build_regional_reserve_contributions("production_capacity_weighted", 20.0)
+    ledger = CreditLedger(
+        initial_cash_per_cell=150.0,
+        trade_credit_limit_per_cell=50.0,
+        regional_pool_reserve_per_region=20.0,
+        regional_reserve_contributions_by_cell=contributions,
+    )
+    snap = ledger.snapshot()
+    for region in ("WEST", "EAST"):
+        assert sum(
+            contributions[cell_id]
+            for cell_id in contributions if cell_id.startswith(region + "-")
+        ) == pytest.approx(20.0)
+    assert snap["regional_reserve_contributions_by_cell"] == contributions
+    assert sum(snap["cash_by_cell"].values()) + sum(snap["regional_pool_reserve_by_region"].values()) == pytest.approx(ledger.opening_cash)
+    assert contributions["WEST-WH"] == pytest.approx(0.0)
+    assert contributions["WEST-AG1"] > contributions["WEST-AG2"]
+
+
+def test_reserve_contribution_map_rejects_missing_members_and_unfunded_total():
+    from synergy_v66.financing_experiments import build_regional_reserve_contributions
+
+    complete = build_regional_reserve_contributions("equal_all_members", 20.0)
+    incomplete = dict(complete)
+    incomplete.pop("WEST-SV")
+    with pytest.raises(ValueError):
+        CreditLedger(regional_pool_reserve_per_region=20.0, regional_reserve_contributions_by_cell=incomplete)
+    overfunded = dict(complete)
+    overfunded["WEST-AG1"] += 1.0
+    with pytest.raises(ValueError):
+        CreditLedger(regional_pool_reserve_per_region=20.0, regional_reserve_contributions_by_cell=overfunded)
+    excessive = dict(complete)
+    excessive["WEST-AG1"] = 201.0
+    with pytest.raises(ValueError):
+        CreditLedger(initial_cash_per_cell=200.0, regional_pool_reserve_per_region=20.0, regional_reserve_contributions_by_cell=excessive)
+
+
+def test_zero_contribution_is_supported_for_non_producing_support_cells():
+    from synergy_v66.financing_experiments import build_regional_reserve_contributions
+
+    contributions = build_regional_reserve_contributions("production_capacity_weighted", 20.0)
+    assert contributions["EAST-WH"] == pytest.approx(0.0)
+    assert contributions["EAST-LG"] == pytest.approx(0.0)
+    assert sum(v for k, v in contributions.items() if k.startswith("EAST-")) == pytest.approx(20.0)
