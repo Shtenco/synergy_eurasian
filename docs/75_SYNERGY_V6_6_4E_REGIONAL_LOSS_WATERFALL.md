@@ -54,3 +54,10 @@ No fairness or policy superiority claim follows from the existence of this mecha
 The audit trail records each assessment attempt, requested loss amount, eligible member assessment capacity and amount actually paid. A zero assessment payment can therefore be distinguished from a zero eligible capacity or from a case where no assessment was required.
 
 The credit snapshot identifies this implementation as `SYNERGY_V6.6.4E_REGIONAL_LOSS_WATERFALL_LEDGER`.
+
+
+## 6. CI smoke-sample observation
+
+The three-seed, 20-day severe-regime sample ran both loss-waterfall settings. In this particular sample, the model recorded **zero regional assessment attempts, zero requested assessment amount and zero eligible assessment capacity** in both mutual-credit and hybrid modes. Consequently, reserve-only and reserve-plus-assessment outputs were identical. This does not show that assessments are ineffective; it shows that this sample did not generate a local same-region residual claim eligible for the mechanism.
+
+The unit tests separately construct same-region defaults and verify that assessments are triggered, allocated pro rata, capped per member, and reconciled in the consolidated cash balance. Future policy experiments should include deliberately generated local supplier-default paths, not rely only on naturally occurring defaults in a small synthetic sample.
