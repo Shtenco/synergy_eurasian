@@ -164,6 +164,8 @@ def _run_one(
     written_off = sum(float(event["written_off"]) for event in default_events)
     claim_paid = local_paid + federation_paid + assessment_paid
     claim_reconciliation_error = abs(claim_requested - claim_paid - written_off)
+    seller_trade_bad_debt = sum(float(value) for value in post_default["trade_bad_debt_by_cell"].values())
+    seller_bad_debt_reconciliation_error = abs(seller_trade_bad_debt - written_off)
 
     defaulted_cells = set(post_default["defaulted_cells"])
     defaulted_buyers = len(defaulted_cells.intersection(buyers))
@@ -262,6 +264,9 @@ def _run_one(
         "total_claim_uncovered": written_off,
         "claim_coverage_ratio": coverage_ratio,
         "claim_reconciliation_error": claim_reconciliation_error,
+        "seller_trade_bad_debt_total": seller_trade_bad_debt,
+        "seller_bad_debt_reconciliation_error": seller_bad_debt_reconciliation_error,
+        "external_supplier_bad_debt": float(post_default["external_supplier_bad_debt"]),
         "seller_guarantee_payout_gini": _gini(list(seller_payouts.values())),
         "seller_guarantee_payout_by_cell": seller_payouts,
         "recovery_requested": recovery_requested,
@@ -353,6 +358,9 @@ def run_paired_production_default_batch_experiment(
         "total_claim_uncovered",
         "claim_coverage_ratio",
         "claim_reconciliation_error",
+        "seller_trade_bad_debt_total",
+        "seller_bad_debt_reconciliation_error",
+        "external_supplier_bad_debt",
         "seller_guarantee_payout_gini",
         "recovery_requested",
         "recovery_unfunded",
@@ -396,6 +404,7 @@ def run_paired_production_default_batch_experiment(
             row["total_claim_paid"] <= row["total_claim_requested"] + 1e-8 for row in all_rows
         ),
         "all_claims_reconciled": all(row["claim_reconciliation_error"] <= 1e-8 for row in all_rows),
+        "seller_bad_debt_reconciles_to_writeoffs": all(row["seller_bad_debt_reconciliation_error"] <= 1e-8 for row in all_rows),
         "cash_conserved": all(row["max_cash_conservation_error"] <= 1e-8 for row in all_rows),
         "zero_bank_draws": all(row["bank_draws"] <= EPS for row in all_rows),
         "zero_external_inflows": all(row["external_inflows"] <= EPS for row in all_rows),
