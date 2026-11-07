@@ -11,7 +11,7 @@ from hashlib import sha256
 import json
 from typing import Any, Callable, Iterable, Mapping
 
-from .v7_adapter import SUESSourceEvent, _canonical
+from .v7_adapter import SUESSourceEvent, _canonical, is_verified_source_event
 
 
 @dataclass(frozen=True)
@@ -100,8 +100,8 @@ class ProjectorRegistry:
     def project(
         self, event: SUESSourceEvent, schema_version: int = 1
     ) -> SUESProjection:
-        if not isinstance(event, SUESSourceEvent):
-            raise ValueError("Projectors accept only verified SUESSourceEvent records")
+        if not isinstance(event, SUESSourceEvent) or not is_verified_source_event(event):
+            raise ValueError("Projectors accept only exact SUESSourceEvent instances emitted by the verified adapter")
         spec = self._specs.get((event.event_type, schema_version))
         if spec is None:
             raise ValueError(
