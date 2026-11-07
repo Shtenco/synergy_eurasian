@@ -112,6 +112,7 @@ def simulate(policy: str, environment: list[dict[str, Any]], final_price: float 
         raise ValueError(f"policy must be one of {POLICIES}")
     cash = {node: INITIAL_CASH_PER_CELL for node in NODES}
     sales = external_costs = fixed_due = fixed_paid = 0.0
+    internal_transfer_in = internal_transfer_out = 0.0
     output = unmet = 0.0
 
     for day in environment:
@@ -184,6 +185,8 @@ def simulate(policy: str, environment: list[dict[str, Any]], final_price: float 
                 cash[raw_supplier] -= raw_external
                 cash["L"] += raw_freight + component_freight
                 cash["L"] -= fuel_external
+                internal_transfer_out += component_payment + raw_payment + raw_freight + component_freight
+                internal_transfer_in += component_payment + raw_payment + raw_freight + component_freight
                 cash[assembler] += q_final * final_price
 
                 sales += q_final * final_price
@@ -220,7 +223,8 @@ def simulate(policy: str, environment: list[dict[str, Any]], final_price: float 
         "closing_cash": closing_cash,
         "cash_by_cell": dict(cash),
         "conservation_error": conservation_error,
-        "internal_transfer_net_at_system_level": 0.0,
+        "internal_transfer_gross": internal_transfer_in,
+        "internal_transfer_net_at_system_level": internal_transfer_in - internal_transfer_out,
     }
 
 
