@@ -89,6 +89,7 @@ class CreditLedger:
         regional_member_credit_limit_per_cell: float | None = None,
         grace_days: int = 2,
         initial_cash_by_cell: dict[str, float] | None = None,
+        minimum_post_contribution_cash: float = 0.0,
     ) -> None:
         limits = (initial_cash_per_cell, bank_limit_per_cell, trade_credit_limit_per_cell)
         if any(not math.isfinite(float(x)) or float(x) < 0 for x in limits):
@@ -116,6 +117,12 @@ class CreditLedger:
             raise ValueError("regional_pool_reserve_per_region must be finite and >= 0")
         if isinstance(regional_assessment_rate, bool) or not math.isfinite(float(regional_assessment_rate)) or not 0.0 <= regional_assessment_rate <= 1.0:
             raise ValueError("regional_assessment_rate must be between 0 and 1")
+        if (
+            isinstance(minimum_post_contribution_cash, bool)
+            or not math.isfinite(float(minimum_post_contribution_cash))
+            or minimum_post_contribution_cash < 0
+        ):
+            raise ValueError("minimum_post_contribution_cash must be finite and >= 0")
         if isinstance(federation_pool_reserve_total, bool) or not math.isfinite(float(federation_pool_reserve_total)) or federation_pool_reserve_total < 0:
             raise ValueError("federation_pool_reserve_total must be finite and >= 0")
         if regional_assessment_limit_per_cell is not None and (
@@ -191,6 +198,14 @@ class CreditLedger:
             for cell_id in CELL_BY_ID
         ):
             raise ValueError("combined regional and federation reserve contributions exceed member opening cash")
+        if any(
+            member_opening_cash[cell_id]
+            - reserve_contributions[cell_id]
+            - federation_contributions[cell_id]
+            < float(minimum_post_contribution_cash) - EPS
+            for cell_id in CELL_BY_ID
+        ):
+            raise ValueError("combined reserve contributions breach minimum post-contribution cash")
         if grace_days < 0:
             raise ValueError("grace_days must be >= 0")
         self.accounts = {
@@ -227,6 +242,7 @@ class CreditLedger:
             float(regional_member_credit_limit_per_cell)
             if regional_member_credit_limit_per_cell is not None else None
         )
+        self.minimum_post_contribution_cash = float(minimum_post_contribution_cash)
         self.regional_reserve_contributions_by_cell = dict(reserve_contributions)
         self.federation_reserve_contributions_by_cell = dict(federation_contributions)
         self.federation_pool_reserve_initial = float(federation_pool_reserve_total)
@@ -737,6 +753,7 @@ class CreditLedger:
             },
             "external_supplier_bad_debt": self.external_supplier_bad_debt,
             "initial_cash_by_cell": dict(self.initial_cash_by_cell),
+            "minimum_post_contribution_cash": self.minimum_post_contribution_cash,
             "regional_reserve_contributions_by_cell": dict(self.regional_reserve_contributions_by_cell),
             "federation_reserve_contributions_by_cell": dict(self.federation_reserve_contributions_by_cell),
             "federation_pool_reserve_initial": self.federation_pool_reserve_initial,
