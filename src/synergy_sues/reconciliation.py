@@ -98,10 +98,32 @@ def reconcile_bank_account(
 
     journal_movements = {}
     late_recorded_journal_lines = []
+    late_recorded_opening_journal_lines = []
+    calculated_opening_ledger_balance = Decimal("0")
     for entry in journal.entries:
+        recorded_date_utc = entry.recorded_at.astimezone(timezone.utc).date()
+        if entry.effective_date < statement.period.start:
+            if recorded_date_utc >= statement.period.start:
+                for line in entry.lines:
+                    if line.account_id == statement.account_id:
+                        late_recorded_opening_journal_lines.append({
+                            "journal_line_ref": f"{entry.entry_id}:{line.line_id}",
+                            "effective_date": entry.effective_date.isoformat(),
+                            "recorded_at": entry.recorded_at.isoformat(),
+                            "opening_cutoff": statement.period.start.isoformat(),
+                        })
+                continue
+            for line in entry.lines:
+                if line.account_id != statement.account_id:
+                    continue
+                if line.amount.currency != statement.currency:
+                    raise ValueError(f"Cash journal line currency mismatch: {entry.entry_id}:{line.line_id}")
+                calculated_opening_ledger_balance += (
+                    line.amount.amount if line.side == PostingSide.DEBIT else -line.amount.amount
+                )
+            continue
         if not statement.period.contains(entry.effective_date):
             continue
-        recorded_date_utc = entry.recorded_at.astimezone(timezone.utc).date()
         if recorded_date_utc > statement.period.end:
             for line in entry.lines:
                 if line.account_id == statement.account_id:
@@ -122,6 +144,10 @@ def reconcile_bank_account(
             if ref in journal_movements:
                 raise ValueError(f"Duplicate journal cash line reference: {ref}")
             journal_movements[ref] = signed
+
+    opening_ledger_difference = (
+        statement.opening_ledger_balance.amount - calculated_opening_ledger_balance
+    )
 
     bank_lines = {line.line_id: line for line in statement.lines}
     allocation_rows = list(allocations)
@@ -182,7 +208,7 @@ def reconcile_bank_account(
     statement_net = sum((line.signed_amount.amount for line in statement.lines), Decimal("0"))
     ledger_net = sum(journal_movements.values(), Decimal("0"))
     bank_close = statement.opening_bank_balance.amount + statement_net
-    ledger_close = statement.opening_ledger_balance.amount + ledger_net
+    ledger_close = calculated_opening_ledger_balance + ledger_net
     closing_difference = bank_close - ledger_close
 
     return {
@@ -192,7 +218,9 @@ def reconcile_bank_account(
         "period_id": statement.period.period_id,
         "bank_opening_balance": str(statement.opening_bank_balance.amount),
         "bank_closing_balance": str(bank_close),
-        "ledger_opening_balance": str(statement.opening_ledger_balance.amount),
+        "ledger_opening_balance_reported": str(statement.opening_ledger_balance.amount),
+        "ledger_opening_balance_calculated": str(calculated_opening_ledger_balance),
+        "opening_ledger_balance_difference": str(opening_ledger_difference),
         "ledger_closing_balance": str(ledger_close),
         "bank_minus_ledger_closing_difference": str(closing_difference),
         "statement_line_count": len(statement.lines),
@@ -201,9 +229,11 @@ def reconcile_bank_account(
         "unmatched_statement_lines": bank_exceptions,
         "unmatched_journal_lines": journal_exceptions,
         "late_recorded_journal_lines": late_recorded_journal_lines,
+        "late_recorded_opening_journal_lines": late_recorded_opening_journal_lines,
         "fully_reconciled": (
-            closing_difference == 0 and not bank_exceptions and not journal_exceptions
-            and not late_recorded_journal_lines
+            closing_difference == 0 and opening_ledger_difference == 0
+            and not bank_exceptions and not journal_exceptions
+            and not late_recorded_journal_lines and not late_recorded_opening_journal_lines
         ),
         "automatic_matching_performed": False,
     }
