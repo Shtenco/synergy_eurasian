@@ -498,3 +498,131 @@ def compare_regional_loss_waterfalls(
             "money; the model does not establish legal authority or normative fairness."
         ),
     }
+
+
+def build_liquidity_capped_reserve_contributions(
+    scheme: str,
+    reserve_per_region: float,
+    initial_cash_by_cell: dict[str, float],
+    max_contribution_fraction: float = 0.10,
+) -> dict[str, float]:
+    """Allocate a regional reserve by weights without exceeding member liquidity caps."""
+    if scheme not in {"equal_all_members", "production_capacity_weighted"}:
+        raise ValueError("unsupported reserve contribution scheme")
+    if set(initial_cash_by_cell) != {cell.cell_id for cell in CELLS}:
+        raise ValueError("initial cash map must contain every known cell exactly once")
+    if (
+        isinstance(reserve_per_region, bool)
+        or not isinstance(reserve_per_region, (int, float))
+        or not math.isfinite(float(reserve_per_region))
+        or reserve_per_region < 0
+    ):
+        raise ValueError("reserve_per_region must be finite and non-negative")
+    if (
+        isinstance(max_contribution_fraction, bool)
+        or not isinstance(max_contribution_fraction, (int, float))
+        or not math.isfinite(float(max_contribution_fraction))
+        or not 0.0 <= max_contribution_fraction <= 1.0
+    ):
+        raise ValueError("max_contribution_fraction must be finite and in [0, 1]")
+    cash: dict[str, float] = {}
+    for cell_id, amount in initial_cash_by_cell.items():
+        if (
+            isinstance(amount, bool)
+            or not isinstance(amount, (int, float))
+            or not math.isfinite(float(amount))
+            or amount < 0
+        ):
+            raise ValueError("member opening cash must be finite and non-negative")
+        cash[cell_id] = float(amount)
+
+    result = {cell.cell_id: 0.0 for cell in CELLS}
+    for region in sorted({cell.region for cell in CELLS}):
+        members = [cell for cell in CELLS if cell.region == region]
+        if scheme == "equal_all_members":
+            weights = {cell.cell_id: 1.0 for cell in members}
+        else:
+            weights = {
+                cell.cell_id: cell.capacity
+                if cell.sector in {"primary", "processing", "manufacturing"} else 0.0
+                for cell in members
+            }
+        caps = {
+            cell.cell_id: cash[cell.cell_id] * float(max_contribution_fraction)
+            for cell in members
+        }
+        target = float(reserve_per_region)
+        if sum(caps.values()) + 1e-9 < target:
+            raise ValueError(f"member liquidity caps cannot fund the requested reserve in {region}")
+        active = {cell.cell_id for cell in members if weights[cell.cell_id] > 0 and caps[cell.cell_id] > 0}
+        remaining = target
+        while remaining > 1e-10:
+            total_weight = sum(weights[cell_id] for cell_id in active)
+            if total_weight <= 0:
+                raise ValueError(f"no eligible weighted contributors remain in {region}")
+            saturated = []
+            for cell_id in sorted(active):
+                proposed = remaining * weights[cell_id] / total_weight
+                room = caps[cell_id] - result[cell_id]
+                if proposed >= room - 1e-12:
+                    saturated.append(cell_id)
+            if not saturated:
+                for cell_id in active:
+                    result[cell_id] += remaining * weights[cell_id] / total_weight
+                remaining = 0.0
+            else:
+                for cell_id in saturated:
+                    room = max(0.0, caps[cell_id] - result[cell_id])
+                    result[cell_id] += room
+                    remaining -= room
+                    active.remove(cell_id)
+        # Correct floating-point drift on a member with remaining headroom.
+        residual = target - sum(result[cell.cell_id] for cell in members)
+        if abs(residual) > 1e-10:
+            candidates = [cell.cell_id for cell in members if caps[cell.cell_id] - result[cell.cell_id] >= residual - 1e-12]
+            if not candidates:
+                raise ArithmeticError(f"cannot reconcile reserve allocation for {region}")
+            result[sorted(candidates)[-1]] += residual
+    return result
+
+
+def compare_liquidity_capped_reserve_contributions(
+    seeds: Iterable[int],
+    initial_cash_by_cell: dict[str, float],
+    days: int = 45,
+    shock_regime: str = "severe",
+    reserve_per_region: float = 10.0,
+    max_contribution_fraction: float = 0.10,
+    scheme: str = "production_capacity_weighted",
+    base_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Paired experiment for a contribution rule bounded by each member's opening liquidity."""
+    seed_list = list(seeds)
+    if not seed_list:
+        raise ValueError("at least one seed is required")
+    contributions = build_liquidity_capped_reserve_contributions(
+        scheme, reserve_per_region, initial_cash_by_cell, max_contribution_fraction
+    )
+    config = dict(base_config or {})
+    config.update({
+        "initial_cash_by_cell": dict(initial_cash_by_cell),
+        "regional_pool_reserve_per_region": float(reserve_per_region),
+        "regional_reserve_contributions_by_cell": contributions,
+    })
+    report = compare_financing_modes(seed_list, days, shock_regime, config)
+    return {
+        "model_id": "SYNERGY_V6.6.4F_LIQUIDITY_CAPPED_RESERVE",
+        "days": days,
+        "shock_regime": shock_regime,
+        "seeds": seed_list,
+        "reserve_per_region": float(reserve_per_region),
+        "max_contribution_fraction": float(max_contribution_fraction),
+        "scheme": scheme,
+        "initial_cash_by_cell": dict(initial_cash_by_cell),
+        "contributions_by_cell": contributions,
+        "comparison": report,
+        "interpretation_guard": (
+            "Synthetic contribution-cap experiment. A cash-fraction cap limits initial burden, "
+            "but does not establish fairness, ability to pay, benefit received or legal enforceability."
+        ),
+    }
