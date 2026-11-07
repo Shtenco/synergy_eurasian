@@ -289,3 +289,82 @@ def test_recovery_plan_fingerprint_binds_ledger_policy_changes():
     ledger.reserve_recovery_contribution_fraction = 0.05
     with pytest.raises(ValueError, match="ledger state changed"):
         execute_reserve_recovery(ledger, plan, "POLICY-CHANGED", day=0)
+
+
+def test_exogenous_stress_claim_uses_local_then_federation_and_conserves_cash():
+    ledger = CreditLedger(
+        initial_cash_per_cell=100.0,
+        regional_pool_reserve_per_region=5.0,
+        federation_pool_reserve_total=5.0,
+    )
+    ledger.process_day(0)
+    before = ledger.snapshot()
+    result = ledger.apply_exogenous_guarantee_claim(
+        claim_id="STRESS-WEST-001",
+        region="WEST",
+        beneficiary_cell="WEST-MF1",
+        amount=8.0,
+        day=0,
+    )
+    after = ledger.snapshot()
+    assert result["regional_paid"] == pytest.approx(5.0)
+    assert result["federation_paid"] == pytest.approx(3.0)
+    assert result["uncovered"] == pytest.approx(0.0)
+    assert after["regional_pool_reserve_by_region"]["WEST"] == pytest.approx(0.0)
+    assert after["federation_pool_reserve_balance"] == pytest.approx(2.0)
+    assert after["cash_by_cell"]["WEST-MF1"] - before["cash_by_cell"]["WEST-MF1"] == pytest.approx(8.0)
+    assert after["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_exogenous_stress_claim_rejects_duplicate_ids_and_wrong_region_beneficiary():
+    ledger = CreditLedger(
+        initial_cash_per_cell=100.0,
+        regional_pool_reserve_per_region=5.0,
+        federation_pool_reserve_total=5.0,
+    )
+    ledger.process_day(0)
+    ledger.apply_exogenous_guarantee_claim("CLAIM-UNIQUE", "WEST", "WEST-MF1", 1.0, 0)
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match="already been processed"):
+        ledger.apply_exogenous_guarantee_claim("CLAIM-UNIQUE", "WEST", "WEST-MF1", 1.0, 0)
+    with pytest.raises(ValueError, match="belong to the claim region"):
+        ledger.apply_exogenous_guarantee_claim("CLAIM-WRONG-REGION", "WEST", "EAST-MF1", 1.0, 0)
+    after = ledger.snapshot()
+    assert after["cash_by_cell"] == before["cash_by_cell"]
+    assert after["regional_pool_reserve_by_region"] == before["regional_pool_reserve_by_region"]
+    assert after["federation_pool_reserve_balance"] == before["federation_pool_reserve_balance"]
+
+
+def test_paired_100_cycle_experiment_preserves_cash_and_enforces_member_caps():
+    from synergy_v66.reserve_cycle_experiments import run_paired_reserve_recovery_experiment
+
+    result = run_paired_reserve_recovery_experiment(
+        seeds=[11, 23],
+        cycles=100,
+        shock_regime="severe",
+    )
+    assert result["cycles"] == 100
+    assert set(result["allocation_rules"]) == {
+        "no_replenishment", "equal", "production_capacity",
+        "opening_cash", "adaptive_liquidity",
+    }
+    for seed_index in range(2):
+        fingerprints = {
+            result["observations"][rule][seed_index]["paired_path_fingerprint"]
+            for rule in result["allocation_rules"]
+        }
+        assert len(fingerprints) == 1
+    for rule in result["allocation_rules"]:
+        for row in result["observations"][rule]:
+            assert row["max_cash_conservation_error"] <= 1e-8
+            assert abs(row["system_cash_change"]) <= 1e-8
+            assert row["cash_floor_breach_count"] == 0
+            assert row["max_period_cap_excess"] <= 1e-8
+            assert row["bank_draws"] == pytest.approx(0.0)
+            assert row["external_inflows"] == pytest.approx(0.0)
+    for seed_index in range(2):
+        baseline_paid = result["observations"]["no_replenishment"][seed_index]["total_claim_paid"]
+        assert any(
+            result["observations"][rule][seed_index]["total_claim_paid"] > baseline_paid + 1e-8
+            for rule in ("equal", "production_capacity", "opening_cash", "adaptive_liquidity")
+        )
