@@ -54,7 +54,11 @@ Use paired seeds, multiple horizons and all three shock regimes. Do not select c
 The repository CI runs a compact severe-regime sample with three seeds, two regional pool ceilings (5 and 150) and two member caps (2 and 80). It writes a machine-readable report under `outputs/synergy_v66_regional_pool_sensitivity.json`. This is a smoke/sensitivity check, not a statistically powered policy evaluation.
 
 
-## 6. CI smoke-sample observation
+## 6. Earlier CI smoke-sample observation
+
+The table below was generated before the member-funded guarantee reserve was added to mutual-credit and hybrid modes. It demonstrates pool/member cap interaction, but is not directly comparable to subsequent runs with the reserve enabled. The current CI run regenerates the sensitivity output with the reserve included.
+
+## 7. Earlier cap interaction results
 
 A three-seed, 20-day severe-regime CI sample produced the following mean outcomes. These are synthetic smoke-test values, not calibrated forecasts.
 
