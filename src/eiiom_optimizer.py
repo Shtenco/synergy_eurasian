@@ -266,6 +266,7 @@ def validate_invariants(config: dict, solution: dict, tol: float = 1e-5) -> None
     if any(not np.isfinite(v) or v <= 0 for v in expected_by_stage.values()):
         raise ValueError("Every stage budget must be finite and positive")
     expected_total = sum(expected_by_stage.values())
+    yields = config["annual_gva_equivalent_yield"]
 
     capex_by_stage = defaultdict(float)
     capex_by_country = defaultdict(float)
