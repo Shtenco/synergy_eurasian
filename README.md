@@ -399,3 +399,5 @@ Cash-first procurement funding is supported: own cash is used first, then unused
 
 
 The integrated credit ledger now also supports partial invoice settlement during grace periods, supplier-side receivable exposure caps, customer receivable limits, deterministic customer recovery/default write-offs, and credit rejection diagnostics. Customer credit limits can block final sales without consuming finished-goods inventory.
+
+- [V6.6.3-C bilateral exposure and customer credit risk specification](docs/70_SYNERGY_V6_6_3C_BILATERAL_EXPOSURE_AND_CUSTOMER_RISK.md)
