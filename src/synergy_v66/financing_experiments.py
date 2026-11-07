@@ -398,6 +398,9 @@ def compare_reserve_contribution_schemes(
         config = dict(base_config or {})
         config["regional_pool_reserve_per_region"] = float(reserve_per_region)
         opening_cash = config.get("initial_cash_by_cell")
+        if opening_cash is None:
+            uniform_cash = float(config.get("initial_cash_per_cell", 200.0))
+            opening_cash = {cell.cell_id: uniform_cash for cell in CELLS}
         config["regional_reserve_contributions_by_cell"] = build_regional_reserve_contributions(
             scheme, reserve_per_region, opening_cash
         )
