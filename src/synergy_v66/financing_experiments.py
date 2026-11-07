@@ -129,6 +129,30 @@ def compare_financing_modes(
             for metric in METRICS
         }
 
+    reference_by_seed = {row["seed"]: row for row in observations["unconstrained_reference"]}
+    paired_deltas = {}
+    delta_summary = {}
+    for mode, rows in observations.items():
+        if mode == "unconstrained_reference":
+            continue
+        deltas = []
+        for row in rows:
+            reference = reference_by_seed[row["seed"]]
+            deltas.append({
+                "seed": row["seed"],
+                **{metric: row[metric] - reference[metric] for metric in METRICS},
+            })
+        paired_deltas[mode] = deltas
+        delta_summary[mode] = {
+            metric: {
+                "mean": mean(row[metric] for row in deltas),
+                "median": median(row[metric] for row in deltas),
+                "min": min(row[metric] for row in deltas),
+                "max": max(row[metric] for row in deltas),
+            }
+            for metric in METRICS
+        }
+
     return {
         "model_id": "SYNERGY_V6.6.3D_PAIRED_FINANCING_EXPERIMENT",
         "days": days,
@@ -139,6 +163,8 @@ def compare_financing_modes(
         "paired_environment_hashes": paired,
         "observations": observations,
         "summary": summary,
+        "paired_deltas_vs_unconstrained_reference": paired_deltas,
+        "paired_delta_summary_vs_unconstrained_reference": delta_summary,
         "interpretation_guard": (
             "Synthetic paired experiment only. Do not infer causal superiority from a single seed. "
             "Compare distributions across seeds and regimes; validate parameters against observed data."
