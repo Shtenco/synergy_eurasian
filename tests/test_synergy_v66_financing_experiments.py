@@ -594,7 +594,7 @@ def test_reserve_sizing_can_apply_absolute_cash_floor_without_fractional_cap():
 
     cash = {cell.cell_id: 80.0 for cell in CELLS}
     report = compare_regional_reserve_size_sensitivities(
-        seeds=[102], reserve_levels_per_region=[20.0], days=3,
+        seeds=[102], reserve_levels_per_region=[10.0], days=3,
         base_config={"initial_cash_by_cell": cash},
         minimum_post_contribution_cash=79.0,
     )
