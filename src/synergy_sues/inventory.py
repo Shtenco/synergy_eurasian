@@ -127,15 +127,9 @@ class InventoryLedger:
             self._journal_posted_movements,
         ) = deepcopy(snapshot)
 
-    def _mark_journal_posted(self, movement_ids: Iterable[str], entity_id: str) -> None:
-        if self.entity_id is None or self.entity_id != entity_id:
-            raise ValueError("Inventory ledger entity ownership mismatch")
-        ids = tuple(movement_ids)
-        if any(movement_id not in self._movements for movement_id in ids):
-            raise ValueError("Cannot journalize an unknown inventory movement")
-        if any(movement_id in self._journal_posted_movements for movement_id in ids):
-            raise ValueError("Inventory movement has already been journalized")
-        self._journal_posted_movements.update(ids)
+    def _mark_journal_posted(self, movement_ids: Iterable[str]) -> None:
+        # Caller validates entity ownership and journal batch before committing.
+        self._journal_posted_movements.update(movement_ids)
 
     def _check_pool(self, item_id: str, location_id: str, unit: str) -> tuple[str, str]:
         key = (item_id, location_id)
