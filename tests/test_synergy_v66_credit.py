@@ -250,3 +250,49 @@ def test_partial_payment_default_only_applies_to_unpaid_residual_after_grace():
     ledger.process_day(3)
     assert ledger.accounts["WEST-PR1"].defaulted is True
     assert ledger.payables["GRACE-PO"].status == "defaulted"
+
+
+def test_customer_partial_recovery_then_bad_debt_writeoff():
+    ledger = CreditLedger(
+        initial_cash_per_cell=0.0,
+        customer_recovery_rate=0.75,
+        customer_grace_days=2,
+    )
+    issued = ledger.issue_customer_invoice("WEST-MF1", 100.0, 1, 0, "RISK-CUSTOMER")
+    assert issued["authorized"] is True
+    ledger.process_day(1)
+    invoice = ledger.customer_invoices["RISK-CUSTOMER"]
+    assert invoice.status == "partial"
+    assert invoice.remaining == pytest.approx(25.0)
+    assert ledger.accounts["WEST-MF1"].customer_receivable == pytest.approx(25.0)
+    ledger.process_day(2)
+    assert invoice.status == "overdue"
+    ledger.process_day(3)
+    snap = ledger.snapshot()
+    assert invoice.status == "defaulted"
+    assert invoice.remaining == pytest.approx(0.0)
+    assert snap["customer_bad_debt"] == pytest.approx(25.0)
+    assert snap["customer_collections"] == pytest.approx(75.0)
+    assert snap["customer_receivable_by_cell"]["WEST-MF1"] == pytest.approx(0.0)
+    assert snap["customer_default_count"] == 1
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_customer_receivable_exposure_limit_blocks_new_sales_invoices():
+    ledger = CreditLedger(initial_cash_per_cell=0.0, customer_receivable_limit_per_cell=5.0)
+    first = ledger.issue_customer_invoice("WEST-MF1", 5.0, 3, 0, "CUSTOMER-LIMIT-1")
+    second = ledger.issue_customer_invoice("WEST-MF1", 1.0, 3, 0, "CUSTOMER-LIMIT-2")
+    assert first["authorized"] is True
+    assert second == {"authorized": False, "reason": "customer_exposure_limit"}
+    snap = ledger.snapshot()
+    assert snap["customer_receivable_by_cell"]["WEST-MF1"] == pytest.approx(5.0)
+    assert snap["customer_invoice_rejection_count"] == 1
+
+
+def test_invalid_customer_recovery_policy_is_rejected():
+    with pytest.raises(ValueError):
+        CreditLedger(customer_recovery_rate=1.1)
+    with pytest.raises(ValueError):
+        CreditLedger(customer_recovery_rate=float("nan"))
+    with pytest.raises(ValueError):
+        CreditLedger(customer_grace_days=-1)
