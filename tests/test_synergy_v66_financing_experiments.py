@@ -193,6 +193,14 @@ def test_targeted_default_stress_exercises_local_reserve_assessment_and_cross_re
     assert cross["trade_bad_debt_by_cell"]["EAST-AG1"] == pytest.approx(10.5)
     assert cross["cash_conservation_error"] == pytest.approx(0.0)
 
+    federated = cases["cross_region_federation_pool"]
+    assert federated["guarantee_paid"] == pytest.approx(0.0)
+    assert federated["federation_guarantee_paid"] == pytest.approx(5.0)
+    assert federated["member_assessment_paid"] == pytest.approx(0.0)
+    assert federated["written_off"] == pytest.approx(5.5)
+    assert federated["federation_pool_reserve_balance"] == pytest.approx(0.0)
+    assert federated["cash_conservation_error"] == pytest.approx(0.0)
+
 
 def test_liquidity_capped_reserve_allocation_respects_each_member_cap_and_region_total():
     from synergy_v66.financing_experiments import build_liquidity_capped_reserve_contributions
