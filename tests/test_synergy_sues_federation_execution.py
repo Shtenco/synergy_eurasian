@@ -359,6 +359,9 @@ def test_handler_cannot_issue_sql_transaction_control_or_drop_receipt_triggers(t
         executor.execute(request, [approval], policy, registry, committing_handler, now())
     assert executor.receipts() == ()
     with sqlite3.connect(path) as db:
-        assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 0
+        # The entire handler DDL is rolled back, so the table must not exist.
+        assert db.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='protected_effects'"
+        ).fetchone()[0] == 0
         with pytest.raises(sqlite3.DatabaseError):
             db.execute("DROP TRIGGER execution_receipts_no_update")
