@@ -530,6 +530,8 @@ def test_trade_subledger_foreign_currency_posting_uses_dated_fx_for_each_event()
     journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
     journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
     journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_account(account("fx-gain", "7100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("fx-loss", "8100", AccountType.EXPENSE, NormalBalance.DEBIT))
     journal.add_fx_rate(FXRate("eurusd-invoice", "EUR", "USD", "1.1",
         datetime(2026, 11, 1, 12, tzinfo=timezone.utc), "fx:invoice"))
     journal.add_fx_rate(FXRate("eurusd-settlement", "EUR", "USD", "1.2",
@@ -541,12 +543,13 @@ def test_trade_subledger_foreign_currency_posting_uses_dated_fx_for_each_event()
             Money("20", "EUR"), "cash", "bank:eur")],
     )
     result = subledger.post_to_journal(
-        journal, TradeAccountMap("ar", "revenue", "ap", "purchases"),
+        journal, TradeAccountMap("ar", "revenue", "ap", "purchases", "fx-gain", "fx-loss"),
         datetime(2026, 11, 6, 13, tzinfo=timezone.utc),
         {"invoice:eur": "eurusd-invoice", "bank:eur": "eurusd-settlement"},
     )
-    assert result["expected_ar_control_delta"] == "86.0"
-    assert result["actual_ar_control_delta"] == "86.0"
+    assert result["expected_ar_control_delta"] == "88.0"
+    assert result["actual_ar_control_delta"] == "88.0"
+    assert journal.trial_balance()["accounts"]["fx-gain"]["credit"] == "2.0"
     assert journal.trial_balance()["balanced"]
 
 
@@ -747,3 +750,35 @@ def test_journal_line_freezes_mutable_evidence_id_input():
     )
     evidence.append("attacker:injected")
     assert line.evidence_ids == ("meter:reading-1",)
+
+
+def test_trade_subledger_requires_realized_fx_account_for_currency_difference():
+    journal = Journal("USD")
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
+    journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_fx_rate(FXRate("invoice-rate", "EUR", "USD", "1.1",
+        datetime(2026, 11, 1, tzinfo=timezone.utc), "fx:invoice"))
+    journal.add_fx_rate(FXRate("settlement-rate", "EUR", "USD", "1.2",
+        datetime(2026, 11, 6, tzinfo=timezone.utc), "fx:settlement"))
+    subledger = TradeSubledger(
+        [TradeDocument("fx-invoice", TradeSide.RECEIVABLE, "co1", "customer",
+            date(2026, 11, 1), date(2026, 11, 30), Money("100", "EUR"), "invoice:fx")],
+        [TradeSettlement("fx-settlement", "fx-invoice", date(2026, 11, 6),
+            Money("20", "EUR"), "cash", "bank:fx")],
+    )
+    with pytest.raises(ValueError, match="Realized FX gain account is required"):
+        subledger.post_to_journal(
+            journal, TradeAccountMap("ar", "revenue", "ap", "purchases"),
+            datetime(2026, 11, 6, 13, tzinfo=timezone.utc),
+            {"invoice:fx": "invoice-rate", "bank:fx": "settlement-rate"},
+        )
+
+
+def test_trade_documents_reject_datetime_in_calendar_date_fields():
+    with pytest.raises(ValueError, match="calendar date"):
+        TradeDocument("bad-date", TradeSide.RECEIVABLE, "co1", "customer",
+            datetime(2026, 11, 1, tzinfo=timezone.utc), date(2026, 11, 30),
+            Money("10", "USD"), "invoice:bad-date")
