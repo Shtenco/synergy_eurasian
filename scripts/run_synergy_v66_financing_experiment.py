@@ -160,11 +160,12 @@ def main() -> int:
         print(f"LOSS_WATERFALL_REPORT_WRITTEN: {waterfall_path}")
         reserve_allocation = compare_federation_reserve_allocation_rules(
             claims=[
-                {"invoice_id": "CLAIM-003", "due_day": 2, "eligible_amount": 30.0},
-                {"invoice_id": "CLAIM-001", "due_day": 1, "eligible_amount": 10.0},
-                {"invoice_id": "CLAIM-002", "due_day": 1, "eligible_amount": 20.0},
+                {"invoice_id": "CLAIM-003", "due_day": 0, "eligible_amount": 30.0, "claim_class": "ordinary"},
+                {"invoice_id": "CLAIM-001", "due_day": 2, "eligible_amount": 10.0, "claim_class": "essential"},
+                {"invoice_id": "CLAIM-002", "due_day": 1, "eligible_amount": 20.0, "claim_class": "essential"},
             ],
             reserve_available=25.0,
+            priority_order=["essential", "ordinary"],
         )
         allocation_path = output.with_name("synergy_v66_federation_reserve_allocation_rules.json")
         allocation_path.write_text(json.dumps(reserve_allocation, indent=2, allow_nan=False), encoding="utf-8")
