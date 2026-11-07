@@ -15,9 +15,9 @@
       "type": "object",
       "required": ["available", "unit"],
       "properties": {
-        "installed": {"type": ["number", "null"]},
-        "available": {"type": "number"},
-        "committed": {"type": ["number", "null"]},
+        "installed": {"type": ["number", "null"], "minimum": 0},
+        "available": {"type": "number", "minimum": 0},
+        "committed": {"type": ["number", "null"], "minimum": 0},
         "unit": {"type": "string"},
         "availability_factor": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
       }
@@ -25,10 +25,11 @@
     "cost": {
       "type": ["object", "null"],
       "properties": {
-        "value": {"type": "number"},
-        "currency": {"type": "string"},
+        "value": {"type": "number", "minimum": 0},
+        "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
         "per_unit": {"type": "string"}
-      }
+      },
+      "required": ["value", "currency", "per_unit"]
     },
     "source": {
       "type": "object",
