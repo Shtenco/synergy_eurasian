@@ -681,24 +681,31 @@ def allocate_federation_reserve_claims(
     claims: Iterable[dict[str, Any]],
     reserve_available: float,
     rule: str = "first_come_first_served",
+    priority_order: Iterable[str] | None = None,
 ) -> dict[str, Any]:
-    """Compare deterministic FCFS and simultaneous pro-rata allocation of finite reserve cash."""
-    claim_list = list(claims)
-    if rule not in {"first_come_first_served", "batch_pro_rata"}:
+    """Allocate finite reserve cash under FCFS, batch pro-rata or explicit class priorities."""
+    supported = {
+        "first_come_first_served",
+        "batch_pro_rata",
+        "priority_class_then_first_come_first_served",
+        "priority_class_then_batch_pro_rata",
+    }
+    if rule not in supported:
         raise ValueError("unsupported federation reserve allocation rule")
     if (
         isinstance(reserve_available, bool) or not isinstance(reserve_available, (int, float))
         or not math.isfinite(float(reserve_available)) or reserve_available < 0
     ):
         raise ValueError("reserve_available must be finite and non-negative")
-    seen: set[str] = set()
     normalized = []
-    for claim in claim_list:
+    seen: set[str] = set()
+    for claim in list(claims):
         if not isinstance(claim, dict):
             raise ValueError("each claim must be a mapping")
         invoice_id = claim.get("invoice_id")
         amount = claim.get("eligible_amount")
         due_day = claim.get("due_day", 0)
+        claim_class = claim.get("claim_class", "standard")
         if not isinstance(invoice_id, str) or not invoice_id.strip() or invoice_id in seen:
             raise ValueError("claim invoice IDs must be non-empty and unique")
         if not isinstance(due_day, int) or isinstance(due_day, bool) or due_day < 0:
@@ -708,45 +715,84 @@ def allocate_federation_reserve_claims(
             or not math.isfinite(float(amount)) or amount < 0
         ):
             raise ValueError("claim eligible_amount must be finite and non-negative")
+        if not isinstance(claim_class, str) or not claim_class.strip():
+            raise ValueError("claim_class must be a non-empty string")
         seen.add(invoice_id)
         normalized.append({
             "invoice_id": invoice_id,
             "due_day": due_day,
             "eligible_amount": float(amount),
+            "claim_class": claim_class,
         })
 
     normalized.sort(key=lambda x: (x["due_day"], x["invoice_id"]))
-    total_claims = sum(item["eligible_amount"] for item in normalized)
+    classes = {item["claim_class"] for item in normalized}
+    if priority_order is None:
+        ordered_classes = sorted(classes)
+    else:
+        ordered_classes = list(priority_order)
+        if (
+            any(not isinstance(name, str) or not name.strip() for name in ordered_classes)
+            or len(set(ordered_classes)) != len(ordered_classes)
+            or set(ordered_classes) != classes
+        ):
+            raise ValueError("priority_order must list every claim class exactly once")
     reserve = float(reserve_available)
     allocations = {item["invoice_id"]: 0.0 for item in normalized}
+
     if rule == "first_come_first_served":
         remaining = reserve
         for item in normalized:
             paid = min(item["eligible_amount"], remaining)
             allocations[item["invoice_id"]] = paid
             remaining -= paid
-    elif total_claims > EPS:
-        coverage = min(1.0, reserve / total_claims)
-        for item in normalized:
-            allocations[item["invoice_id"]] = item["eligible_amount"] * coverage
+    elif rule == "batch_pro_rata":
+        total = sum(item["eligible_amount"] for item in normalized)
+        if total > EPS:
+            coverage = min(1.0, reserve / total)
+            for item in normalized:
+                allocations[item["invoice_id"]] = item["eligible_amount"] * coverage
+    else:
+        remaining = reserve
+        for claim_class in ordered_classes:
+            group = [item for item in normalized if item["claim_class"] == claim_class]
+            group_total = sum(item["eligible_amount"] for item in group)
+            if group_total <= EPS or remaining <= EPS:
+                continue
+            group_paid = min(group_total, remaining)
+            if rule == "priority_class_then_first_come_first_served":
+                for item in group:
+                    paid = min(item["eligible_amount"], remaining)
+                    allocations[item["invoice_id"]] = paid
+                    remaining -= paid
+                    if remaining <= EPS:
+                        break
+            else:
+                coverage = group_paid / group_total
+                for item in group:
+                    allocations[item["invoice_id"]] = item["eligible_amount"] * coverage
+                remaining -= group_paid
 
     paid_total = sum(allocations.values())
+    reserve_remaining = max(0.0, reserve - paid_total)
     return {
         "rule": rule,
+        "priority_order": ordered_classes,
         "reserve_opening": reserve,
-        "eligible_claim_total": total_claims,
+        "eligible_claim_total": sum(item["eligible_amount"] for item in normalized),
         "allocated_total": paid_total,
-        "reserve_remaining": max(0.0, reserve - paid_total),
+        "reserve_remaining": reserve_remaining,
         "allocations_by_invoice": allocations,
         "uncovered_by_invoice": {
             item["invoice_id"]: item["eligible_amount"] - allocations[item["invoice_id"]]
             for item in normalized
         },
         "allocation_order": [item["invoice_id"] for item in normalized],
-        "allocation_conservation_error": reserve - paid_total - max(0.0, reserve - paid_total),
+        "allocation_conservation_error": reserve - paid_total - reserve_remaining,
         "interpretation_guard": (
-            "Batch pro-rata assumes claims are presented simultaneously in one clearing batch; "
-            "FCFS uses due-day/invoice-ID order. Neither rule is a legal creditor-priority rule."
+            "Batch pro-rata treats claims within a clearing batch as simultaneous. Priority rules "
+            "apply explicit claim classes before due-day/invoice-ID ordering or within-class pro-rata. "
+            "None of these rules is a legal creditor-priority rule."
         ),
     }
 
@@ -754,20 +800,31 @@ def allocate_federation_reserve_claims(
 def compare_federation_reserve_allocation_rules(
     claims: Iterable[dict[str, Any]],
     reserve_available: float,
+    priority_order: Iterable[str] | None = None,
 ) -> dict[str, Any]:
-    """Side-by-side pure allocation comparison on the exact same claim batch."""
+    """Side-by-side allocation comparison on the exact same claim batch."""
     claim_list = list(claims)
+    classes = {claim.get("claim_class", "standard") for claim in claim_list if isinstance(claim, dict)}
+    order = list(priority_order) if priority_order is not None else sorted(classes)
+    rules = (
+        "first_come_first_served",
+        "batch_pro_rata",
+        "priority_class_then_first_come_first_served",
+        "priority_class_then_batch_pro_rata",
+    )
     return {
-        "model_id": "SYNERGY_V6.6.4J_FEDERATION_RESERVE_ALLOCATION_RULES",
+        "model_id": "SYNERGY_V6.6.4L_FEDERATION_CLAIM_PRIORITY",
         "claims": claim_list,
         "reserve_available": reserve_available,
+        "priority_order": order,
         "reports_by_rule": {
-            rule: allocate_federation_reserve_claims(claim_list, reserve_available, rule)
-            for rule in ("first_come_first_served", "batch_pro_rata")
+            rule: allocate_federation_reserve_claims(claim_list, reserve_available, rule, order)
+            for rule in rules
         },
         "interpretation_guard": (
-            "Allocation-rule comparison only. It does not change the current ledger, which remains "
-            "deterministic FCFS by due day and invoice ID."
+            "Allocation-rule comparison only. Priority classes are synthetic labels and are not legal "
+            "seniority. The operational ledger supports FCFS and batch pro-rata; class-priority rules "
+            "remain analytical alternatives."
         ),
     }
 
