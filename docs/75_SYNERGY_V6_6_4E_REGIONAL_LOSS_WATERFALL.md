@@ -61,3 +61,14 @@ The credit snapshot identifies this implementation as `SYNERGY_V6.6.4E_REGIONAL_
 The three-seed, 20-day severe-regime sample ran both loss-waterfall settings. In this particular sample, the model recorded **zero regional assessment attempts, zero requested assessment amount and zero eligible assessment capacity** in both mutual-credit and hybrid modes. Consequently, reserve-only and reserve-plus-assessment outputs were identical. This does not show that assessments are ineffective; it shows that this sample did not generate a local same-region residual claim eligible for the mechanism.
 
 The unit tests separately construct same-region defaults and verify that assessments are triggered, allocated pro rata, capped per member, and reconciled in the consolidated cash balance. Future policy experiments should include deliberately generated local supplier-default paths, not rely only on naturally occurring defaults in a small synthetic sample.
+
+
+## 7. Targeted deterministic default fixture
+
+The loss-waterfall experiment now also emits four forced one-day ledger cases:
+- same-region default with reserve only;
+- same-region default with reserve plus member assessment;
+- same-region default with a tight per-member assessment cap;
+- cross-region default while local reserve and assessment are configured.
+
+These cases are intentionally constructed to exercise the mechanics and exclusions. They are not stochastic simulations and must not be used to infer default probabilities. Their purpose is to ensure that the local assessment can activate, that a binding cap leaves a measurable residual seller loss, and that a local pool does not silently guarantee a cross-region claim.
