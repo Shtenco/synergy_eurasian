@@ -50,10 +50,14 @@ def simulate_case(
     start = cfg["starting_point"]
     tech = cfg["technology_projects"]
     alloc = cfg["allocation"]
-    if not isinstance(alloc, dict) or not alloc or any(
-        not isinstance(name, str) or not name.strip() for name in alloc
-    ):
-        raise ValueError("Fund allocation must be a non-empty object with named funds")
+    required_funds = {
+        "productive_automation", "breakthrough_rd", "resilience_reserve"
+    }
+    if not isinstance(alloc, dict) or set(alloc) != required_funds:
+        raise ValueError(
+            "Fund allocation must contain exactly productive_automation, "
+            "breakthrough_rd and resilience_reserve"
+        )
     allocation_values = [_finite_float(v, "fund allocation share") for v in alloc.values()]
     if not all(0.0 <= v <= 1.0 for v in allocation_values):
         raise ValueError("Fund allocation shares must be in [0, 1].")
@@ -110,8 +114,13 @@ def simulate_case(
     horizon = _strict_int(cfg["horizon_years"], "horizon_years", 1)
 
     for year in range(1, horizon + 1):
-        gross *= 1.0 + annual_cashflow_growth
-        replacement *= 1.0 + annual_replacement_inflation
+        gross = _finite_float(
+            gross * (1.0 + annual_cashflow_growth), f"year {year} gross cashflow"
+        )
+        replacement = _finite_float(
+            replacement * (1.0 + annual_replacement_inflation),
+            f"year {year} replacement capex",
+        )
         automation_return = sum(
             amount * auto_yield
             for deployed_year, amount in auto_projects
@@ -123,7 +132,10 @@ def simulate_case(
             if deployed_year + rd_lag <= year < deployed_year + rd_lag + rd_life
         )
         operating_residual = gross - replacement
-        residual = operating_residual + automation_return + rd_expected_return
+        residual = _finite_float(
+            operating_residual + automation_return + rd_expected_return,
+            f"year {year} residual",
+        )
         automation_contribution = rd_contribution = reserve_contribution = 0.0
         reserve_draw = unfunded_gap = 0.0
 
@@ -199,11 +211,14 @@ def break_even_cashflow_growth(
     years = _strict_int(years, "years", 1)
     if starting_cashflow <= 0 or starting_replacement <= 0 or replacement_inflation < -1.0:
         raise ValueError("Break-even inputs require positive cashflow/capex and inflation >= -100%")
-    return (
-        (starting_replacement * (1.0 + replacement_inflation) ** years / starting_cashflow)
-        ** (1.0 / years)
-        - 1.0
-    )
+    try:
+        future_replacement = starting_replacement * (1.0 + replacement_inflation) ** years
+        required_growth = (future_replacement / starting_cashflow) ** (1.0 / years) - 1.0
+    except OverflowError as exc:
+        raise ValueError("Break-even projection overflows finite numeric range") from exc
+    if not math.isfinite(future_replacement) or not math.isfinite(required_growth):
+        raise ValueError("Break-even projection must remain finite")
+    return required_growth
 
 
 
