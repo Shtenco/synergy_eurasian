@@ -7,9 +7,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from threading import RLock
+from hashlib import sha256
 from typing import Iterable
 
-from .federation_identity import SignedEventEnvelope, TrustedKeyRegistry, _utc
+from .federation_identity import SignedEventEnvelope, TrustedKeyRegistry, _canonical, _utc
 
 
 @dataclass(frozen=True)
@@ -54,11 +55,40 @@ class FederationAuthorizationPolicy:
         self.max_request_age_seconds = max_request_age_seconds
         self._rules: dict[str, AuthorizationRule] = {}
         self._execution_lock = RLock()
+        self._version = 0
+        self._policy_hash = self._compute_policy_hash()
 
     @property
     def execution_lock(self):
         """Serialize in-memory policy mutation with an authorized execution."""
         return self._execution_lock
+
+    @property
+    def policy_version(self) -> int:
+        return self._version
+
+    @property
+    def policy_hash(self) -> str:
+        return self._policy_hash
+
+    def _compute_policy_hash(self) -> str:
+        documents = [
+            {
+                "rule_id": rule.rule_id,
+                "tenant_id": rule.tenant_id,
+                "effect": rule.effect,
+                "action": rule.action,
+                "resource_type": rule.resource_type,
+                "subject_ids": list(rule.subject_ids),
+                "approver_ids": list(rule.approver_ids),
+                "min_approvals": rule.min_approvals,
+                "resource_id": rule.resource_id,
+                "valid_from": rule.valid_from,
+                "valid_until": rule.valid_until,
+            }
+            for rule in sorted(self._rules.values(), key=lambda item: item.rule_id)
+        ]
+        return sha256(_canonical(documents)).hexdigest()
 
     def register_rule(self, rule: AuthorizationRule) -> None:
         with self._execution_lock:
@@ -92,6 +122,8 @@ class FederationAuthorizationPolicy:
         if rule.rule_id in self._rules:
             raise ValueError("authorization rule ID already exists")
         self._rules[rule.rule_id] = rule
+        self._version += 1
+        self._policy_hash = self._compute_policy_hash()
 
     @staticmethod
     def _payload_fields(envelope: SignedEventEnvelope, event_type: str,
@@ -134,6 +166,7 @@ class FederationAuthorizationPolicy:
                 request_event_id=request.event["event_id"],
                 request_event_hash=request.event["event_hash"],
                 action=action, resource_type=resource_type, resource_id=resource_id,
+                policy_version=self._version, policy_hash=self._policy_hash,
             )
         if any(not isinstance(x, str) or not x.strip() for x in (request_id, action, resource_type, resource_id)):
             raise ValueError("authorization request scope fields must be non-empty strings")
