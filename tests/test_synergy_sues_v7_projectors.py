@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from synergy_sues.v7_adapter import adapt_v7_event_store
+from synergy_sues.v7_adapter import SUESSourceEvent, adapt_v7_event_store
 from synergy_sues.v7_projectors import (
     DEFAULT_PROJECTOR_REGISTRY,
     ProjectorRegistry,
@@ -162,3 +162,13 @@ def test_registry_rejects_duplicate_registration():
             ProjectorSpec("NODE_REGISTERED", 1, 1, handler),
             ProjectorSpec("NODE_REGISTERED", 1, 2, handler),
         ))
+
+
+
+def test_projector_rejects_forged_or_copied_source_event_instances():
+    verified = graph_events()[0]
+    forged = SUESSourceEvent(**verified.__dict__)
+    with pytest.raises(ValueError, match="exact SUESSourceEvent instances"):
+        DEFAULT_PROJECTOR_REGISTRY.project(forged)
+    with pytest.raises(ValueError, match="exact SUESSourceEvent instances"):
+        replay_event_projections([forged])
