@@ -454,12 +454,12 @@ def test_regional_pool_reserve_cannot_exceed_member_contributions():
 
 def test_cross_default_resolves_all_open_payables_of_failed_buyer():
     ledger = CreditLedger(
-        initial_cash_per_cell=0.0,
+        initial_cash_per_cell=10.0,
         trade_credit_limit_per_cell=100.0,
         grace_days=0,
         regional_pool_reserve_per_region=20.0,
     )
-    ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 10.0, 0, 0, "DEFAULT-1")
+    ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 20.0, 0, 0, "DEFAULT-1")
     ledger.authorize_purchase("WEST-PR1", "WEST-AG2", 10.0, 5, 0, "DEFAULT-2")
     ledger.process_day(0)
     snap = ledger.snapshot()
