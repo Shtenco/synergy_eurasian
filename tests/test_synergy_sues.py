@@ -1082,3 +1082,31 @@ def test_bank_reconciliation_does_not_rewrite_closed_period_with_late_backdated_
     assert not result["fully_reconciled"]
     assert result["late_recorded_journal_lines"][0]["journal_line_ref"] == "late-backdated-cash:late-cash"
     assert result["bank_minus_ledger_closing_difference"] == "50"
+
+
+def test_translation_policy_rejects_datetime_and_freezes_historical_rates():
+    now = datetime(2026, 11, 6, 10, tzinfo=timezone.utc)
+    historical = {
+        "capital": FXRate("hist", "EUR", "USD", "1.0", now, "fx:historical")
+    }
+    policy = TranslationPolicy(
+        closing_rate=FXRate("close", "EUR", "USD", "1.1", now, "fx:close"),
+        average_rate=FXRate("average", "EUR", "USD", "1.05", now, "fx:average"),
+        historical_equity_rates=historical,
+        reporting_date=date(2026, 11, 6),
+        translation_adjustment_account_id="cta",
+    )
+    historical.clear()
+    assert "capital" in policy.historical_equity_rates
+    with pytest.raises(TypeError):
+        policy.historical_equity_rates["new-capital"] = FXRate(
+            "new", "EUR", "USD", "1.2", now, "fx:new"
+        )
+    with pytest.raises(ValueError, match="calendar date"):
+        TranslationPolicy(
+            closing_rate=policy.closing_rate,
+            average_rate=policy.average_rate,
+            historical_equity_rates={},
+            reporting_date=datetime(2026, 11, 6, 10, tzinfo=timezone.utc),
+            translation_adjustment_account_id="cta",
+        )
