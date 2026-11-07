@@ -217,6 +217,8 @@ def sector_reconciliation(
     if not isinstance(cfg["sector_starting_point"], list) or not cfg["sector_starting_point"]:
         raise ValueError("sector_starting_point must be a non-empty array")
     for item in cfg["sector_starting_point"]:
+        if not isinstance(item, dict):
+            raise ValueError("Each sector starting point must be an object")
         if not isinstance(item.get("sector"), str) or not item["sector"].strip():
             raise ValueError("Each sector starting point requires a name")
         start_cash = _finite_float(item["cashflow_after_opex_before_replacement_usd"], "sector cashflow")
