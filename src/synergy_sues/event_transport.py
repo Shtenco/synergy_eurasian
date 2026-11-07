@@ -559,6 +559,9 @@ class DurableEventStore:
                 payload = json.loads(message["payload_json"])
                 if not isinstance(payload, dict):
                     return False
+                if (payload.get("event_id") != stored["event_id"]
+                        or payload.get("event_hash") != stored["event_hash"]):
+                    return False
                 digest_row = dict(payload)
                 supplied_hash = digest_row.pop("event_hash", None)
                 digest = sha256(_canonical(_unsigned(
@@ -566,6 +569,7 @@ class DurableEventStore:
                 )).encode("utf-8")).hexdigest()
                 if supplied_hash != digest or digest != stored["event_hash"]:
                     return False
+                _validate_event(digest_row)
                 snapshot = json.loads(_canonical(message))
                 try:
                     authenticated = authenticator(snapshot)
