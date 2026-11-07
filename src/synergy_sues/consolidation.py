@@ -96,6 +96,12 @@ def reconcile_intercompany(records: Iterable[IntercompanyRecord]) -> dict:
     ids = [row.record_id for row in rows]
     if len(ids) != len(set(ids)):
         raise ValueError("Duplicate intercompany record_id")
+    # Validate every period before categorizing records. Cash-transfer-only
+    # transactions do not create GL elimination entries, so validating periods
+    # only in the journal-posting branch would let malformed periods leak into
+    # consolidated cash-flow reports.
+    for row in rows:
+        _period_bounds(row.period_id)
 
     grouped: dict[str, list[IntercompanyRecord]] = {}
     for row in rows:
