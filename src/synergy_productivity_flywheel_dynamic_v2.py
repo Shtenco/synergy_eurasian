@@ -169,7 +169,12 @@ def simulate_case(
         "rd_net_residual_yield_if_success": rd_yield,
         "initial_reserve_usd": initial_reserve,
         "final_reserve_usd": reserve,
-        "year_10_residual_usd": float(rows[-1]["residual_after_replacement_and_project_returns_usd"]),
+        "final_year": horizon,
+        "final_year_residual_usd": float(rows[-1]["residual_after_replacement_and_project_returns_usd"]),
+        "year_10_residual_usd": (
+            float(rows[-1]["residual_after_replacement_and_project_returns_usd"])
+            if horizon == 10 else None
+        ),
         "cumulative_automation_contributions_usd": total("automation_fund_contribution_usd"),
         "cumulative_rd_contributions_usd": total("rd_fund_contribution_usd"),
         "cumulative_reserve_contributions_usd": total("reserve_contribution_usd"),
