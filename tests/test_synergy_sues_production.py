@@ -66,7 +66,10 @@ def test_grni_three_way_match_and_journal_clearance():
         SupplierInvoiceLine("inv-1", "po-1", Quantity("4", "kg"),
             Money("20", "USD"), date(2026, 11, 5), "supplier-invoice:1")
     )
-    post_grni_receipt(receipt, matcher, journal, "raw", "grni", "co1", NOW)
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("gr-1", "gr-1-lot", "steel", "warehouse",
+        Quantity("6", "kg"), Money("30", "USD"), date(2026, 11, 3), "warehouse:gr-1")
+    post_grni_receipt(receipt, matcher, inventory, journal, "raw", "grni", "co1", NOW)
     post_grni_invoice(invoice, matcher, journal, "grni", "ap", "co1", NOW)
 
     report = matcher.report("po-1")
