@@ -654,3 +654,90 @@ def test_heterogeneous_opening_cash_rejects_incomplete_and_underfunded_member_ma
             regional_pool_reserve_per_region=10.0,
             regional_reserve_contributions_by_cell=contributions,
         )
+
+
+def test_federation_reserve_covers_cross_region_default_without_local_reserve():
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        trade_credit_limit_per_cell=50.0,
+        federation_pool_reserve_total=5.0,
+        grace_days=0,
+    )
+    purchase = ledger.authorize_purchase("WEST-PR1", "EAST-AG1", 30.0, 0, 0, "FED-CROSS-1")
+    assert purchase["authorized"]
+    ledger.process_day(0)
+    invoice = ledger.payables[purchase["invoice_id"]]
+    snapshot = ledger.snapshot()
+    assert invoice.guarantee_paid == pytest.approx(0.0)
+    assert invoice.federation_guarantee_paid == pytest.approx(5.0)
+    assert invoice.member_assessment_paid == pytest.approx(0.0)
+    assert invoice.written_off == pytest.approx(5.5)
+    assert snapshot["federation_pool_reserve_balance"] == pytest.approx(0.0)
+    assert snapshot["federation_pool_guarantee_paid"] == pytest.approx(5.0)
+    assert snapshot["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_local_default_uses_local_reserve_then_federation_reserve_then_member_assessment():
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        trade_credit_limit_per_cell=50.0,
+        regional_pool_reserve_per_region=5.0,
+        federation_pool_reserve_total=3.0,
+        regional_assessment_rate=0.10,
+        regional_assessment_limit_per_cell=2.0,
+        grace_days=0,
+    )
+    purchase = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 30.0, 0, 0, "FED-LOCAL-1")
+    assert purchase["authorized"]
+    ledger.process_day(0)
+    invoice = ledger.payables[purchase["invoice_id"]]
+    snapshot = ledger.snapshot()
+    assert invoice.guarantee_paid == pytest.approx(5.0)
+    assert invoice.federation_guarantee_paid == pytest.approx(3.0)
+    assert invoice.member_assessment_paid == pytest.approx(2.5)
+    assert invoice.written_off == pytest.approx(0.0)
+    assert snapshot["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_federation_reserve_contributions_are_separately_funded_and_cash_safe():
+    from synergy_v66.network_topology import CELLS
+
+    contributions = {cell.cell_id: 0.0 for cell in CELLS}
+    contributions["WEST-PR1"] = 2.0
+    contributions["EAST-PR1"] = 3.0
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        federation_pool_reserve_total=5.0,
+        federation_reserve_contributions_by_cell=contributions,
+    )
+    snapshot = ledger.snapshot()
+    assert snapshot["federation_reserve_contributions_by_cell"] == contributions
+    assert snapshot["federation_pool_reserve_balance"] == pytest.approx(5.0)
+    assert sum(snapshot["cash_by_cell"].values()) + sum(snapshot["regional_pool_reserve_by_region"].values()) + snapshot["federation_pool_reserve_balance"] == pytest.approx(ledger.opening_cash)
+    overdrawn = dict(contributions)
+    overdrawn["WEST-PR1"] = 21.0
+    overdrawn["EAST-PR1"] = 0.0
+    with pytest.raises(ValueError):
+        CreditLedger(
+            initial_cash_per_cell=20.0,
+            federation_pool_reserve_total=21.0,
+            federation_reserve_contributions_by_cell=overdrawn,
+        )
+
+
+def test_federation_reserve_rejects_incomplete_or_mismatched_contribution_maps():
+    from synergy_v66.network_topology import CELLS
+
+    contributions = {cell.cell_id: 0.0 for cell in CELLS}
+    contributions["WEST-PR1"] = 2.0
+    with pytest.raises(ValueError):
+        CreditLedger(
+            federation_pool_reserve_total=3.0,
+            federation_reserve_contributions_by_cell=contributions,
+        )
+    contributions.pop("WEST-PR1")
+    with pytest.raises(ValueError):
+        CreditLedger(
+            federation_pool_reserve_total=0.0,
+            federation_reserve_contributions_by_cell=contributions,
+        )
