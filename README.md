@@ -416,3 +416,7 @@ The experiment module also provides `compare_all_shock_regimes(...)`, which runs
 - [Reproducible financing experiment CLI](scripts/run_synergy_v66_financing_experiment.py)
 
 The repository CI now runs a paired three-regime, three-seed financing stress sample and writes a machine-readable report under `outputs/`.
+
+- [V6.6.4-A regional mutual-credit pool specification](docs/72_SYNERGY_V6_6_4A_REGIONAL_MUTUAL_CREDIT_POOL.md)
+
+The credit ledger now tracks local regional net debtor/creditor positions, per-member debit/credit caps and regional pool ceilings. These are memorandum credit claims, not cash or tokens; cross-border clearing and loss allocation remain separate future work.
