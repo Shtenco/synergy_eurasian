@@ -412,3 +412,7 @@ The integrated credit ledger now also supports partial invoice settlement during
 The runner compares cash-only, bank-only, mutual-credit and hybrid modes against an unconstrained reference using identical seed-specific exogenous environments. It reports service level, output, defaults, bad debt, financing usage, rejection counts and accounting residuals. It does not assume any policy is superior.
 
 The experiment module also provides `compare_all_shock_regimes(...)`, which runs the same paired financing comparison under normal, volatile and severe synthetic shocks.
+
+- [Reproducible financing experiment CLI](scripts/run_synergy_v66_financing_experiment.py)
+
+The repository CI now runs a paired three-regime, three-seed financing stress sample and writes a machine-readable report under `outputs/`.
