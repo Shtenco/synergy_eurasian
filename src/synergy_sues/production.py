@@ -10,7 +10,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Iterable
 
-from .contracts import Money, Quantity, _aware, _calendar_date, _calendar_date
+from .contracts import Money, Quantity, _aware, _calendar_date
 from .inventory import InventoryLedger, InventoryMovement
 from .journal import (
     AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide,
@@ -130,17 +130,25 @@ class GRNIMatcher:
                                 if x.po_line_id == row.po_line_id), Decimal("0"))
         if already_invoiced + row.invoiced_quantity.amount > received:
             raise ValueError("Invoice quantity exceeds physically received, not-yet-invoiced quantity")
-        # An invoice cannot recognize goods received only after its invoice date.
-        received_by_invoice_date = sum((
-            x.received_quantity.amount for x in receipts_for_po
-            if x.received_date <= row.invoice_date
-        ), Decimal("0"))
-        previously_invoiced_by_date = sum((
-            x.invoiced_quantity.amount for x in self._invoices.values()
-            if x.po_line_id == row.po_line_id and x.invoice_date <= row.invoice_date
-        ), Decimal("0"))
-        if previously_invoiced_by_date + row.invoiced_quantity.amount > received_by_invoice_date:
-            raise ValueError("Invoice date precedes the physical receipt supporting its quantity")
+        # Validate the complete chronological invoice/receipt timeline. This also
+        # prevents a newly inserted backdated invoice from making a later invoice
+        # unsupported by the receipts available on that later invoice date.
+        candidate_invoices = [
+            x for x in self._invoices.values() if x.po_line_id == row.po_line_id
+        ] + [row]
+        for invoice_date in sorted({x.invoice_date for x in candidate_invoices}):
+            cumulative_invoiced = sum((
+                x.invoiced_quantity.amount for x in candidate_invoices
+                if x.invoice_date <= invoice_date
+            ), Decimal("0"))
+            cumulative_received = sum((
+                x.received_quantity.amount for x in receipts_for_po
+                if x.received_date <= invoice_date
+            ), Decimal("0"))
+            if cumulative_invoiced > cumulative_received:
+                raise ValueError(
+                    "Invoice date precedes the physical receipt supporting cumulative invoiced quantity"
+                )
         expected = po.unit_price.amount * row.invoiced_quantity.amount
         if row.amount.amount != expected:
             raise ValueError("Invoice amount does not match PO price; route variance for approval")
