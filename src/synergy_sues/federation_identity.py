@@ -493,9 +493,10 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
         self._refresh()
 
     def verify(self, envelope: SignedEventEnvelope | Mapping[str, Any],
-               received_at: datetime | str | None = None) -> FederationIdentity:
+               received_at: datetime | str | None = None, *,
+               allow_historical: bool = False) -> FederationIdentity:
         self._refresh()
-        return super().verify(envelope, received_at)
+        return super().verify(envelope, received_at, allow_historical=allow_historical)
 
     def audit_events(self) -> tuple[dict[str, Any], ...]:
         with self._session() as db:
