@@ -63,17 +63,18 @@ Those alternatives require observable and independently auditable data, governan
 
 ## 5. CI smoke-sample observations
 
-A three-seed, 20-day severe-regime sample was run with 20 synthetic currency units of reserve per region. Both allocation schemes fund the same total reserve. The table reports mean outcomes across the three seeds.
+The updated three-seed, 20-day severe-regime sample uses a heterogeneous synthetic opening-cash fixture and 20 units of reserve per region. All three allocation rules fund the same reserve target on the same seed-specific environments. The table reports mean outcomes across the three seeds.
 
 | Contribution rule | Financing mode | Service level | Defaults per run | Guarantee paid | Seller trade bad debt | Reserve remaining |
 |---|---|---:|---:|---:|---:|---:|
-| Equal all-members | Mutual credit | 69.979% | 1.00 | 5.113 | 6.828 | 34.887 |
-| Capacity-weighted | Mutual credit | 70.035% | 1.00 | 5.721 | 7.010 | 34.279 |
-| Equal all-members | Hybrid | 70.535% | 1.00 | 12.742 | 7.873 | 27.258 |
-| Capacity-weighted | Hybrid | 70.535% | 1.00 | 13.533 | 7.873 | 26.467 |
+| Equal all-members | Mutual credit | 69.731% | 1.33 | 7.532 | 0.000 | 32.468 |
+| Capacity-weighted | Mutual credit | 69.731% | 1.33 | 6.555 | 0.000 | 33.445 |
+| Opening-cash-weighted | Mutual credit | 69.731% | 1.33 | 7.384 | 0.000 | 32.616 |
+| Equal all-members | Hybrid | 69.647% | 1.33 | 14.192 | 15.556 | 25.808 |
+| Capacity-weighted | Hybrid | 69.647% | 1.33 | 14.983 | 15.820 | 25.017 |
+| Opening-cash-weighted | Hybrid | 69.647% | 1.33 | 14.062 | 15.507 | 25.938 |
 
-The smoke run is not a fairness verdict. It shows that changing who contributes changes member liquidity and can change reserve utilization and downstream losses even when total reserve capital is fixed. The opening-cash-weighted rule is now available for explicit heterogeneous opening-cash maps; with a uniform cash map it mathematically collapses to equal-all-member contributions. A larger paired sample is needed before drawing conclusions. The first displayed service-level value should be read from the CI log rather than inferred; the raw CI observation is 0.6997929 for equal mutual-credit and 0.7003472 for capacity-weighted mutual-credit.
-
+In this small sample, opening-cash weighting sits between equal-member and production-capacity allocation on mutual-credit reserve payouts, and has slightly lower hybrid reserve payouts and seller bad debt than the other two rules. These differences are descriptive only: three seeds are not enough to rank the schemes, and the fixture does not represent observed EAEU member liquidity or guarantee risk.
 
 ## 6. Heterogeneous opening cash and capped contributions
 
