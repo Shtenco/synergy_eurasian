@@ -15,7 +15,7 @@ from hashlib import sha256
 from typing import Any, Callable, Mapping
 
 from .federation_authorization import AuthorizationDecision, FederationAuthorizationPolicy
-from .federation_identity import SignedEventEnvelope, TrustedKeyRegistry, _canonical, _utc
+from .federation_identity import SignedEventEnvelope, TrustedKeyRegistry, _canonical, _event_hash, _utc
 
 
 @dataclass(frozen=True)
@@ -55,6 +55,9 @@ class AuthorizedActionExecutor:
                     executed_at TEXT NOT NULL,
                     result_json TEXT NOT NULL,
                     decision_json TEXT NOT NULL,
+                    receipt_version INTEGER NOT NULL DEFAULT 1,
+                    request_envelope_json TEXT NOT NULL DEFAULT '{}',
+                    approval_envelopes_json TEXT NOT NULL DEFAULT '[]',
                     previous_hash TEXT NOT NULL,
                     receipt_hash TEXT NOT NULL UNIQUE
                 );
@@ -85,6 +88,13 @@ class AuthorizedActionExecutor:
                 BEFORE DELETE ON execution_receipts
                 BEGIN SELECT RAISE(ABORT, 'execution receipts are append-only'); END;
             """)
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(execution_receipts)").fetchall()}
+            if "receipt_version" not in columns:
+                db.execute("ALTER TABLE execution_receipts ADD COLUMN receipt_version INTEGER NOT NULL DEFAULT 1")
+            if "request_envelope_json" not in columns:
+                db.execute("ALTER TABLE execution_receipts ADD COLUMN request_envelope_json TEXT NOT NULL DEFAULT '{}'")
+            if "approval_envelopes_json" not in columns:
+                db.execute("ALTER TABLE execution_receipts ADD COLUMN approval_envelopes_json TEXT NOT NULL DEFAULT '[]'")
         if not self.verify():
             raise ValueError("execution receipt chain verification failed")
 
@@ -137,6 +147,12 @@ class AuthorizedActionExecutor:
         fields = ("sequence", "request_id", "request_event_id", "request_event_hash",
                   "action", "resource_type", "resource_id", "requester_identity_id",
                   "executed_at", "result_json", "decision_json", "previous_hash")
+        try:
+            version = int(row["receipt_version"])
+        except (KeyError, IndexError):
+            version = 1
+        if version >= 2:
+            fields = fields + ("receipt_version", "request_envelope_json", "approval_envelopes_json")
         return sha256(_canonical({field: row[field] for field in fields})).hexdigest()
 
     def execute(
@@ -150,23 +166,52 @@ class AuthorizedActionExecutor:
     ) -> ExecutionResult:
         if not callable(handler):
             raise ValueError("handler must be callable")
-        decision = policy.authorize(request, approvals, registry, received_at)
-        if not decision.allowed:
-            return ExecutionResult(False, "DENIED", decision)
+        if received_at is None:
+            now = datetime.now(timezone.utc)
+        elif isinstance(received_at, str):
+            now = _utc(received_at, "received_at")
+        elif isinstance(received_at, datetime) and received_at.tzinfo is not None and received_at.utcoffset() is not None:
+            now = received_at.astimezone(timezone.utc)
+        else:
+            raise ValueError("received_at must be an ISO timestamp or timezone-aware datetime")
+        received_stamp = now.isoformat()
 
-        payload = request.event["payload"]
+        def snapshot(envelope: SignedEventEnvelope) -> SignedEventEnvelope:
+            if not isinstance(envelope, SignedEventEnvelope):
+                raise ValueError("request and approvals must be signed event envelopes")
+            document = json.loads(_canonical(envelope.as_dict()))
+            return SignedEventEnvelope(**document)
+
+        # Separate immutable-by-convention snapshots isolate authorization,
+        # handler execution and receipt evidence from caller-owned mutable dicts.
+        receipt_request = snapshot(request)
+        authorization_request = snapshot(request)
+        approval_snapshots = tuple(snapshot(item) for item in approvals)
+        request_snapshot_json = _canonical(receipt_request.as_dict())
+        approval_snapshot_json = tuple(_canonical(item.as_dict()) for item in approval_snapshots)
+
+        decision = policy.authorize(authorization_request, approval_snapshots, registry, received_stamp)
+        if (_canonical(authorization_request.as_dict()) != request_snapshot_json
+                or tuple(_canonical(item.as_dict()) for item in approval_snapshots) != approval_snapshot_json):
+            raise ValueError("authorization mutated signed request or approval evidence")
+        verified_requester = registry.verify(receipt_request, received_stamp)
+        if (verified_requester.identity_id != decision.requester_identity_id
+                or verified_requester.tenant_id != receipt_request.tenant_id):
+            raise ValueError("authorization decision requester does not match signed request identity")
+        payload = receipt_request.event["payload"]
         request_id = payload["request_id"]
         action = payload["action"]
         resource_type = payload["resource_type"]
         resource_id = payload["resource_id"]
-        request_event_id = request.event["event_id"]
-        request_event_hash = request.event["event_hash"]
-        requester = decision.requester_identity_id
-        now = _utc(received_at, "received_at") if isinstance(received_at, str) else (
-            received_at or datetime.now(timezone.utc))
-        if now.tzinfo is None or now.utcoffset() is None:
-            raise ValueError("received_at must be timezone-aware")
-        executed_at = now.astimezone(timezone.utc).isoformat()
+        if decision.request_id != request_id:
+            raise ValueError("authorization decision request_id does not match signed request")
+        request_event_id = receipt_request.event["event_id"]
+        request_event_hash = receipt_request.event["event_hash"]
+        requester = verified_requester.identity_id
+        if not decision.allowed:
+            return ExecutionResult(False, "DENIED", decision)
+        handler_request = snapshot(receipt_request)
+        executed_at = received_stamp
 
         with self._session() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -219,7 +264,7 @@ class AuthorizedActionExecutor:
                             or current_hash != decision.policy_hash):
                         raise ValueError("authorization policy snapshot changed before execution")
 
-                result = handler(db, request, decision)
+                result = handler(db, handler_request, decision)
                 result_json = _canonical(result).decode("utf-8")
                 decision_document = {
                     "allowed": decision.allowed,
@@ -250,17 +295,29 @@ class AuthorizedActionExecutor:
                     "executed_at": executed_at,
                     "result_json": result_json,
                     "decision_json": decision_json,
+                    "receipt_version": 2,
+                    "request_envelope_json": request_snapshot_json.decode("utf-8"),
+                    "approval_envelopes_json": _canonical([
+                        item.as_dict() for item in sorted(
+                            (approval for approval in approval_snapshots
+                             if (approval.event["event_id"], approval.event["event_hash"])
+                             in set(decision.approval_event_refs)),
+                            key=lambda approval: (approval.event["event_id"], approval.event["event_hash"]),
+                        )
+                    ]).decode("utf-8"),
                     "previous_hash": previous_hash,
                 }
                 receipt_hash = self._receipt_hash(row)
                 db.execute("""INSERT INTO execution_receipts
                     (sequence,request_id,request_event_id,request_event_hash,action,
                      resource_type,resource_id,requester_identity_id,executed_at,
-                     result_json,decision_json,previous_hash,receipt_hash)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     result_json,decision_json,receipt_version,request_envelope_json,
+                     approval_envelopes_json,previous_hash,receipt_hash)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (sequence, request_id, request_event_id, request_event_hash, action,
                      resource_type, resource_id, requester, executed_at, result_json,
-                     decision_json, previous_hash, receipt_hash))
+                     decision_json, 2, row["request_envelope_json"], row["approval_envelopes_json"],
+                     previous_hash, receipt_hash))
                 db.commit()
                 return ExecutionResult(True, "EXECUTED", decision, result)
             except Exception:
@@ -286,6 +343,35 @@ class AuthorizedActionExecutor:
                     return False
             except (TypeError, ValueError):
                 return False
+            if int(row["receipt_version"]) >= 2:
+                try:
+                    request_document = json.loads(row["request_envelope_json"])
+                    approvals_document = json.loads(row["approval_envelopes_json"])
+                    if (_canonical(request_document).decode("utf-8") != row["request_envelope_json"]
+                            or _canonical(approvals_document).decode("utf-8") != row["approval_envelopes_json"]
+                            or not isinstance(approvals_document, list)):
+                        return False
+                    signed_request = SignedEventEnvelope(**request_document)
+                    if (_event_hash(signed_request.event) != row["request_event_hash"]
+                            or signed_request.event["event_id"] != row["request_event_id"]
+                            or signed_request.identity_id != row["requester_identity_id"]
+                            or signed_request.event["payload"].get("request_id") != row["request_id"]
+                            or signed_request.event["payload"].get("action") != row["action"]
+                            or signed_request.event["payload"].get("resource_type") != row["resource_type"]
+                            or signed_request.event["payload"].get("resource_id") != row["resource_id"]):
+                        return False
+                    approval_refs = sorted(
+                        (item["event"]["event_id"], item["event"]["event_hash"])
+                        for item in approvals_document
+                    )
+                    if approval_refs != sorted(tuple(x) for x in decision.get("approval_event_refs", [])):
+                        return False
+                    for item in approvals_document:
+                        signed_approval = SignedEventEnvelope(**item)
+                        if _event_hash(signed_approval.event) != signed_approval.event["event_hash"]:
+                            return False
+                except (KeyError, TypeError, ValueError):
+                    return False
             digest = self._receipt_hash(row)
             if digest != row["receipt_hash"]:
                 return False
