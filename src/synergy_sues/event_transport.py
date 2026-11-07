@@ -634,4 +634,29 @@ class DurableEventStore:
                 expected_message_id = sha256(_canonical({"event_id": item["event_id"], "destination": item["destination"]}).encode()).hexdigest()
                 if item["message_id"] != expected_message_id or not item["destination"] or not item["topic"]:
                     return False
+
+            # Retained inbox envelopes are integrity-checked here. Signature
+            # validity is re-evaluated separately by verify_inbox(authenticator).
+            for item in db.execute("SELECT * FROM inbox").fetchall():
+                if item["message_json"] == "{}":
+                    continue  # Legacy receipt: present, but not re-verifiable.
+                try:
+                    message = json.loads(item["message_json"])
+                    if (_canonical(message) != item["message_json"]
+                            or message.get("message_id") != item["message_id"]
+                            or message.get("event_id") != item["event_id"]
+                            or message.get("event_hash") != item["event_hash"]):
+                        return False
+                    payload = json.loads(message["payload_json"])
+                    if not isinstance(payload, dict):
+                        return False
+                    digest_row = dict(payload)
+                    supplied_hash = digest_row.pop("event_hash", None)
+                    digest = sha256(_canonical(_unsigned(
+                        digest_row, str(digest_row.get("previous_hash") or "")
+                    )).encode("utf-8")).hexdigest()
+                    if supplied_hash != digest or digest != item["event_hash"]:
+                        return False
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    return False
         return True
