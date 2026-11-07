@@ -17,8 +17,8 @@ _UNIT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_./*-]{0,31}$")
 
 
 def _decimal(value: Decimal | int | float | str, field: str) -> Decimal:
-    if isinstance(value, bool):
-        raise ValueError(f"{field} must be a finite decimal number")
+    if isinstance(value, (bool, float)):
+        raise ValueError(f"{field} must be Decimal, int or decimal string; binary floats are rejected")
     try:
         result = value if isinstance(value, Decimal) else Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError) as exc:
