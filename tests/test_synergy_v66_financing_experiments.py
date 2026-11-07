@@ -41,3 +41,18 @@ def test_financing_experiment_rejects_invalid_seed_sets_and_regimes():
         compare_financing_modes([1], days=0)
     with pytest.raises(ValueError):
         compare_financing_modes([1], days=5, shock_regime="not-a-regime")
+
+
+def test_multi_regime_runner_covers_all_shock_regimes_with_paired_paths():
+    from synergy_v66.financing_experiments import compare_all_shock_regimes
+
+    report = compare_all_shock_regimes([31, 32], days=10)
+    assert report["shock_regimes"] == ["normal", "volatile", "severe"]
+    for regime, subreport in report["reports_by_regime"].items():
+        assert subreport["shock_regime"] == regime
+        for pair in subreport["paired_environment_hashes"]:
+            assert len(set(pair["environment_hashes"].values())) == 1
+        for rows in subreport["observations"].values():
+            for row in rows:
+                assert row["physical_balance_error"] < 1e-7
+                assert row["cash_conservation_error"] < 1e-6
