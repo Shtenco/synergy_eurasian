@@ -576,8 +576,9 @@ def build_liquidity_capped_reserve_contributions(
     reserve_per_region: float,
     initial_cash_by_cell: dict[str, float],
     max_contribution_fraction: float = 0.10,
+    minimum_post_contribution_cash: float = 0.0,
 ) -> dict[str, float]:
-    """Allocate a regional reserve by weights without exceeding member liquidity caps."""
+    """Allocate a regional reserve without breaching fractional or absolute cash floors."""
     if scheme not in {"equal_all_members", "production_capacity_weighted"}:
         raise ValueError("unsupported reserve contribution scheme")
     if set(initial_cash_by_cell) != {cell.cell_id for cell in CELLS}:
@@ -596,6 +597,13 @@ def build_liquidity_capped_reserve_contributions(
         or not 0.0 <= max_contribution_fraction <= 1.0
     ):
         raise ValueError("max_contribution_fraction must be finite and in [0, 1]")
+    if (
+        isinstance(minimum_post_contribution_cash, bool)
+        or not isinstance(minimum_post_contribution_cash, (int, float))
+        or not math.isfinite(float(minimum_post_contribution_cash))
+        or minimum_post_contribution_cash < 0
+    ):
+        raise ValueError("minimum_post_contribution_cash must be finite and non-negative")
     cash: dict[str, float] = {}
     for cell_id, amount in initial_cash_by_cell.items():
         if (
@@ -619,7 +627,10 @@ def build_liquidity_capped_reserve_contributions(
                 for cell in members
             }
         caps = {
-            cell.cell_id: cash[cell.cell_id] * float(max_contribution_fraction)
+            cell.cell_id: min(
+                cash[cell.cell_id] * float(max_contribution_fraction),
+                max(0.0, cash[cell.cell_id] - float(minimum_post_contribution_cash)),
+            )
             for cell in members
         }
         target = float(reserve_per_region)
@@ -672,8 +683,9 @@ def build_liquidity_capped_federation_contributions(
     max_combined_contribution_fraction: float = 0.10,
     scheme: str = "equal_all_members",
     regional_contributions_by_cell: dict[str, float] | None = None,
+    minimum_post_contribution_cash: float = 0.0,
 ) -> dict[str, float]:
-    """Allocate a federation reserve globally within each member's remaining combined cap."""
+    """Allocate a federation reserve within combined fractional and absolute member cash floors."""
     cell_ids = {cell.cell_id for cell in CELLS}
     if set(initial_cash_by_cell) != cell_ids:
         raise ValueError("initial cash map must contain every known cell exactly once")
@@ -692,6 +704,13 @@ def build_liquidity_capped_federation_contributions(
     ):
         raise ValueError("combined contribution cap fraction must be finite and in [0, 1]")
 
+    if (
+        isinstance(minimum_post_contribution_cash, bool)
+        or not isinstance(minimum_post_contribution_cash, (int, float))
+        or not math.isfinite(float(minimum_post_contribution_cash))
+        or minimum_post_contribution_cash < 0
+    ):
+        raise ValueError("minimum_post_contribution_cash must be finite and non-negative")
     cash: dict[str, float] = {}
     for cell_id, amount in initial_cash_by_cell.items():
         if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(float(amount)) or amount < 0:
@@ -707,11 +726,18 @@ def build_liquidity_capped_federation_contributions(
                 raise ValueError("regional contributions must be finite and non-negative")
             regional[cell_id] = float(amount)
 
-    caps = {
-        cell_id: max(0.0, cash[cell_id] * float(max_combined_contribution_fraction) - regional[cell_id])
+    combined_caps = {
+        cell_id: min(
+            cash[cell_id] * float(max_combined_contribution_fraction),
+            max(0.0, cash[cell_id] - float(minimum_post_contribution_cash)),
+        )
         for cell_id in cell_ids
     }
-    if any(regional[cell_id] > cash[cell_id] * max_combined_contribution_fraction + 1e-9 for cell_id in cell_ids):
+    caps = {
+        cell_id: max(0.0, combined_caps[cell_id] - regional[cell_id])
+        for cell_id in cell_ids
+    }
+    if any(regional[cell_id] > combined_caps[cell_id] + 1e-9 for cell_id in cell_ids):
         raise ValueError("regional contributions already exceed the declared combined member cap")
     if sum(caps.values()) + 1e-9 < float(reserve_total):
         raise ValueError("remaining member liquidity caps cannot fund the federation reserve")
@@ -771,8 +797,9 @@ def compare_liquidity_capped_federation_contributions(
     days: int = 45,
     shock_regime: str = "severe",
     base_config: dict[str, Any] | None = None,
+    minimum_post_contribution_cash: float = 0.0,
 ) -> dict[str, Any]:
-    """Paired federation reserve experiment under combined local/federal member caps."""
+    """Paired federation reserve experiment under combined member liquidity constraints."""
     seed_list = list(seeds)
     if not seed_list:
         raise ValueError("at least one seed is required")
@@ -784,6 +811,7 @@ def compare_liquidity_capped_federation_contributions(
         max_combined_contribution_fraction,
         scheme,
         regional_map,
+        minimum_post_contribution_cash,
     )
     config.update({
         "initial_cash_by_cell": dict(initial_cash_by_cell),
@@ -798,6 +826,7 @@ def compare_liquidity_capped_federation_contributions(
         "seeds": seed_list,
         "reserve_total": float(reserve_total),
         "max_combined_contribution_fraction": float(max_combined_contribution_fraction),
+        "minimum_post_contribution_cash": float(minimum_post_contribution_cash),
         "scheme": scheme,
         "initial_cash_by_cell": dict(initial_cash_by_cell),
         "regional_contributions_by_cell": regional_map or {cell.cell_id: 0.0 for cell in CELLS},
@@ -819,13 +848,15 @@ def compare_liquidity_capped_reserve_contributions(
     max_contribution_fraction: float = 0.10,
     scheme: str = "production_capacity_weighted",
     base_config: dict[str, Any] | None = None,
+    minimum_post_contribution_cash: float = 0.0,
 ) -> dict[str, Any]:
-    """Paired experiment for a contribution rule bounded by each member's opening liquidity."""
+    """Paired experiment bounded by fractional contribution caps and absolute cash floors."""
     seed_list = list(seeds)
     if not seed_list:
         raise ValueError("at least one seed is required")
     contributions = build_liquidity_capped_reserve_contributions(
-        scheme, reserve_per_region, initial_cash_by_cell, max_contribution_fraction
+        scheme, reserve_per_region, initial_cash_by_cell,
+        max_contribution_fraction, minimum_post_contribution_cash,
     )
     config = dict(base_config or {})
     config.update({
@@ -841,6 +872,7 @@ def compare_liquidity_capped_reserve_contributions(
         "seeds": seed_list,
         "reserve_per_region": float(reserve_per_region),
         "max_contribution_fraction": float(max_contribution_fraction),
+        "minimum_post_contribution_cash": float(minimum_post_contribution_cash),
         "scheme": scheme,
         "initial_cash_by_cell": dict(initial_cash_by_cell),
         "contributions_by_cell": contributions,
