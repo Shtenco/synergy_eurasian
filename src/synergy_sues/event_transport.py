@@ -417,18 +417,29 @@ class DurableEventStore:
         message: Mapping[str, Any],
         handler: Callable[[sqlite3.Connection, Mapping[str, Any]], None],
         received_at: datetime | None = None,
+        authenticator: Callable[[Mapping[str, Any]], bool] | None = None,
     ) -> bool:
-        """Apply local DB effects and record inbox receipt in one transaction.
+        """Authenticate, validate and apply an inbox message in one local boundary.
 
-        Handler must use only the supplied connection and must not perform network,
-        payment, filesystem or other external side effects. Return False for an
-        exact duplicate; reject message-ID reuse with a different event hash.
+        The authenticator must verify the sender's signed envelope against an
+        explicit trust registry and return literal True. SHA-256 checks below
+        provide integrity only; they do not authenticate the publisher.
+        Handler must use only the supplied connection and must not perform
+        network, payment, filesystem or other external side effects. Return
+        False for an exact duplicate; reject ID reuse with a different hash.
         """
         if not isinstance(consumer, str) or not consumer.strip():
             raise ValueError("consumer must be a non-empty string")
         if not callable(handler):
             raise ValueError("handler must be callable")
+        if not callable(authenticator):
+            raise ValueError("a trusted signed-message authenticator is required")
         message_snapshot = json.loads(_canonical(dict(message)))
+        auth_snapshot = json.loads(_canonical(message_snapshot))
+        if authenticator(auth_snapshot) is not True:
+            raise ValueError("Inbox sender authentication failed")
+        if _canonical(auth_snapshot) != _canonical(message_snapshot):
+            raise ValueError("Inbox authenticator mutated the signed message snapshot")
         required = ("message_id", "event_id", "event_hash", "payload_json")
         if any(not isinstance(message_snapshot.get(key), str) or not message_snapshot.get(key) for key in required):
             raise ValueError("Inbox message is missing required string fields")
