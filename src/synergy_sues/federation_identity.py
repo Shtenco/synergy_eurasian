@@ -342,8 +342,9 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
                 BEFORE DELETE ON trust_audit BEGIN SELECT RAISE(ABORT, 'trust audit is append-only'); END;
             """)
         self._refresh()
+        self._ensure_state_anchor()
         if not self.verify_audit():
-            raise ValueError("trust registry administrative audit chain verification failed")
+            raise ValueError("trust registry administrative audit/state verification failed")
 
     @contextmanager
     def _session(self):
@@ -358,6 +359,61 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
             db.close()
 
     @staticmethod
+    def _registry_state_hash(db: sqlite3.Connection) -> str:
+        """Hash the live trust state, not just the administrative audit rows."""
+        state = {
+            "identities": [
+                dict(row) for row in db.execute(
+                    "SELECT identity_id,tenant_id,identity_type,display_name "
+                    "FROM trust_identities ORDER BY identity_id"
+                ).fetchall()
+            ],
+            "keys": [
+                dict(row) for row in db.execute(
+                    "SELECT identity_id,key_id,tenant_id,algorithm,public_key_b64,valid_from,valid_until "
+                    "FROM trust_keys ORDER BY identity_id,key_id"
+                ).fetchall()
+            ],
+            "revocations": [
+                dict(row) for row in db.execute(
+                    "SELECT identity_id,key_id,revoked_at "
+                    "FROM trust_revocations ORDER BY identity_id,key_id"
+                ).fetchall()
+            ],
+        }
+        return sha256(_canonical(state)).hexdigest()
+
+    def _ensure_state_anchor(self) -> None:
+        """Anchor legacy trust state once when upgrading an older audit schema.
+
+        This records the state present at upgrade time; it cannot retroactively
+        prove that legacy state was untampered before the anchor was created.
+        """
+        with self._session() as db:
+            last = db.execute(
+                "SELECT details_json FROM trust_audit ORDER BY sequence DESC LIMIT 1"
+            ).fetchone()
+            if last is None:
+                return
+            try:
+                details = json.loads(last["details_json"])
+            except (TypeError, ValueError):
+                return
+            if isinstance(details, dict) and "registry_state_sha256" in details:
+                return
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                self._append_audit(
+                    db, "REGISTRY_STATE_ANCHORED", "registry",
+                    {"legacy_state_anchor": True},
+                    datetime.now(timezone.utc).isoformat(),
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+
+    @staticmethod
     def _audit_hash(sequence: int, action: str, subject_id: str, details_json: str,
                     occurred_at: str, previous_hash: str) -> str:
         document = {"sequence": sequence, "action": action, "subject_id": subject_id,
@@ -370,7 +426,9 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
         prior = db.execute("SELECT sequence,event_hash FROM trust_audit ORDER BY sequence DESC LIMIT 1").fetchone()
         sequence = 1 if prior is None else int(prior["sequence"]) + 1
         previous_hash = "" if prior is None else str(prior["event_hash"])
-        details_json = _canonical(dict(details)).decode("utf-8")
+        audit_details = dict(details)
+        audit_details["registry_state_sha256"] = self._registry_state_hash(db)
+        details_json = _canonical(audit_details).decode("utf-8")
         digest = self._audit_hash(sequence, action, subject_id, details_json, occurred_at, previous_hash)
         db.execute("""INSERT INTO trust_audit
             (sequence,action,subject_id,details_json,occurred_at,previous_hash,event_hash)
@@ -492,6 +550,8 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
 
     def verify(self, envelope: SignedEventEnvelope | Mapping[str, Any],
                received_at: datetime | str | None = None) -> FederationIdentity:
+        if not self.verify_audit():
+            raise ValueError("trust registry state/audit verification failed")
         self._refresh()
         return super().verify(envelope, received_at)
 
@@ -520,4 +580,22 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
             if digest != row["event_hash"]:
                 return False
             previous = digest
+        if rows:
+            try:
+                latest_details = json.loads(rows[-1]["details_json"])
+            except (TypeError, ValueError):
+                return False
+            if not isinstance(latest_details, dict):
+                return False
+            anchored_state = latest_details.get("registry_state_sha256")
+            if not isinstance(anchored_state, str) or len(anchored_state) != 64:
+                return False
+            with self._session() as db:
+                if anchored_state != self._registry_state_hash(db):
+                    return False
+        else:
+            with self._session() as db:
+                empty_state = {"identities": [], "keys": [], "revocations": []}
+                if self._registry_state_hash(db) != sha256(_canonical(empty_state)).hexdigest():
+                    return False
         return True
