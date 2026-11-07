@@ -174,6 +174,21 @@ class TrustedKeyRegistry:
 
     def verify(self, envelope: SignedEventEnvelope | Mapping[str, Any],
                received_at: datetime | str | None = None) -> FederationIdentity:
+        """Verify a signature for current authorization use."""
+        return self._verify(envelope, received_at, require_current_validity=True)
+
+    def verify_historical(
+        self, envelope: SignedEventEnvelope | Mapping[str, Any],
+        verified_at: datetime | str | None = None,
+    ) -> FederationIdentity:
+        """Verify whether a signature was valid when signed; audit only, never authorize."""
+        return self._verify(envelope, verified_at, require_current_validity=False)
+
+    def _verify(
+        self, envelope: SignedEventEnvelope | Mapping[str, Any],
+        received_at: datetime | str | None,
+        require_current_validity: bool,
+    ) -> FederationIdentity:
         if isinstance(envelope, Mapping):
             try:
                 envelope = SignedEventEnvelope(**dict(envelope))
@@ -207,10 +222,11 @@ class TrustedKeyRegistry:
             raise ValueError("signature timestamp is outside key validity window")
         if revoked is not None and signed_at >= revoked:
             raise ValueError("signing key was revoked at signing time")
-        if now < start or (end is not None and now >= end):
-            raise ValueError("signing key is not currently valid")
-        if revoked is not None and now >= revoked:
-            raise ValueError("signing key is revoked")
+        if require_current_validity:
+            if now < start or (end is not None and now >= end):
+                raise ValueError("signing key is not currently valid")
+            if revoked is not None and now >= revoked:
+                raise ValueError("signing key is revoked")
         _event_hash(envelope.event)
         try:
             public_bytes = base64.b64decode(key.public_key_b64, validate=True)
