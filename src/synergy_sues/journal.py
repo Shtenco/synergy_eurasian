@@ -114,7 +114,9 @@ class Journal:
         self._accounts: dict[str, Account] = {}
         self._entries: dict[str, JournalEntry] = {}
         self._idempotency_keys: set[str] = set()
+        self._source_event_ids: set[str] = set()
         self._reversed: set[str] = set()
+        self._closed_through: date | None = None
         self._fx_rates: dict[str, FXRate] = {}
 
     @property
@@ -124,6 +126,18 @@ class Journal:
     @property
     def entries(self) -> tuple[JournalEntry, ...]:
         return tuple(self._entries.values())
+
+    @property
+    def closed_through(self) -> date | None:
+        return self._closed_through
+
+    def close_through(self, closing_date: date) -> date:
+        """Permanently close posting through a calendar date in this reference journal."""
+        _calendar_date(closing_date, "journal closing date")
+        if self._closed_through is not None and closing_date < self._closed_through:
+            raise ValueError("Journal close date cannot move backwards")
+        self._closed_through = closing_date
+        return closing_date
 
     def functional_value(self, amount: Money, fx_rate_ref: str | None = None) -> Money:
         """Value transaction currency in the journal functional currency."""
@@ -158,6 +172,7 @@ class Journal:
         rows = tuple(entries)
         pending_entry_ids: set[str] = set()
         pending_idempotency: set[str] = set()
+        pending_source_events: set[str] = set()
         pending_reversed: set[str] = set()
 
         for entry in rows:
@@ -165,6 +180,12 @@ class Journal:
                 raise ValueError(f"Duplicate journal entry: {entry.entry_id}")
             if entry.idempotency_key in self._idempotency_keys or entry.idempotency_key in pending_idempotency:
                 raise ValueError(f"Duplicate idempotency key: {entry.idempotency_key}")
+            if entry.source_event_id in self._source_event_ids or entry.source_event_id in pending_source_events:
+                raise ValueError(f"Duplicate source_event_id: {entry.source_event_id}")
+            if self._closed_through is not None and entry.effective_date <= self._closed_through:
+                raise ValueError(
+                    f"Journal effective date {entry.effective_date} is in a closed accounting period"
+                )
             if entry.functional_currency != self.functional_currency:
                 raise ValueError("Journal entry functional currency mismatch")
             line_ids = [line.line_id for line in entry.lines]
@@ -228,11 +249,13 @@ class Journal:
                 pending_reversed.add(entry.reversal_of)
             pending_entry_ids.add(entry.entry_id)
             pending_idempotency.add(entry.idempotency_key)
+            pending_source_events.add(entry.source_event_id)
 
         # Commit only after every candidate has passed validation.
         for entry in rows:
             self._entries[entry.entry_id] = entry
             self._idempotency_keys.add(entry.idempotency_key)
+            self._source_event_ids.add(entry.source_event_id)
             if entry.reversal_of is not None:
                 self._reversed.add(entry.reversal_of)
         return rows
@@ -252,6 +275,9 @@ class Journal:
             raise ValueError(f"Unknown journal entry: {entry_id}")
         if entry_id in self._reversed:
             raise ValueError(f"Journal entry has already been reversed: {entry_id}")
+        _calendar_date(effective_date, "journal reversal effective_date")
+        if effective_date < original.effective_date:
+            raise ValueError("Reversal effective date cannot precede the original entry")
         reversed_lines = tuple(
             JournalLine(
                 line_id=f"{reversal_entry_id}:{line.line_id}",
