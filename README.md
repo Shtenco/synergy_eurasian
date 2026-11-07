@@ -357,3 +357,13 @@ V6.6 is an additive research specification for comparing independent firms, mark
 - [Pull request #16](https://github.com/Shtenco/synergy_eurasian/pull/16)
 
 V6.6.0 defines cell state, decision rights, evidence classes, conservation invariants, coordination baselines, staged scale-up, governance attack scenarios and calibration gates. V6.6.1 adds a deterministic seven-cell make-to-order compatibility kernel and paired policy replay. Its DAO label is only a legacy greedy capacity-balancing proxy; CA and market are also deliberately narrow heuristics. Persistent inventory, lead times, credit, FX and real governance remain unimplemented. All scenario outputs remain synthetic research results, not forecasts or proof of policy superiority.
+
+
+### SYNERGY V6.6.2 — 20-cell inventory network
+
+- [V6.6.2 physical network kernel](src/synergy_v66/network.py)
+- [V6.6.2 topology, recipes and environment](src/synergy_v66/network_topology.py)
+- [V6.6.2 model specification and limitations](docs/66_SYNERGY_V6_6_2_20_CELL_INVENTORY_NETWORK.md)
+- [V6.6.2 physical-network tests](tests/test_synergy_v66_network.py)
+
+V6.6.2 adds a deterministic synthetic 20-cell / two-region network with three production sectors, multi-stage recipes, lot inventory, expiry-aware FIFO consumption, lead-time shipments, regional storage and transport constraints, shipment audit and per-SKU physical conservation. This is the physical submodel only: working capital, payment delays, contracts, FX and governance remain explicit next increments, not implemented capabilities. All parameters and outputs are synthetic research fixtures, not calibrated EAEU data or forecasts.
