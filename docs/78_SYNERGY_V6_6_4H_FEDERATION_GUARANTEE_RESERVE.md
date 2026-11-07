@@ -59,3 +59,10 @@ CI on code commit `633a7568978820a5176174c1d2dc74319230c327` completed successfu
 The 5.75 cross-region residual is intentionally higher than the 5.5 no-federation baseline in the targeted fixture: the regional and federation reserves are both funded by member opening cash, so the defaulting buyer has less cash available to pay its invoice. This illustrates why reserve coverage and reserve-funding liquidity effects must be assessed together.
 
 The latest full CI run on commit `864166836b7c7d57a818afe3adb78be7a6897988` also completed successfully: 138 tests passed, the financing stress experiment succeeded, and README integrity checks passed.
+
+
+## 7. Multiple-default exhaustion test
+
+A deterministic two-claim cross-region fixture now checks reserve drawdown under concurrent stress. Both buyers have a 30-unit payable and 20 units of cash; the federation reserve is funded with 7 units. Payables share the same due day and are resolved in stable invoice-ID order. The first eligible claim receives 7 units from the federation reserve and leaves 3 units of seller loss; the second receives zero after reserve exhaustion and leaves 10 units of seller loss. Consolidated cash remains conserved.
+
+This test verifies the deterministic allocation order and the fact that a finite federation reserve cannot cover all claims once exhausted. It does not model simultaneous clearing, priority classes, pro-rata haircut among creditors or legal insolvency ranking. The present ordering rule is a software determinism rule, not a normative creditor-priority rule.
