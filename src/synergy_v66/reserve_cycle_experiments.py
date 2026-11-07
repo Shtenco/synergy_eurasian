@@ -215,6 +215,17 @@ def _run_one_path(
 
     final = ledger.snapshot()
     final_cash = list(final["cash_by_cell"].values())
+    contribution_values = list(cumulative_contributions.values())
+    total_member_contributions = sum(contribution_values)
+    top_member_count = max(1, math.ceil(0.20 * len(contribution_values)))
+    top_contribution_share = (
+        sum(sorted(contribution_values, reverse=True)[:top_member_count]) / total_member_contributions
+        if total_member_contributions > EPS else 0.0
+    )
+    max_contribution_opening_cash_ratio = max(
+        (cumulative_contributions[cell_id] / opening_cash[cell_id] for cell_id in opening_cash),
+        default=0.0,
+    )
     # Opening cash is the total member funding before initial reserve allocations;
     # adding initial reserves again would double-count the same contributed money.
     total_initial_cash_and_reserves = sum(opening_cash.values())
@@ -234,6 +245,12 @@ def _run_one_path(
         "total_claim_uncovered": total_uncovered,
         "claim_coverage_ratio": total_paid / total_requested if total_requested > EPS else 1.0,
         "total_replenished": total_replenished,
+        "total_member_contributions": total_member_contributions,
+        "mean_member_cumulative_contribution": mean(contribution_values) if contribution_values else 0.0,
+        "max_member_cumulative_contribution": max(contribution_values, default=0.0),
+        "contribution_gini": _gini(contribution_values),
+        "top_20_percent_contribution_share": top_contribution_share,
+        "max_contribution_opening_cash_ratio": max_contribution_opening_cash_ratio,
         "total_recovery_requested": total_recovery_requested,
         "total_recovery_unfunded": total_recovery_unfunded,
         "recovery_funding_ratio": (
@@ -303,6 +320,12 @@ def run_paired_reserve_recovery_experiment(
         "total_claim_uncovered",
         "claim_coverage_ratio",
         "total_replenished",
+        "total_member_contributions",
+        "mean_member_cumulative_contribution",
+        "max_member_cumulative_contribution",
+        "contribution_gini",
+        "top_20_percent_contribution_share",
+        "max_contribution_opening_cash_ratio",
         "total_recovery_unfunded",
         "reserve_exhaustion_cycles",
         "regional_reserve_exhaustion_cycles",
