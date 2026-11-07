@@ -62,6 +62,7 @@ For each seed and policy, the experiment records:
 - maximum cash-conservation residual;
 - maximum excess over the ledger-owned 30-day member contribution cap;
 - total system cash change;
+- measured customer-collection inflows and external-supplier outflows;
 - bank draws and external inflows.
 
 The output preserves per-cycle observations as well as paired summaries across seeds. Paired path fingerprints must match across all five policies for each seed. Water-filling sums and ledger settlement iteration are explicitly sorted so repeated runs with the same inputs are bitwise reproducible. Recovery-plan fingerprints also bind the opening-cash capacity schedule, not just current cash and reserve balances.
