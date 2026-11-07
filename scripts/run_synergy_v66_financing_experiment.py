@@ -20,6 +20,7 @@ from synergy_v66.financing_experiments import (
     compare_regional_reserve_size_sensitivities,
     compare_liquidity_capped_federation_contributions,
     compare_federation_reserve_allocation_rules,
+    analyze_claim_class_relabeling_incentives,
 )
 
 
@@ -180,6 +181,28 @@ def main() -> int:
                 "uncovered_total": sum(allocation["uncovered_by_invoice"].values()),
             }, sort_keys=True))
         print(f"FEDERATION_RESERVE_ALLOCATION_REPORT_WRITTEN: {allocation_path}")
+        relabeling = analyze_claim_class_relabeling_incentives(
+            claims=[
+                {"invoice_id": "ORDINARY", "due_day": 0, "eligible_amount": 30.0, "claim_class": "ordinary"},
+                {"invoice_id": "ESSENTIAL", "due_day": 1, "eligible_amount": 10.0, "claim_class": "essential"},
+            ],
+            reserve_available=20.0,
+            priority_order=["essential", "ordinary"],
+            allocation_rule="priority_class_then_batch_pro_rata",
+        )
+        relabeling_path = output.with_name("synergy_v66_claim_class_relabeling_sensitivity.json")
+        relabeling_path.write_text(json.dumps(relabeling, indent=2, allow_nan=False), encoding="utf-8")
+        for item in relabeling["relabeling_sensitivity"]:
+            print(json.dumps({
+                "claim_class_relabeling": item["invoice_id"],
+                "original_class": item["original_class"],
+                "relabeled_class": item["relabeled_class"],
+                "payout_before": item["payout_before"],
+                "payout_after": item["payout_after"],
+                "claimant_payout_delta": item["claimant_payout_delta"],
+                "other_claim_payout_delta_total": item["other_claim_payout_delta_total"],
+            }, sort_keys=True))
+        print(f"CLAIM_CLASS_RELABELING_REPORT_WRITTEN: {relabeling_path}")
 
     if args.liquidity_capped_reserve:
         cash_fixture = make_synthetic_heterogeneous_cash_fixture()
