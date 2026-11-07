@@ -19,6 +19,7 @@ class BenefitEvent:
     counterfactual_id: str
     evidence_ids: tuple[str, ...]
     evidence_status: EvidenceStatus
+    measurement_scope_id: str = ""
 
     def __post_init__(self) -> None:
         if not all((self.benefit_event_id, self.measurement_id, self.enterprise_id,
@@ -26,8 +27,14 @@ class BenefitEvent:
             raise ValueError("Benefit event identity, measurement and counterfactual are required")
         if not isinstance(self.evidence_status, EvidenceStatus):
             object.__setattr__(self, "evidence_status", EvidenceStatus(self.evidence_status))
+        if not isinstance(self.evidence_ids, tuple):
+            object.__setattr__(self, "evidence_ids", tuple(self.evidence_ids))
         if not self.evidence_ids:
             raise ValueError("Benefit event requires at least one evidence ID")
+        if any(not isinstance(item, str) or not item for item in self.evidence_ids):
+            raise ValueError("Benefit evidence IDs must be non-empty strings")
+        if len(self.evidence_ids) != len(set(self.evidence_ids)):
+            raise ValueError("Benefit evidence IDs must be unique")
         if self.amount.amount < 0:
             raise ValueError("Benefit amount must be non-negative")
 
@@ -54,6 +61,7 @@ class BenefitAttributionRegistry:
     def __init__(self) -> None:
         self._events: dict[str, BenefitEvent] = {}
         self._measurement_ids: set[str] = set()
+        self._measurement_keys: set[tuple[str, str, str, str, str]] = set()
         self._claims: dict[str, BenefitAttribution] = {}
 
     def add_event(self, event: BenefitEvent) -> None:
@@ -61,8 +69,17 @@ class BenefitAttributionRegistry:
             raise ValueError(f"Duplicate benefit_event_id: {event.benefit_event_id}")
         if event.measurement_id in self._measurement_ids:
             raise ValueError(f"Measurement already registered: {event.measurement_id}")
+        measurement_key = (
+            event.enterprise_id, event.period_id, event.metric_code,
+            event.counterfactual_id, event.measurement_scope_id,
+        )
+        if measurement_key in self._measurement_keys:
+            raise ValueError(
+                "Enterprise/period/metric/counterfactual measurement scope already registered"
+            )
         self._events[event.benefit_event_id] = event
         self._measurement_ids.add(event.measurement_id)
+        self._measurement_keys.add(measurement_key)
 
     def add_claim(self, claim: BenefitAttribution) -> None:
         if claim.claim_id in self._claims:
