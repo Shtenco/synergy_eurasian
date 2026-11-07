@@ -873,3 +873,84 @@ def test_credit_ledger_floor_applies_to_combined_regional_and_federation_reserve
             federation_reserve_contributions_by_cell=federation,
             minimum_post_contribution_cash=9.0,
         )
+
+
+def test_batch_pro_rata_federation_clearing_shares_same_day_cross_region_default_loss():
+    from synergy_v66.network_topology import CELLS
+
+    contributions = {cell.cell_id: 0.0 for cell in CELLS}
+    contributions["WEST-LG"] = 5.0
+    contributions["EAST-LG"] = 5.0
+
+    def run(rule):
+        ledger = CreditLedger(
+            initial_cash_per_cell=20.0,
+            trade_credit_limit_per_cell=50.0,
+            federation_pool_reserve_total=10.0,
+            federation_reserve_contributions_by_cell=contributions,
+            federation_reserve_allocation_rule=rule,
+            grace_days=0,
+        )
+        first = ledger.authorize_purchase("WEST-PR1", "EAST-AG1", 30.0, 0, 0, "A-CROSS")
+        second = ledger.authorize_purchase("EAST-PR1", "WEST-AG1", 30.0, 0, 0, "B-CROSS")
+        assert first["authorized"] and second["authorized"]
+        ledger.process_day(0)
+        return ledger, first, second
+
+    fcfs, first, second = run("first_come_first_served")
+    assert fcfs.payables[first["invoice_id"]].federation_guarantee_paid == pytest.approx(10.0)
+    assert fcfs.payables[second["invoice_id"]].federation_guarantee_paid == pytest.approx(0.0)
+    assert fcfs.snapshot()["cash_conservation_error"] == pytest.approx(0.0)
+
+    pro_rata, first, second = run("batch_pro_rata")
+    first_invoice = pro_rata.payables[first["invoice_id"]]
+    second_invoice = pro_rata.payables[second["invoice_id"]]
+    snapshot = pro_rata.snapshot()
+    assert first_invoice.federation_guarantee_paid == pytest.approx(5.0)
+    assert second_invoice.federation_guarantee_paid == pytest.approx(5.0)
+    assert first_invoice.written_off == pytest.approx(5.0)
+    assert second_invoice.written_off == pytest.approx(5.0)
+    assert snapshot["federation_pool_guarantee_paid"] == pytest.approx(10.0)
+    assert snapshot["federation_pool_reserve_balance"] == pytest.approx(0.0)
+    assert snapshot["federation_reserve_allocation_rule"] == "batch_pro_rata"
+    assert snapshot["trade_bad_debt_by_cell"]["EAST-AG1"] == pytest.approx(5.0)
+    assert snapshot["trade_bad_debt_by_cell"]["WEST-AG1"] == pytest.approx(5.0)
+    assert snapshot["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_batch_pro_rata_keeps_local_reserve_ahead_of_federation_pool():
+    from synergy_v66.network_topology import CELLS
+
+    contributions = {cell.cell_id: 0.0 for cell in CELLS}
+    contributions["WEST-LG"] = 2.0
+    contributions["EAST-LG"] = 2.0
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        trade_credit_limit_per_cell=50.0,
+        regional_pool_reserve_per_region=2.0,
+        federation_pool_reserve_total=2.0,
+        regional_reserve_contributions_by_cell={
+            **{cell.cell_id: 0.0 for cell in CELLS},
+            "WEST-LG": 2.0,
+            "EAST-LG": 2.0,
+        },
+        federation_reserve_contributions_by_cell=contributions,
+        federation_reserve_allocation_rule="batch_pro_rata",
+        grace_days=0,
+    )
+    purchase = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 30.0, 0, 0, "LOCAL-FIRST")
+    assert purchase["authorized"]
+    ledger.process_day(0)
+    invoice = ledger.payables[purchase["invoice_id"]]
+    snapshot = ledger.snapshot()
+    assert invoice.guarantee_paid == pytest.approx(2.0)
+    assert invoice.federation_guarantee_paid == pytest.approx(2.0)
+    assert invoice.written_off == pytest.approx(6.0)
+    assert snapshot["regional_pool_reserve_by_region"]["WEST"] == pytest.approx(0.0)
+    assert snapshot["federation_pool_reserve_balance"] == pytest.approx(0.0)
+    assert snapshot["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_credit_ledger_rejects_unknown_federation_reserve_allocation_rule():
+    with pytest.raises(ValueError):
+        CreditLedger(federation_reserve_allocation_rule="arbitrary_priority")
