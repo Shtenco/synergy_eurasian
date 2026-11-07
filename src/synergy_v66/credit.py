@@ -636,7 +636,7 @@ class CreditLedger:
         bank_debt = {cell: account.bank_debt for cell, account in self.accounts.items()}
         expected_cash = self.opening_cash + self.bank_draws + self.customer_collections - self.external_supplier_payments - self.bank_repayments
         return {
-            "model_id": "SYNERGY_V6.6.4C_REGIONAL_GUARANTEE_CREDIT_LEDGER",
+            "model_id": "SYNERGY_V6.6.4E_REGIONAL_LOSS_WATERFALL_LEDGER",
             "current_day": self.current_day,
             "cell_count": len(self.accounts),
             "cash_by_cell": cash,
