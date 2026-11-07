@@ -17,6 +17,7 @@ from synergy_v66.financing_experiments import (
     compare_regional_loss_waterfalls,
     compare_liquidity_capped_reserve_contributions,
     make_synthetic_heterogeneous_cash_fixture,
+    compare_regional_reserve_size_sensitivities,
 )
 
 
@@ -30,6 +31,7 @@ def main() -> int:
     parser.add_argument("--reserve-allocation", action="store_true")
     parser.add_argument("--loss-waterfall", action="store_true")
     parser.add_argument("--liquidity-capped-reserve", action="store_true")
+    parser.add_argument("--reserve-sizing", action="store_true")
     args = parser.parse_args()
     if args.seed_count < 1 or args.days < 1:
         parser.error("--seed-count and --days must be >= 1")
@@ -179,6 +181,35 @@ def main() -> int:
                 "cash_conservation_error_max": metrics["cash_conservation_error"]["max"],
             }, sort_keys=True))
         print(f"LIQUIDITY_CAPPED_REPORT_WRITTEN: {liquidity_path}")
+
+    if args.reserve_sizing:
+        cash_fixture = make_synthetic_heterogeneous_cash_fixture()
+        sizing = compare_regional_reserve_size_sensitivities(
+            seeds=range(args.seed_start, args.seed_start + args.seed_count),
+            reserve_levels_per_region=(0.0, 5.0, 10.0, 20.0, 40.0),
+            days=args.days,
+            shock_regime="severe",
+            contribution_scheme="equal_all_members",
+            max_contribution_fraction=0.10,
+            base_config={"initial_cash_by_cell": cash_fixture},
+        )
+        sizing_path = output.with_name("synergy_v66_regional_reserve_sizing.json")
+        sizing_path.write_text(json.dumps(sizing, indent=2, allow_nan=False), encoding="utf-8")
+        for item in sizing["sensitivity_reports"]:
+            for mode, metrics in item["diagnostics"].items():
+                print(json.dumps({
+                    "reserve_per_region": item["reserve_per_region"],
+                    "mode": mode,
+                    "reserve_paid_mean": metrics["reserve_paid_mean"],
+                    "reserve_remaining_mean": metrics["reserve_remaining_mean"],
+                    "reserve_exhaustion_rate": metrics["reserve_exhaustion_rate"],
+                    "reserve_utilization_mean": metrics["reserve_utilization_mean"],
+                    "seller_trade_bad_debt_mean": metrics["seller_trade_bad_debt_mean"],
+                    "service_level_mean": metrics["service_level_mean"],
+                    "defaults_mean": metrics["defaults_mean"],
+                    "cash_conservation_error_max": metrics["cash_conservation_error_max"],
+                }, sort_keys=True))
+        print(f"RESERVE_SIZING_REPORT_WRITTEN: {sizing_path}")
     return 0
 
 
