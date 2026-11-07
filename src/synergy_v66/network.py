@@ -170,11 +170,12 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0,credit_
                     if credit_ledger.accounts[cell].defaulted:
                         qty=0.0
                     elif qty>1e-9:
-                        credit_ledger.issue_customer_invoice(
+                        invoice=credit_ledger.issue_customer_invoice(
                             seller=cell,amount=qty*EXTERNAL_SALE_PRICE[sku],
                             due_day=day+customer_terms_days,day=day,
                             invoice_id=f"CUST-{region}-{sku}-{day}",
                         )
+                        if not invoice["authorized"]: qty=0.0
                 if qty>1e-9: _consume_fifo(inventory[cell],sku,qty,day)
                 sold[sku]+=qty
                 sales_audit.append({"day":day,"cell_id":cell,"sku":sku,"quantity":qty})
