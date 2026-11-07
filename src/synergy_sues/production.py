@@ -614,11 +614,13 @@ def post_grni_invoice(
         raise ValueError("GRNI reference posting requires invoice currency equal to journal functional currency")
     _account_map(journal, grni_account_id, AccountType.LIABILITY, NormalBalance.CREDIT, "GRNI account")
     _account_map(journal, accounts_payable_account_id, AccountType.LIABILITY, NormalBalance.CREDIT, "AP account")
+    journal_entry_ids = {x.entry_id for x in journal.entries}
     posted_receipts = sum((
         matcher._orders[receipt.po_line_id].unit_price.amount * receipt.received_quantity.amount
         for receipt in matcher.receipts
         if receipt.po_line_id == invoice.po_line_id
-        and f"inventory:{receipt.receipt_id}" in {x.entry_id for x in journal.entries}
+        and receipt.receipt_id in matcher._journalized_receipts
+        and f"inventory:{receipt.receipt_id}" in journal_entry_ids
     ), Decimal("0"))
     posted_invoices = sum((
         row.amount.amount for row in matcher.invoices
