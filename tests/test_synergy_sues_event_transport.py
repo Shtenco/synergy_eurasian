@@ -377,3 +377,42 @@ def test_inbox_authenticates_signed_publisher_with_trusted_key_registry(tmp_path
             "signed-consumer", mismatched_message, lambda *_: None,
             received_at=utc(9, 2), authenticator=authenticator,
         )
+
+
+def test_inbox_retains_publisher_envelope_for_later_signature_reverification(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "sender-retained.db"))
+    receiver = DurableEventStore(str(tmp_path / "receiver-retained.db"))
+    sender.append(event(), now=utc())
+    claimed = sender.claim_outbox(now=utc())[0]
+    message = {
+        "message_id": claimed.message_id,
+        "event_id": claimed.event_id,
+        "event_hash": claimed.event_hash,
+        "payload_json": claimed.payload_json,
+        "publisher_identity_id": "org:trusted-publisher",
+        "publisher_signature": "signature:trusted",
+    }
+
+    def verify_publisher(snapshot):
+        return (
+            snapshot.get("publisher_identity_id") == "org:trusted-publisher"
+            and snapshot.get("publisher_signature") == "signature:trusted"
+        )
+
+    assert receiver.consume_inbox(
+        "audit-projector", message, lambda *_: None,
+        received_at=utc(), authenticator=verify_publisher,
+    )
+    assert receiver.verify_inbox(verify_publisher)
+
+    with sqlite3.connect(receiver.database_path) as db:
+        db.execute("DROP TRIGGER inbox_no_update")
+        tampered = dict(message)
+        tampered["publisher_signature"] = "signature:forged"
+        db.execute(
+            "UPDATE inbox SET message_json=? WHERE consumer=? AND message_id=?",
+            (json.dumps(tampered, sort_keys=True, separators=(",", ":")),
+             "audit-projector", message["message_id"]),
+        )
+    assert receiver.verify()  # Event content hash is intact; this alone cannot authenticate a publisher.
+    assert not receiver.verify_inbox(verify_publisher)
