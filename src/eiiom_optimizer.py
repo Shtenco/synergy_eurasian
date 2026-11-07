@@ -359,11 +359,15 @@ def validate_invariants(config: dict, solution: dict, tol: float = 1e-5) -> None
         }
         target = TARGETS[milestone]
         checks = [
-            (cumulative["Compute"], 1.2 * cumulative["AICloud"] + 0.0, "Compute/AICloud dependency"),
-            (cumulative["AICloud"], 2.0 + 1.2 * cumulative["Compute"], "AICloud cap"),
+            (cumulative["AICloud"], 2.0 + 1.2 * cumulative["Compute"], "AICloud/Compute dependency"),
             (cumulative["IndustrialAI"], 3.0 + 1.8 * cumulative["AICloud"] + 0.5 * cumulative["Robotics"], "IndustrialAI dependency"),
             (cumulative["SemiDesign"], 3.0 + 0.5 * cumulative["Compute"], "SemiDesign dependency"),
-            (cumulative["Robotics"], 2.0 + 2.0 * cumulative["MachineTools"] + 1.5 * cumulative["PowerElectronics"], "Robotics dependency"),
+            (0.25 * cumulative["Robotics"], cumulative["MachineTools"], "Robotics/MachineTools dependency"),
+            (cumulative["Robotics"], 2.0 + 2.0 * cumulative["MachineTools"] + 1.5 * cumulative["PowerElectronics"], "Robotics capacity dependency"),
+            (0.12 * (cumulative["UrbanRenovation"] + cumulative["RuralHousing"]), cumulative["ConstructionTech"], "ConstructionTech dependency"),
+            (0.7 * cumulative["AgroGenomics"], cumulative["SeedProduction"], "SeedProduction dependency"),
+            (cumulative["PrecisionAg"], 3.0 + 2.5 * cumulative["AICloud"], "PrecisionAg dependency"),
+            (cumulative["AgroRobotics"], 3.0 + 1.5 * cumulative["Robotics"] + cumulative["MachineTools"], "AgroRobotics dependency"),
         ]
         for value, upper, label in checks:
             if value > upper + tol:
@@ -381,6 +385,15 @@ def validate_invariants(config: dict, solution: dict, tol: float = 1e-5) -> None
             )
             if delivered < required - tol:
                 raise ValueError(f"Cumulative {sector} milestone target is not met")
+
+    global_caps = (
+        ("PrecisionAg", 60.0),
+        ("AgroRobotics", 15.0),
+        ("RuralAIClusters", 220.0),
+    )
+    for sector, cap in global_caps:
+        if capex_by_sector[sector] > cap + tol:
+            raise ValueError(f"Global {sector} allocation cap is exceeded")
 
     floors = {
         "STEM": "minimum_stem_bn", "FoodProcessing": "minimum_food_processing_bn",
