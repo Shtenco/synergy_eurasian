@@ -217,9 +217,15 @@ class AuthorizedActionExecutor:
                 # A persisted policy decision is valid only for the exact snapshot
                 # still current in this same SQLite database. BEGIN IMMEDIATE
                 # prevents a policy mutation from racing this check and commit.
-                if decision.policy_version is not None or decision.policy_hash is not None:
-                    if decision.policy_version is None or not decision.policy_hash:
-                        raise ValueError("incomplete versioned policy evidence")
+                if decision.policy_version is None or not decision.policy_hash:
+                    raise ValueError("authorization decision must include a versioned policy snapshot")
+                if isinstance(policy, FederationAuthorizationPolicy):
+                    if (
+                        policy.policy_version != decision.policy_version
+                        or policy.policy_hash != decision.policy_hash
+                    ):
+                        raise ValueError("in-memory authorization policy snapshot changed before execution")
+                else:
                     if getattr(policy, "database_path", None) != self.database_path:
                         raise ValueError("versioned policy execution requires the policy store and executor to share one SQLite database")
                     policy_table = db.execute(
@@ -247,6 +253,11 @@ class AuthorizedActionExecutor:
                         raise ValueError("authorization policy snapshot changed before execution")
 
                 result = handler(db, request, decision)
+                if isinstance(policy, FederationAuthorizationPolicy) and (
+                    policy.policy_version != decision.policy_version
+                    or policy.policy_hash != decision.policy_hash
+                ):
+                    raise ValueError("authorization policy changed during action handler execution")
                 result_json = _canonical(result).decode("utf-8")
                 decision_document = {
                     "allowed": decision.allowed,
