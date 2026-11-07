@@ -248,3 +248,13 @@ def test_same_approval_event_id_with_conflicting_signed_hash_is_rejected(tmp_pat
     assert signed_approvals[0].event["event_hash"] != signed_approvals[1].event["event_hash"]
     with pytest.raises(ValueError, match="collision with conflicting event hash"):
         policy().authorize(request, signed_approvals, registry, "2026-11-06T10:02:00+00:00")
+
+
+def test_authorization_rejects_stale_signed_requests(tmp_path):
+    registry, keys = setup_registry()
+    request = signed_event(tmp_path, "org:requester", "tenant:one", "key-1",
+        keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "stale-request")
+    with pytest.raises(ValueError, match="authorization request is stale"):
+        policy(min_approvals=0).authorize(
+            request, [], registry, "2026-11-06T10:10:00+00:00"
+        )
