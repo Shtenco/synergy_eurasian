@@ -45,7 +45,7 @@ def _gini(values: list[float]) -> float:
     return max(0.0, min(1.0, (2.0 * weighted) / (n * total) - (n + 1) / n))
 
 
-def _paired_path(seed: int, cycles: int, shock_regime: str) -> tuple[dict[str, float], list[dict[str, float]], str]:
+def _paired_path(seed: int, cycles: int, shock_regime: str) -> tuple[dict[str, float], list[dict[str, float]], list[dict[str, str]], str]:
     rng = random.Random(seed)
     opening_cash = {cell.cell_id: round(rng.uniform(80.0, 120.0), 8) for cell in CELLS}
     low, high = SHOCK_RANGES[shock_regime]
@@ -53,11 +53,22 @@ def _paired_path(seed: int, cycles: int, shock_regime: str) -> tuple[dict[str, f
         {region: round(rng.uniform(low, high), 8) for region in REGIONS}
         for _ in range(cycles)
     ]
-    payload = {"opening_cash": opening_cash, "claims_by_day": shocks}
+    beneficiaries_by_day = [
+        {
+            region: sorted(cell.cell_id for cell in CELLS if cell.region == region)[day % sum(cell.region == region for cell in CELLS)]
+            for region in REGIONS
+        }
+        for day in range(cycles)
+    ]
+    payload = {
+        "opening_cash": opening_cash,
+        "claims_by_day": shocks,
+        "beneficiaries_by_day": beneficiaries_by_day,
+    }
     fingerprint = hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
     ).hexdigest()
-    return opening_cash, shocks, fingerprint
+    return opening_cash, shocks, beneficiaries_by_day, fingerprint
 
 
 def _new_ledger(opening_cash: dict[str, float]) -> CreditLedger:
@@ -77,6 +88,7 @@ def _run_one_path(
     allocation_rule: str,
     opening_cash: dict[str, float],
     shocks: list[dict[str, float]],
+    beneficiaries_by_day: list[dict[str, str]],
     path_fingerprint: str,
 ) -> dict[str, Any]:
     ledger = _new_ledger(opening_cash)
@@ -104,7 +116,7 @@ def _run_one_path(
         day_paid = 0.0
         day_uncovered = 0.0
         for region in REGIONS:
-            beneficiary = f"{region}-MF1"
+            beneficiary = beneficiaries_by_day[day][region]
             claim = ledger.apply_exogenous_guarantee_claim(
                 claim_id=f"SEED-{seed}-{allocation_rule}-DAY-{day}-{region}",
                 region=region,
@@ -211,6 +223,7 @@ def _run_one_path(
             "regional_reserve_total": sum(snapshot["regional_pool_reserve_by_region"].values()),
             "federation_reserve": float(snapshot["federation_pool_reserve_balance"]),
             "cash_conservation_error": cash_error,
+            "claim_beneficiary_by_region": dict(beneficiaries_by_day[day]),
         })
 
     final = ledger.snapshot()
@@ -307,11 +320,11 @@ def run_paired_reserve_recovery_experiment(
     observations: dict[str, list[dict[str, Any]]] = {rule: [] for rule in rules}
     paired_paths = []
     for seed in seed_list:
-        opening_cash, shocks, fingerprint = _paired_path(seed, cycles, shock_regime)
+        opening_cash, shocks, beneficiaries_by_day, fingerprint = _paired_path(seed, cycles, shock_regime)
         paired_paths.append({"seed": seed, "path_fingerprint": fingerprint})
         for rule in rules:
             observations[rule].append(
-                _run_one_path(seed, cycles, shock_regime, rule, opening_cash, shocks, fingerprint)
+                _run_one_path(seed, cycles, shock_regime, rule, opening_cash, shocks, beneficiaries_by_day, fingerprint)
             )
 
     scalar_metrics = (
