@@ -55,6 +55,10 @@ class PolicyChangeResult:
     policy_hash: str
 
 
+class PolicyAuditPersistenceError(RuntimeError):
+    """Raised when a rejected policy change cannot be durably audited."""
+
+
 class SQLiteAuthorizationPolicyStore:
     """File-backed CAS policy store with two-person signed administration.
 
@@ -387,10 +391,6 @@ class SQLiteAuthorizationPolicyStore:
                      event_id, event_hash, envelope_json, "REJECTED", reason,
                      previous_hash, digest))
                 db.commit()
-        except Exception:
-            # Never replace the original authorization failure with an audit
-            # write failure. Operational monitoring must alert on audit I/O loss.
-            return
 
     def apply_change(
         self,
@@ -403,7 +403,13 @@ class SQLiteAuthorizationPolicyStore:
         try:
             return self._apply_change(request, approvals, registry, received_at)
         except Exception as exc:
-            self._record_rejected_attempt(request, exc)
+            try:
+                self._record_rejected_attempt(request, exc)
+            except Exception as audit_error:
+                raise PolicyAuditPersistenceError(
+                    "Policy change was rejected, but the rejection audit could not be persisted; "
+                    "administrative policy operations are blocked until audit storage is healthy"
+                ) from audit_error
             raise
 
     def _apply_change(
