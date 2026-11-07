@@ -782,3 +782,34 @@ def test_trade_documents_reject_datetime_in_calendar_date_fields():
         TradeDocument("bad-date", TradeSide.RECEIVABLE, "co1", "customer",
             datetime(2026, 11, 1, tzinfo=timezone.utc), date(2026, 11, 30),
             Money("10", "USD"), "invoice:bad-date")
+
+
+def test_trade_payable_settlement_posts_realized_fx_loss_against_invoice_carrying_value():
+    journal = Journal("USD")
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
+    journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_account(account("fx-gain", "7100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("fx-loss", "8100", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_fx_rate(FXRate("ap-invoice-rate", "EUR", "USD", "1.1",
+        datetime(2026, 11, 1, 12, tzinfo=timezone.utc), "fx:ap-invoice"))
+    journal.add_fx_rate(FXRate("ap-settlement-rate", "EUR", "USD", "1.2",
+        datetime(2026, 11, 6, 12, tzinfo=timezone.utc), "fx:ap-settlement"))
+    subledger = TradeSubledger(
+        [TradeDocument("ap-eur", TradeSide.PAYABLE, "co1", "supplier",
+            date(2026, 11, 1), date(2026, 11, 30), Money("100", "EUR"), "invoice:ap-eur")],
+        [TradeSettlement("ap-settle-eur", "ap-eur", date(2026, 11, 6),
+            Money("20", "EUR"), "cash", "bank:ap-eur")],
+    )
+    result = subledger.post_to_journal(
+        journal, TradeAccountMap("ar", "revenue", "ap", "purchases", "fx-gain", "fx-loss"),
+        datetime(2026, 11, 6, 13, tzinfo=timezone.utc),
+        {"invoice:ap-eur": "ap-invoice-rate", "bank:ap-eur": "ap-settlement-rate"},
+    )
+    assert result["expected_ap_credit_control_delta"] == "88.0"
+    assert result["actual_ap_credit_control_delta"] == "88.0"
+    trial = journal.trial_balance()
+    assert trial["accounts"]["fx-loss"]["debit"] == "2.0"
+    assert trial["balanced"]
