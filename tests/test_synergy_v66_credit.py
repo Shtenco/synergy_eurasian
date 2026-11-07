@@ -58,7 +58,7 @@ def test_trade_credit_limit_blocks_new_purchase():
     first = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 8.0, 5, 0, "PO-1")
     second = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 3.0, 5, 0, "PO-2")
     assert first["authorized"] is True
-    assert second == {"authorized": False, "reason": "insufficient_cash_and_credit"}
+    assert second == {"authorized": False, "reason": "buyer_trade_credit_limit"}
 
 
 def test_unpaid_invoice_causes_default_and_freezes_buyer():
