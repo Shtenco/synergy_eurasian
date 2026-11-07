@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from copy import deepcopy
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
@@ -108,6 +109,13 @@ class InventoryLedger:
     @property
     def movements(self) -> tuple[InventoryMovement, ...]:
         return tuple(self._movements.values())
+
+    def _snapshot(self):
+        """Capture mutable inventory state for an atomic compound operation."""
+        return deepcopy((self._lots, self._pool_units, self._lot_ids, self._movements))
+
+    def _restore(self, snapshot) -> None:
+        self._lots, self._pool_units, self._lot_ids, self._movements = deepcopy(snapshot)
 
     def _check_pool(self, item_id: str, location_id: str, unit: str) -> tuple[str, str]:
         key = (item_id, location_id)
