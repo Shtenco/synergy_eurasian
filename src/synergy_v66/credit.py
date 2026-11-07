@@ -85,6 +85,7 @@ class CreditLedger:
         regional_assessment_limit_per_cell: float | None = None,
         federation_pool_reserve_total: float = 0.0,
         federation_reserve_contributions_by_cell: dict[str, float] | None = None,
+        federation_reserve_allocation_rule: str = "first_come_first_served",
         regional_member_debit_limit_per_cell: float | None = None,
         regional_member_credit_limit_per_cell: float | None = None,
         grace_days: int = 2,
@@ -125,6 +126,8 @@ class CreditLedger:
             raise ValueError("minimum_post_contribution_cash must be finite and >= 0")
         if isinstance(federation_pool_reserve_total, bool) or not math.isfinite(float(federation_pool_reserve_total)) or federation_pool_reserve_total < 0:
             raise ValueError("federation_pool_reserve_total must be finite and >= 0")
+        if federation_reserve_allocation_rule not in {"first_come_first_served", "batch_pro_rata"}:
+            raise ValueError("federation_reserve_allocation_rule must be first_come_first_served or batch_pro_rata")
         if regional_assessment_limit_per_cell is not None and (
             isinstance(regional_assessment_limit_per_cell, bool)
             or not math.isfinite(float(regional_assessment_limit_per_cell))
@@ -247,6 +250,7 @@ class CreditLedger:
         self.federation_reserve_contributions_by_cell = dict(federation_contributions)
         self.federation_pool_reserve_initial = float(federation_pool_reserve_total)
         self.federation_pool_reserve_balance = float(federation_pool_reserve_total)
+        self.federation_reserve_allocation_rule = federation_reserve_allocation_rule
         self.federation_pool_guarantee_paid = 0.0
         self.regional_assessment_rate = float(regional_assessment_rate)
         self.regional_assessment_limit_per_cell = (
@@ -554,8 +558,14 @@ class CreditLedger:
         })
         return paid_total
 
-    def _resolve_payable_default(self, invoice: PayableInvoice, day: int) -> None:
-        """Resolve a matured default: use local reserve first, then write off residual."""
+    def _resolve_payable_default(
+        self,
+        invoice: PayableInvoice,
+        day: int,
+        local_guarantee_override: float | None = None,
+        federation_guarantee_override: float | None = None,
+    ) -> None:
+        """Resolve a matured default, optionally using preallocated batch guarantees."""
         buyer = self.accounts[invoice.buyer]
         remaining = invoice.remaining
         if remaining <= EPS:
@@ -570,7 +580,9 @@ class CreditLedger:
             invoice.seller is not None
             and CELL_BY_ID[invoice.buyer].region == CELL_BY_ID[invoice.seller].region
         )
-        if same_region:
+        if local_guarantee_override is not None:
+            guarantee = min(remaining, max(0.0, float(local_guarantee_override)))
+        elif same_region:
             region = CELL_BY_ID[invoice.buyer].region
             guarantee = min(remaining, self.regional_pool_reserve_by_region[region])
             if guarantee > EPS:
@@ -585,7 +597,9 @@ class CreditLedger:
 
         uncovered = max(0.0, remaining - guarantee)
         federation_guarantee = 0.0
-        if seller is not None and uncovered > EPS and self.federation_pool_reserve_balance > EPS:
+        if federation_guarantee_override is not None:
+            federation_guarantee = min(uncovered, max(0.0, float(federation_guarantee_override)))
+        elif seller is not None and uncovered > EPS and self.federation_pool_reserve_balance > EPS:
             federation_guarantee = min(uncovered, self.federation_pool_reserve_balance)
             self.federation_pool_reserve_balance -= federation_guarantee
             self.federation_pool_guarantee_paid += federation_guarantee
@@ -638,9 +652,98 @@ class CreditLedger:
     def _resolve_buyer_default(self, buyer_id: str, day: int) -> None:
         """Apply cross-default to all open payables of the failed buyer."""
         self.accounts[buyer_id].defaulted = True
+        batch_default_buyers: set[str] = set()
         for invoice in sorted(self.payables.values(), key=lambda x: (x.due_day, x.invoice_id)):
             if invoice.buyer == buyer_id and invoice.remaining > EPS and invoice.status != "defaulted":
                 self._resolve_payable_default(invoice, day)
+
+    def _resolve_buyer_defaults_batch(self, buyer_ids: set[str], day: int) -> None:
+        """Resolve all claims from buyers defaulting today with a batch pro-rata federal pool."""
+        invoices = sorted(
+            (
+                invoice for invoice in self.payables.values()
+                if invoice.buyer in buyer_ids
+                and invoice.remaining > EPS
+                and invoice.status != "defaulted"
+            ),
+            key=lambda invoice: (invoice.due_day, invoice.invoice_id),
+        )
+        local_paid_by_invoice: dict[str, float] = {}
+        residual_claims: list[PayableInvoice] = []
+
+        # Local regional reserves retain their first-loss position and are allocated in stable order.
+        for invoice in invoices:
+            local_paid = 0.0
+            seller = self.accounts[invoice.seller] if invoice.seller is not None else None
+            same_region = (
+                seller is not None
+                and CELL_BY_ID[invoice.buyer].region == CELL_BY_ID[invoice.seller].region
+            )
+            if same_region:
+                region = CELL_BY_ID[invoice.buyer].region
+                local_paid = min(invoice.remaining, self.regional_pool_reserve_by_region[region])
+                if local_paid > EPS:
+                    self.regional_pool_reserve_by_region[region] -= local_paid
+                    self.regional_pool_guarantee_paid_by_region[region] += local_paid
+                    seller.cash += local_paid
+                    self.events.append({
+                        "day": day, "type": "regional_pool_guarantee_paid",
+                        "invoice_id": invoice.invoice_id, "region": region,
+                        "seller": invoice.seller, "amount": local_paid,
+                    })
+            local_paid_by_invoice[invoice.invoice_id] = local_paid
+            if seller is not None and invoice.remaining - local_paid > EPS:
+                residual_claims.append(invoice)
+
+        # The federation pool is shared pro-rata across the same-day default batch.
+        residual_total = sum(
+            invoice.remaining - local_paid_by_invoice[invoice.invoice_id]
+            for invoice in residual_claims
+        )
+        federal_paid_by_invoice = {invoice.invoice_id: 0.0 for invoice in invoices}
+        federal_total = min(residual_total, self.federation_pool_reserve_balance)
+        if residual_total > EPS and federal_total > EPS:
+            coverage = federal_total / residual_total
+            for invoice in residual_claims:
+                eligible = invoice.remaining - local_paid_by_invoice[invoice.invoice_id]
+                payout = eligible * coverage
+                federal_paid_by_invoice[invoice.invoice_id] = payout
+            # Reconcile floating-point residue deterministically without exceeding a claim.
+            drift = federal_total - sum(federal_paid_by_invoice.values())
+            if abs(drift) > 1e-12:
+                for invoice in reversed(residual_claims):
+                    eligible = invoice.remaining - local_paid_by_invoice[invoice.invoice_id]
+                    room = eligible - federal_paid_by_invoice[invoice.invoice_id]
+                    if drift > 0 and room > 0:
+                        adjustment = min(room, drift)
+                    elif drift < 0 and federal_paid_by_invoice[invoice.invoice_id] > 0:
+                        adjustment = -min(federal_paid_by_invoice[invoice.invoice_id], -drift)
+                    else:
+                        continue
+                    federal_paid_by_invoice[invoice.invoice_id] += adjustment
+                    drift -= adjustment
+                    if abs(drift) <= 1e-12:
+                        break
+            self.federation_pool_reserve_balance -= federal_total
+            self.federation_pool_guarantee_paid += federal_total
+            for invoice in residual_claims:
+                payout = federal_paid_by_invoice[invoice.invoice_id]
+                if payout > EPS:
+                    self.accounts[invoice.seller].cash += payout
+                    self.events.append({
+                        "day": day, "type": "federation_pool_guarantee_paid",
+                        "invoice_id": invoice.invoice_id, "seller": invoice.seller,
+                        "buyer": invoice.buyer, "amount": payout,
+                        "allocation_rule": "batch_pro_rata",
+                    })
+
+        for invoice in invoices:
+            self._resolve_payable_default(
+                invoice,
+                day,
+                local_guarantee_override=local_paid_by_invoice[invoice.invoice_id],
+                federation_guarantee_override=federal_paid_by_invoice[invoice.invoice_id],
+            )
 
     def process_day(self, day: int) -> None:
         """Collect customer invoices first, then settle payables in stable ID order."""
@@ -708,7 +811,14 @@ class CreditLedger:
             if invoice.remaining > EPS and day > invoice.due_day:
                 invoice.status = "overdue"
             if invoice.remaining > EPS and day >= invoice.due_day + self.grace_days:
-                self._resolve_buyer_default(invoice.buyer, day)
+                if self.federation_reserve_allocation_rule == "batch_pro_rata":
+                    account.defaulted = True
+                    batch_default_buyers.add(invoice.buyer)
+                else:
+                    self._resolve_buyer_default(invoice.buyer, day)
+
+        if batch_default_buyers:
+            self._resolve_buyer_defaults_batch(batch_default_buyers, day)
 
     def snapshot(self) -> dict[str, Any]:
         cash = {cell: account.cash for cell, account in self.accounts.items()}
@@ -756,6 +866,7 @@ class CreditLedger:
             "minimum_post_contribution_cash": self.minimum_post_contribution_cash,
             "regional_reserve_contributions_by_cell": dict(self.regional_reserve_contributions_by_cell),
             "federation_reserve_contributions_by_cell": dict(self.federation_reserve_contributions_by_cell),
+            "federation_reserve_allocation_rule": self.federation_reserve_allocation_rule,
             "federation_pool_reserve_initial": self.federation_pool_reserve_initial,
             "federation_pool_reserve_balance": self.federation_pool_reserve_balance,
             "federation_pool_guarantee_paid": self.federation_pool_guarantee_paid,
