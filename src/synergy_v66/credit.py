@@ -33,6 +33,7 @@ class CellAccount:
     trade_payable: float = 0.0
     trade_receivable: float = 0.0
     customer_receivable: float = 0.0
+    customer_receivable_limit: float | None = None
     defaulted: bool = False
 
 
@@ -57,6 +58,7 @@ class CustomerInvoice:
     due_day: int
     issued_day: int
     status: str = "open"
+    collection_attempted: bool = False
 
 
 class CreditLedger:
@@ -68,6 +70,9 @@ class CreditLedger:
         bank_limit_per_cell: float = 0.0,
         trade_credit_limit_per_cell: float = 100.0,
         trade_receivable_limit_per_cell: float | None = None,
+        customer_receivable_limit_per_cell: float | None = None,
+        customer_recovery_rate: float = 1.0,
+        customer_grace_days: int = 0,
         grace_days: int = 2,
     ) -> None:
         limits = (initial_cash_per_cell, bank_limit_per_cell, trade_credit_limit_per_cell)
@@ -77,6 +82,14 @@ class CreditLedger:
             not math.isfinite(float(trade_receivable_limit_per_cell)) or trade_receivable_limit_per_cell < 0
         ):
             raise ValueError("trade receivable limit must be finite and >= 0")
+        if customer_receivable_limit_per_cell is not None and (
+            not math.isfinite(float(customer_receivable_limit_per_cell)) or customer_receivable_limit_per_cell < 0
+        ):
+            raise ValueError("customer receivable limit must be finite and >= 0")
+        if not math.isfinite(float(customer_recovery_rate)) or not 0.0 <= customer_recovery_rate <= 1.0:
+            raise ValueError("customer_recovery_rate must be between 0 and 1")
+        if not isinstance(customer_grace_days, int) or isinstance(customer_grace_days, bool) or customer_grace_days < 0:
+            raise ValueError("customer_grace_days must be a non-negative integer")
         if grace_days < 0:
             raise ValueError("grace_days must be >= 0")
         self.accounts = {
@@ -88,12 +101,19 @@ class CreditLedger:
                     float(trade_receivable_limit_per_cell)
                     if trade_receivable_limit_per_cell is not None else None
                 ),
+                customer_receivable_limit=(
+                    float(customer_receivable_limit_per_cell)
+                    if customer_receivable_limit_per_cell is not None else None
+                ),
             )
             for c in CELLS
         }
         self.payables: dict[str, PayableInvoice] = {}
         self.customer_invoices: dict[str, CustomerInvoice] = {}
         self.grace_days = int(grace_days)
+        self.customer_recovery_rate = float(customer_recovery_rate)
+        self.customer_grace_days = int(customer_grace_days)
+        self.customer_bad_debt = 0.0
         self.current_day = -1
         self.opening_cash = float(initial_cash_per_cell) * len(CELLS)
         self.bank_draws = 0.0
@@ -258,7 +278,7 @@ class CreditLedger:
 
     def issue_customer_invoice(
         self, seller: str, amount: float, due_day: int, day: int, invoice_id: str
-    ) -> None:
+    ) -> dict[str, Any]:
         self._cell(seller)
         if not isinstance(day, int) or isinstance(day, bool) or not math.isfinite(float(amount)) or amount <= 0 or not isinstance(due_day, int) or isinstance(due_day, bool) or due_day < day:
             raise ValueError("day and due_day must be integers; amount must be finite and > 0; due_day must be >= issue day")
@@ -267,12 +287,17 @@ class CreditLedger:
         self._day(day)
         account = self.accounts[seller]
         if account.defaulted:
-            raise ValueError("defaulted cell cannot issue new customer invoices")
+            return {"authorized": False, "reason": "seller_defaulted"}
+        exposure_limit = account.customer_receivable_limit
+        if exposure_limit is not None and account.customer_receivable + amount > exposure_limit + EPS:
+            self.events.append({"day": day, "type": "customer_invoice_rejected", "seller": seller, "amount": float(amount), "reason": "customer_exposure_limit"})
+            return {"authorized": False, "reason": "customer_exposure_limit"}
         self.customer_invoices[invoice_id] = CustomerInvoice(
             invoice_id, seller, float(amount), float(amount), int(due_day), int(day)
         )
         account.customer_receivable += float(amount)
         self.events.append({"day": day, "type": "customer_invoice_issued", "invoice_id": invoice_id, "seller": seller, "amount": float(amount), "due_day": int(due_day)})
+        return {"authorized": True, "reason": None, "invoice_id": invoice_id}
 
     def process_day(self, day: int) -> None:
         """Collect customer invoices first, then settle payables in stable ID order."""
@@ -280,14 +305,29 @@ class CreditLedger:
             raise ValueError("days must be integers and non-decreasing")
         self.current_day = day
         for invoice in sorted(self.customer_invoices.values(), key=lambda x: (x.due_day, x.invoice_id)):
-            if invoice.remaining > EPS and invoice.due_day <= day:
-                amount = invoice.remaining
-                self.accounts[invoice.seller].cash += amount
-                self.accounts[invoice.seller].customer_receivable -= amount
+            if invoice.remaining > EPS and invoice.due_day <= day and not invoice.collection_attempted:
+                amount = invoice.remaining * self.customer_recovery_rate
+                invoice.collection_attempted = True
+                if amount > EPS:
+                    self.accounts[invoice.seller].cash += amount
+                    self.accounts[invoice.seller].customer_receivable -= amount
+                    invoice.remaining -= amount
+                    self.customer_collections += amount
+                    self.events.append({"day": day, "type": "customer_collection", "invoice_id": invoice.invoice_id, "seller": invoice.seller, "amount": amount, "remaining": invoice.remaining})
+                if invoice.remaining <= EPS:
+                    invoice.remaining = 0.0
+                    invoice.status = "paid"
+                else:
+                    invoice.status = "partial"
+            if invoice.remaining > EPS and day > invoice.due_day:
+                invoice.status = "overdue"
+            if invoice.remaining > EPS and day >= invoice.due_day + self.customer_grace_days:
+                bad_debt = invoice.remaining
+                self.accounts[invoice.seller].customer_receivable -= bad_debt
+                self.customer_bad_debt += bad_debt
                 invoice.remaining = 0.0
-                invoice.status = "paid"
-                self.customer_collections += amount
-                self.events.append({"day": day, "type": "customer_collection", "invoice_id": invoice.invoice_id, "seller": invoice.seller, "amount": amount})
+                invoice.status = "defaulted"
+                self.events.append({"day": day, "type": "customer_default", "invoice_id": invoice.invoice_id, "seller": invoice.seller, "bad_debt": bad_debt})
 
         for invoice in sorted(self.payables.values(), key=lambda x: (x.due_day, x.invoice_id)):
             if invoice.remaining <= EPS or invoice.due_day > day or invoice.status == "defaulted":
@@ -339,10 +379,17 @@ class CreditLedger:
             "trade_payable_by_cell": {k: v.trade_payable for k, v in self.accounts.items()},
             "trade_receivable_by_cell": {k: v.trade_receivable for k, v in self.accounts.items()},
             "customer_receivable_by_cell": {k: v.customer_receivable for k, v in self.accounts.items()},
+            "customer_receivable_limit_by_cell": {k: v.customer_receivable_limit for k, v in self.accounts.items()},
+            "customer_receivable_utilization_by_cell": {
+                k: (v.customer_receivable / v.customer_receivable_limit if v.customer_receivable_limit is not None and v.customer_receivable_limit > EPS else 0.0)
+                for k, v in self.accounts.items()
+            },
+            "customer_bad_debt": self.customer_bad_debt,
             "defaulted_cells": sorted(k for k, v in self.accounts.items() if v.defaulted),
             "production_rejection_count": sum(e["type"] == "production_rejected" for e in self.events),
             "purchase_rejection_count": sum(e["type"] == "purchase_rejected" for e in self.events),
             "default_event_count": sum(e["type"] == "default" for e in self.events),
+            "customer_default_count": sum(e["type"] == "customer_default" for e in self.events),
             "bank_line_utilization_by_cell": {
                 k: (v.bank_debt / v.bank_limit if v.bank_limit > EPS else 0.0)
                 for k, v in self.accounts.items()
