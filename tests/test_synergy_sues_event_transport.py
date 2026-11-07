@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone, timedelta
 import json
 import sqlite3
@@ -210,3 +210,69 @@ def test_durable_store_remains_compatible_with_v7_sues_event_adapter(tmp_path):
     assert adapted[0].payload_json == json.dumps(
         stored.payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
     )
+
+
+def test_inbox_deduplicates_by_event_id_and_rejects_conflicting_event_hash(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "sender-event-id.db"))
+    receiver = DurableEventStore(str(tmp_path / "receiver-event-id.db"))
+    original = sender.append(event(), now=utc())
+    message = {
+        "message_id": "message-original", "event_id": original.event_id,
+        "event_hash": original.event_hash,
+        "payload_json": json.dumps({
+            **original.unsigned(), "event_hash": original.event_hash
+        }, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False),
+    }
+    applied = []
+    assert receiver.consume_inbox("consumer", message,
+        lambda db, incoming: applied.append(incoming["event_id"]), received_at=utc())
+    duplicate_message = {**message, "message_id": "message-redelivered"}
+    assert not receiver.consume_inbox("consumer", duplicate_message,
+        lambda db, incoming: applied.append("duplicate"), received_at=utc(9, 1))
+    assert applied == [original.event_id]
+
+    conflicting_source = replace(
+        event(), payload={"node_id": "tampered", "node_type": "PROJECT"},
+        source_ref="source:conflicting-same-event-id",
+    )
+    conflicting_sender = DurableEventStore(str(tmp_path / "sender-conflicting.db"))
+    conflicting = conflicting_sender.append(conflicting_source, now=utc())
+    conflicting_message = {
+        "message_id": "message-conflicting", "event_id": conflicting.event_id,
+        "event_hash": conflicting.event_hash,
+        "payload_json": json.dumps({
+            **conflicting.unsigned(), "event_hash": conflicting.event_hash
+        }, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False),
+    }
+    assert conflicting.event_id == original.event_id
+    assert conflicting.event_hash != original.event_hash
+    with pytest.raises(ValueError, match="event ID reused with a different event hash"):
+        receiver.consume_inbox("consumer", conflicting_message, lambda *_: None, received_at=utc(9, 2))
+    assert len(applied) == 1
+
+
+def test_inbox_handler_cannot_mutate_receipt_identity_and_receipts_are_append_only(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "sender-handler-mutation.db"))
+    receiver = DurableEventStore(str(tmp_path / "receiver-handler-mutation.db"))
+    stored = sender.append(event(), now=utc())
+    message = {
+        "message_id": "message-safe", "event_id": stored.event_id,
+        "event_hash": stored.event_hash, "payload_json": json.dumps(
+            {**stored.unsigned(), "event_hash": stored.event_hash},
+            sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False),
+    }
+
+    def mutate(db, incoming):
+        incoming["event_id"] = "forged-event-id"
+        incoming["payload_json"] = "{}"
+
+    assert receiver.consume_inbox("consumer", message, mutate, received_at=utc())
+    assert not receiver.consume_inbox("consumer", {**message, "message_id": "message-replay"},
+        lambda *_: None, received_at=utc(9, 1))
+    with sqlite3.connect(receiver.database_path) as db:
+        row = db.execute("SELECT event_id,event_hash FROM inbox").fetchone()
+        assert row == (stored.event_id, stored.event_hash)
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            db.execute("UPDATE inbox SET event_id='forged' WHERE consumer='consumer'")
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            db.execute("DELETE FROM inbox WHERE consumer='consumer'")
