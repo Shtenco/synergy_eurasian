@@ -474,3 +474,7 @@ The paired allocation experiment now compares four synthetic rules: FCFS, batch 
 - [V6.6.4-M adversarial claim-class relabeling sensitivity](docs/83_SYNERGY_V6_6_4M_CLAIM_CLASS_RELABELING_SENSITIVITY.md)
 
 The research runner measures how relabeling an ordinary claim as essential can shift reserve coverage away from other claims under priority-class rules. This is an incentive-risk analysis; the system does not automatically assign or validate real claim classes.
+
+- [V6.6.4-N adaptive multi-level reserve recovery](docs/84_SYNERGY_V6_6_4N_ADAPTIVE_MULTI_LEVEL_RESERVE_RECOVERY.md)
+
+V6.6.4-N adds a non-mutating recovery planner and atomic settlement across regional and federation reserves. Four deterministic capped allocation rules are supported: equal, production-capacity, opening-cash and adaptive-liquidity weights. Regional deficits are funded by members of the matching region first; federation funding then uses the remaining shared member capacity. A per-recovery-period cumulative contribution ceiling prevents repeated replenishment IDs from bypassing the member cap. Plans are fingerprinted and rejected if the ledger state changes before execution. The older federation-only replenishment API remains compatible. Repeated correlated-default recovery experiments and full CI verification on the exact implementation head remain required; all inputs are synthetic.
