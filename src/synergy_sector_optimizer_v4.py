@@ -43,7 +43,10 @@ def _number(value: Any, field: str) -> float:
 def _validate(cfg: dict[str, Any], budget: float) -> None:
     if not isinstance(cfg, dict):
         raise ValueError("Sector optimizer config must be an object")
-    budget = _number(budget, "investment budget")
+    try:
+        budget = _number(budget, "investment budget")
+    except ValueError as exc:
+        raise ValueError("Investment budget must be finite and positive.") from exc
     if budget <= 0:
         raise ValueError("Investment budget must be finite and positive.")
     weights = cfg.get("objective_weights")
@@ -51,7 +54,10 @@ def _validate(cfg: dict[str, Any], budget: float) -> None:
         raise ValueError("objective_weights must define exactly the modeled metrics")
     weight_values = {}
     for key in METRICS:
-        value = _number(weights[key], f"objective_weights.{key}")
+        try:
+            value = _number(weights[key], f"objective_weights.{key}")
+        except ValueError as exc:
+            raise ValueError(f"Objective weight {key} must be finite and non-negative.") from exc
         if value < 0:
             raise ValueError(f"Objective weight {key} must be finite and non-negative.")
         weight_values[key] = value
@@ -62,7 +68,10 @@ def _validate(cfg: dict[str, Any], budget: float) -> None:
     if not isinstance(norms, dict) or set(norms) != set(METRICS):
         raise ValueError("normalization must define exactly the modeled metrics")
     for key in METRICS:
-        value = _number(norms[key], f"normalization.{key}")
+        try:
+            value = _number(norms[key], f"normalization.{key}")
+        except ValueError as exc:
+            raise ValueError(f"Normalization value {key} must be finite and strictly positive.") from exc
         if value <= 0:
             raise ValueError(f"Normalization value {key} must be finite and strictly positive.")
 
