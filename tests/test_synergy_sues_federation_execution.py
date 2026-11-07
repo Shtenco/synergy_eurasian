@@ -268,7 +268,6 @@ def test_executor_isolates_signed_snapshot_from_caller_mutation(tmp_path):
 
     mutating_registry = MutatingRegistry()
     # Copy the trusted identities/keys into the test registry.
-    private, public = generate_ed25519_keypair()
     # Reuse the original registry's verification implementation and trust state
     # while mutating only the caller-owned envelope.
     mutating_registry._identities = registry._identities
