@@ -17,7 +17,7 @@ All modes use the same base cash, seller exposure cap, customer exposure cap, cu
 
 ## 2. Paired design
 
-For each seed, the environment is generated once and replayed under all five modes. The output records the environment hash for each mode; the hashes must be identical within each seed. Seeds are independent replicates. The runner reports mean, median, minimum and maximum for every metric.
+For each seed, the environment is generated once and replayed under all five modes. The output records the environment hash for each mode; the hashes must be identical within each seed. Seeds are independent replicates. The runner reports mean, median, minimum and maximum for every metric, plus per-seed paired deltas and aggregate paired-delta summaries versus the unconstrained reference.
 
 Metrics include:
 - finished output and sold units;
