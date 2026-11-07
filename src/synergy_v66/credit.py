@@ -162,9 +162,9 @@ class CreditLedger:
                 raise ValueError("buyer and seller must differ for internal trade")
         if not isinstance(day, int) or isinstance(day, bool) or not math.isfinite(float(amount)) or amount <= 0 or not isinstance(due_day, int) or isinstance(due_day, bool) or due_day < day:
             raise ValueError("day and due_day must be integers; amount must be finite and > 0; due_day must be >= issue day")
-        self._day(day)
         if not invoice_id or invoice_id in self.payables or invoice_id in self.customer_invoices:
             raise ValueError("invoice_id must be non-empty and unique")
+        self._day(day)
         if account.defaulted:
             return {"authorized": False, "reason": "buyer_defaulted"}
         if account.trade_payable + amount > account.trade_credit_limit + EPS:
@@ -184,9 +184,9 @@ class CreditLedger:
         self._cell(seller)
         if not isinstance(day, int) or isinstance(day, bool) or not math.isfinite(float(amount)) or amount <= 0 or not isinstance(due_day, int) or isinstance(due_day, bool) or due_day < day:
             raise ValueError("day and due_day must be integers; amount must be finite and > 0; due_day must be >= issue day")
-        self._day(day)
         if not invoice_id or invoice_id in self.payables or invoice_id in self.customer_invoices:
             raise ValueError("invoice_id must be non-empty and unique")
+        self._day(day)
         account = self.accounts[seller]
         if account.defaulted:
             raise ValueError("defaulted cell cannot issue new customer invoices")
