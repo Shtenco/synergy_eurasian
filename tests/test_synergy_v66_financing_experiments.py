@@ -119,6 +119,8 @@ def test_reserve_contribution_scheme_comparison_uses_paired_paths_and_fixed_rese
             row = comparison["observations"][mode][0]
             assert row["cash_conservation_error"] < 1e-6
             assert row["regional_pool_reserve_balance"] <= 24.0 + 1e-9
+        assert comparison["observations"]["cash_only"][0]["regional_pool_reserve_balance"] == pytest.approx(0.0)
+        assert comparison["observations"]["bank_only"][0]["regional_pool_reserve_balance"] == pytest.approx(0.0)
 
 
 def test_reserve_contribution_scheme_rejects_unknown_rule():
