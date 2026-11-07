@@ -61,6 +61,8 @@ METRICS = (
     "regional_pool_utilization_max",
     "regional_pool_reserve_balance",
     "regional_pool_guarantee_paid",
+    "federation_pool_reserve_balance",
+    "federation_pool_guarantee_paid",
     "regional_member_assessment_paid",
     "regional_member_assessment_attempts",
     "regional_assessment_requested",
@@ -90,6 +92,8 @@ def _metrics(result: dict[str, Any]) -> dict[str, float]:
             "regional_pool_utilization_by_region": {},
             "regional_pool_reserve_by_region": {},
             "regional_pool_guarantee_paid_by_region": {},
+            "federation_pool_reserve_balance": 0.0,
+            "federation_pool_guarantee_paid": 0.0,
             "regional_assessment_paid_by_region": {},
             "regional_assessment_attempt_count": 0,
             "regional_assessment_requested_by_region": {},
@@ -121,6 +125,8 @@ def _metrics(result: dict[str, Any]) -> dict[str, float]:
         "regional_pool_utilization_max": max(credit["regional_pool_utilization_by_region"].values(), default=0.0),
         "regional_pool_reserve_balance": sum(credit["regional_pool_reserve_by_region"].values()),
         "regional_pool_guarantee_paid": sum(credit["regional_pool_guarantee_paid_by_region"].values()),
+        "federation_pool_reserve_balance": float(credit["federation_pool_reserve_balance"]),
+        "federation_pool_guarantee_paid": float(credit["federation_pool_guarantee_paid"]),
         "regional_member_assessment_paid": sum(credit["regional_assessment_paid_by_region"].values()),
         "regional_member_assessment_attempts": float(credit["regional_assessment_attempt_count"]),
         "regional_assessment_requested": sum(credit["regional_assessment_requested_by_region"].values()),
@@ -170,6 +176,8 @@ def compare_financing_modes(
                     mode_config.pop("regional_reserve_contributions_by_cell", None)
                     mode_config.pop("regional_assessment_rate", None)
                     mode_config.pop("regional_assessment_limit_per_cell", None)
+                    mode_config.pop("federation_pool_reserve_total", None)
+                    mode_config.pop("federation_reserve_contributions_by_cell", None)
                 result = simulate(environment, credit_config=mode_config)
             hashes[mode] = result["environment_hash"]
             metrics = _metrics(result)
