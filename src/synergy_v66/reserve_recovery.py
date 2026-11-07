@@ -38,6 +38,7 @@ def _state_fingerprint(ledger: CreditLedger, period_id: str) -> str:
     state = {
         "current_day": ledger.current_day,
         "cash": {key: ledger.accounts[key].cash for key in sorted(ledger.accounts)},
+        "initial_cash_by_cell": {key: ledger.initial_cash_by_cell[key] for key in sorted(ledger.initial_cash_by_cell)},
         "defaulted": {key: ledger.accounts[key].defaulted for key in sorted(ledger.accounts)},
         "regional_reserves": {key: ledger.regional_pool_reserve_by_region[key] for key in REGIONS},
         "federation_reserve": ledger.federation_pool_reserve_balance,
