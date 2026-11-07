@@ -1031,12 +1031,16 @@ def compare_regional_reserve_size_sensitivities(
         initial_cash = {cell.cell_id: scalar_cash for cell in CELLS}
     reports = []
     for level in levels:
-        if max_contribution_fraction is None:
+        if max_contribution_fraction is None and minimum_post_contribution_cash <= 0:
             contributions = build_regional_reserve_contributions(contribution_scheme, float(level))
         else:
+            effective_fraction = (
+                1.0 if max_contribution_fraction is None
+                else float(max_contribution_fraction)
+            )
             contributions = build_liquidity_capped_reserve_contributions(
                 contribution_scheme, float(level), initial_cash,
-                float(max_contribution_fraction), float(minimum_post_contribution_cash),
+                effective_fraction, float(minimum_post_contribution_cash),
             )
         config = dict(config_base)
         config["regional_pool_reserve_per_region"] = float(level)
