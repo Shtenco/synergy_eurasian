@@ -597,7 +597,16 @@ def build_liquidity_capped_reserve_contributions(
         # Correct floating-point drift on a member with remaining headroom.
         residual = target - sum(result[cell.cell_id] for cell in members)
         if abs(residual) > 1e-10:
-            candidates = [cell.cell_id for cell in members if caps[cell.cell_id] - result[cell.cell_id] >= residual - 1e-12]
+            if residual > 0:
+                candidates = [
+                    cell.cell_id for cell in members
+                    if caps[cell.cell_id] - result[cell.cell_id] >= residual - 1e-12
+                ]
+            else:
+                candidates = [
+                    cell.cell_id for cell in members
+                    if result[cell.cell_id] >= -residual - 1e-12
+                ]
             if not candidates:
                 raise ArithmeticError(f"cannot reconcile reserve allocation for {region}")
             result[sorted(candidates)[-1]] += residual
