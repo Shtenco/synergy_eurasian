@@ -426,3 +426,5 @@ The credit ledger now tracks local regional net debtor/creditor positions, per-m
 The financing experiment module now includes `compare_regional_pool_sensitivities(...)` to sweep regional pool ceilings and member debit/credit caps under paired shocks.
 
 The CI experiment also runs a compact regional-pool sensitivity grid (tight and loose regional/member caps) and writes a separate JSON report under `outputs/`.
+
+The regional guarantee reserve is funded by an equal member-cash contribution at initialization. It covers same-region default claims up to the available reserve; uncovered amounts become seller trade bad debt. Reserve transfers are included in cash conservation and do not mint new cash.
