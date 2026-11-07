@@ -368,3 +368,16 @@ def test_paired_100_cycle_experiment_preserves_cash_and_enforces_member_caps():
             result["observations"][rule][seed_index]["total_claim_paid"] > baseline_paid + 1e-8
             for rule in ("equal", "production_capacity", "opening_cash", "adaptive_liquidity")
         )
+
+
+def test_100_cycle_experiment_is_bitwise_reproducible_for_same_seeds():
+    from synergy_v66.reserve_cycle_experiments import run_paired_reserve_recovery_experiment
+
+    kwargs = {
+        "seeds": [41],
+        "cycles": 100,
+        "shock_regime": "systemic",
+    }
+    first = run_paired_reserve_recovery_experiment(**kwargs)
+    second = run_paired_reserve_recovery_experiment(**kwargs)
+    assert first == second
