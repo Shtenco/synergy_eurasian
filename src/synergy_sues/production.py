@@ -278,6 +278,9 @@ class ProductionExecution:
     completed_at: datetime
 
     def __post_init__(self) -> None:
+        if not self.order_id or not self.completion_evidence_ref:
+            raise ValueError("Production execution requires order and completion evidence identity")
+        _aware(self.completed_at, "production execution completed_at")
         if self.direct_material_cost.currency != self.conversion_cost.currency or self.direct_material_cost.currency != self.capitalized_cost.currency:
             raise ValueError("Production cost currencies must match")
         if self.capitalized_cost != self.direct_material_cost + self.conversion_cost:
