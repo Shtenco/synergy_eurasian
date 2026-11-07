@@ -34,6 +34,7 @@ def main() -> int:
     for regime, comparison in report["reports_by_regime"].items():
         print(f"SHOCK REGIME: {regime}")
         for mode, metrics in comparison["summary"].items():
+            deltas = comparison["paired_delta_summary_vs_unconstrained_reference"].get(mode, {})
             print(json.dumps({
                 "mode": mode,
                 "service_level_mean": metrics["service_level"]["mean"],
@@ -42,6 +43,9 @@ def main() -> int:
                 "defaulted_cells_mean": metrics["defaulted_cells"]["mean"],
                 "bank_debt_mean": metrics["bank_debt"]["mean"],
                 "customer_bad_debt_mean": metrics["customer_bad_debt"]["mean"],
+                "paired_delta_service_level_vs_reference": deltas.get("service_level", {}).get("mean"),
+                "paired_delta_unmet_demand_vs_reference": deltas.get("unmet_demand_units", {}).get("mean"),
+                "paired_delta_defaults_vs_reference": deltas.get("defaulted_cells", {}).get("mean"),
                 "physical_balance_error_max": metrics["physical_balance_error"]["max"],
                 "cash_conservation_error_max": metrics["cash_conservation_error"]["max"],
             }, sort_keys=True))
