@@ -156,6 +156,120 @@ class AuthorityScopeEngine:
                 raise ValueError("minimum_approvals must be an integer >= 1")
             seen_roles.add(requirement.role_id)
 
+    def reserve_in_transaction(
+        self,
+        connection: Any,
+        evaluation: ScopeEvaluation,
+        committed_period_total: str,
+        source_ref: str,
+        now: datetime | None = None,
+    ) -> bool:
+        """Atomically reserve a passing scope evaluation inside the executor transaction.
+
+        committed_period_total MUST be queried from the authoritative ledger using
+        this same SQLite transaction. Active reservations are added before the
+        limit check, preventing two concurrent requests from spending the same
+        remaining headroom. Returns False only for an exact idempotent retry.
+        """
+        if not evaluation.allowed or not evaluation.scope_id:
+            raise ValueError("only an allowed scope evaluation can be reserved")
+        if not isinstance(source_ref, str) or not source_ref.strip():
+            raise ValueError("reservation source_ref must be non-empty")
+        scope = self._scopes.get(evaluation.scope_id)
+        if scope is None:
+            raise ValueError("scope evaluation references an unknown scope")
+        if not all((evaluation.request_id, evaluation.amount, evaluation.currency, evaluation.period_key)):
+            raise ValueError("scope evaluation is missing reservation dimensions")
+        amount = _decimal(evaluation.amount, "reservation amount")
+        committed = _decimal(committed_period_total, "committed_period_total")
+        if amount <= 0 or committed < 0:
+            raise ValueError("reservation amount must be positive and committed total non-negative")
+        if evaluation.currency not in scope.currencies:
+            raise ValueError("reservation currency is outside the authority scope")
+        if amount > _decimal(scope.max_per_transaction, "max_per_transaction"):
+            raise ValueError("reservation exceeds per-transaction authority limit")
+        if now is None:
+            instant = datetime.now(timezone.utc)
+        elif isinstance(now, datetime) and now.tzinfo is not None and now.utcoffset() is not None:
+            instant = now.astimezone(timezone.utc)
+        else:
+            raise ValueError("reservation timestamp must be timezone-aware")
+
+        existing = connection.execute(
+            "SELECT event_type,scope_id,tenant_id,period_key,currency,amount,source_ref "
+            "FROM authority_scope_reservation_events WHERE request_id=? ORDER BY rowid",
+            (evaluation.request_id,),
+        ).fetchall()
+        if existing:
+            first = existing[0]
+            if (len(existing) == 1 and first[0] == "RESERVED"
+                    and first[1] == scope.scope_id and first[2] == scope.tenant_id
+                    and first[3] == evaluation.period_key and first[4] == evaluation.currency
+                    and Decimal(first[5]) == amount and first[6] == source_ref):
+                return False
+            raise ValueError("scope reservation request_id has already been used")
+
+        active_rows = connection.execute(
+            "SELECT request_id,event_type,amount FROM authority_scope_reservation_events "
+            "WHERE scope_id=? AND tenant_id=? AND period_key=? AND currency=? ORDER BY rowid",
+            (scope.scope_id, scope.tenant_id, evaluation.period_key, evaluation.currency),
+        ).fetchall()
+        latest_by_request = {}
+        for row in active_rows:
+            latest_by_request[row[0]] = (row[1], row[2])
+        reserved = sum(
+            (Decimal(value[1]) for value in latest_by_request.values() if value[0] == "RESERVED"),
+            Decimal("0"),
+        )
+        if committed + reserved + amount > _decimal(scope.period_limit, "period_limit"):
+            raise ValueError("period_limit_exceeded_including_active_reservations")
+
+        connection.execute(
+            """INSERT INTO authority_scope_reservation_events
+            (event_id,request_id,event_type,scope_id,tenant_id,period_key,currency,
+             amount,source_ref,created_at)
+            VALUES(?,?,'RESERVED',?,?,?,?,?,?,?)""",
+            (f"reserve:{evaluation.request_id}", evaluation.request_id, scope.scope_id,
+             scope.tenant_id, evaluation.period_key, evaluation.currency,
+             format(amount, "f"), source_ref, instant.isoformat()),
+        )
+        return True
+
+    def release_in_transaction(
+        self,
+        connection: Any,
+        request_id: str,
+        settlement_ref: str,
+        now: datetime | None = None,
+    ) -> None:
+        """Release a reservation in the same transaction that records its ledger settlement."""
+        if not isinstance(request_id, str) or not request_id.strip():
+            raise ValueError("request_id is required to release a scope reservation")
+        if not isinstance(settlement_ref, str) or not settlement_ref.strip():
+            raise ValueError("settlement_ref is required to release a scope reservation")
+        if now is None:
+            instant = datetime.now(timezone.utc)
+        elif isinstance(now, datetime) and now.tzinfo is not None and now.utcoffset() is not None:
+            instant = now.astimezone(timezone.utc)
+        else:
+            raise ValueError("reservation release timestamp must be timezone-aware")
+        rows = connection.execute(
+            "SELECT event_type,scope_id,tenant_id,period_key,currency,amount "
+            "FROM authority_scope_reservation_events WHERE request_id=? ORDER BY rowid",
+            (request_id,),
+        ).fetchall()
+        if not rows or rows[-1][0] != "RESERVED":
+            raise ValueError("only an active scope reservation can be released")
+        latest = rows[-1]
+        connection.execute(
+            """INSERT INTO authority_scope_reservation_events
+            (event_id,request_id,event_type,scope_id,tenant_id,period_key,currency,
+             amount,source_ref,created_at)
+            VALUES(?,?,'RELEASED',?,?,?,?,?,?,?)""",
+            (f"release:{request_id}", request_id, latest[1], latest[2], latest[3],
+             latest[4], latest[5], settlement_ref, instant.isoformat()),
+        )
+
     def evaluate(
         self,
         request: SignedEventEnvelope,
