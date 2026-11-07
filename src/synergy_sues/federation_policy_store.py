@@ -566,7 +566,7 @@ class SQLiteAuthorizationPolicyStore:
                     return False
                 request_envelope = self._decode_envelope(request)
                 if registry is not None:
-                    registry.verify(request_envelope, received_at=request_envelope.signed_at)
+                    registry.verify_historical(request_envelope, verified_at=request_envelope.signed_at)
                 change_event = request_envelope.event
                 _event_hash(change_event)
                 change_payload = change_event.get("payload")
@@ -589,7 +589,7 @@ class SQLiteAuthorizationPolicyStore:
                 for approval_document in approvals:
                     approval_envelope = self._decode_envelope(approval_document)
                     if registry is not None:
-                        registry.verify(approval_envelope, received_at=approval_envelope.signed_at)
+                        registry.verify_historical(approval_envelope, verified_at=approval_envelope.signed_at)
                     approval_event = approval_envelope.event
                     _event_hash(approval_event)
                     approval_payload = approval_event.get("payload")
