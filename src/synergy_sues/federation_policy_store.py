@@ -9,6 +9,7 @@ consensus or a production governance service.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from copy import deepcopy
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
@@ -402,6 +403,10 @@ class SQLiteAuthorizationPolicyStore:
         received_at: datetime | str | None = None,
     ) -> PolicyChangeResult:
         """Validate, apply or persist a rejected administrative attempt."""
+        if not isinstance(request, SignedEventEnvelope):
+            raise ValueError("request must be a SignedEventEnvelope")
+        request = deepcopy(request)
+        approvals = tuple(deepcopy(item) for item in approvals)
         try:
             return self._apply_change(request, approvals, registry, received_at)
         except Exception as exc:
@@ -533,6 +538,10 @@ class SQLiteAuthorizationPolicyStore:
         registry: TrustedKeyRegistry,
         received_at: datetime | str | None = None,
     ) -> AuthorizationDecision:
+        if not isinstance(request, SignedEventEnvelope):
+            raise ValueError("request must be a SignedEventEnvelope")
+        request = deepcopy(request)
+        approvals = tuple(deepcopy(item) for item in approvals)
         requester = registry.verify(request, received_at)
         if not self.verify(registry):
             raise ValueError("authorization policy history or historical signature verification failed")
