@@ -5,7 +5,7 @@ import sqlite3
 
 import pytest
 
-from synergy_sues.event_transport import DurableEventStore
+from synergy_sues.event_transport import DurableEventStore, signed_event_authenticator
 from synergy_sues.federation_identity import (
     ALGORITHM, FederationIdentity, TrustedKeyRegistry, TrustedSigningKey,
     generate_ed25519_keypair, sign_event,
@@ -349,16 +349,31 @@ def test_inbox_authenticates_signed_publisher_with_trusted_key_registry(tmp_path
         "signed_envelope": signed.as_dict(),
     }
 
-    def verify_publisher(incoming):
-        identity = registry.verify(
-            incoming["signed_envelope"], received_at="2026-11-06T09:02:00+00:00"
-        )
-        return identity.identity_id == "org:publisher"
-
+    authenticator = signed_event_authenticator(
+        registry, received_at="2026-11-06T09:02:00+00:00"
+    )
     applied = []
     assert receiver.consume_inbox(
         "signed-consumer", message,
         lambda db, incoming: applied.append(incoming["event_id"]),
-        received_at=utc(9, 2), authenticator=verify_publisher,
+        received_at=utc(9, 2), authenticator=authenticator,
     )
     assert applied == [stored.event_id]
+
+    mismatched_event = {
+        **signed.event,
+        "payload": {"node_id": "forged", "node_type": "PROJECT"},
+    }
+    mismatched_message = {
+        **message,
+        "message_id": "message-signed-mismatch",
+        "payload_json": json.dumps(
+            mismatched_event, sort_keys=True, separators=(",", ":"),
+            ensure_ascii=False, allow_nan=False,
+        ),
+    }
+    with pytest.raises(ValueError, match="authentication failed"):
+        receiver.consume_inbox(
+            "signed-consumer", mismatched_message, lambda *_: None,
+            received_at=utc(9, 2), authenticator=authenticator,
+        )
