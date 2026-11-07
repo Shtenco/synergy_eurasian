@@ -63,7 +63,7 @@ In this small fixture, the hybrid path exhausted the federation reserve while th
 **Validation:** 148 pytest tests passed on commit `c5f094f3ea46c62fb50e1ac26f48c78e320d331a`. Full EIIOM CI completed successfully, including the new multi-default exhaustion test and federation liquidity-cap experiment. The README integrity check also passed on the preceding model commit. The CI step wrote `outputs/synergy_v66_federation_liquidity_cap.json`.
 
 
-## 5. Absolute cash floor across both reserve tiers
+## 6. Absolute cash floor across both reserve tiers
 
 The federation allocator accepts `minimum_post_contribution_cash`. It computes the combined member cap as the minimum of the declared fraction of opening cash and the amount above the absolute floor, then subtracts the member's already-funded regional contribution. A regional contribution that already breaches the combined floor causes rejection; it is not concealed by assigning zero federation contribution.
 
