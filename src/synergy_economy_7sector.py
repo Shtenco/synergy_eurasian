@@ -45,6 +45,8 @@ def _number(
     if not np.isfinite(result):
         raise ValueError(f"{field} must be finite")
     if minimum is not None and result < minimum:
+        if minimum == 0.0:
+            raise ValueError(f"{field} must be non-negative")
         raise ValueError(f"{field} must be >= {minimum}")
     if maximum is not None and result > maximum:
         raise ValueError(f"{field} must be <= {maximum}")
