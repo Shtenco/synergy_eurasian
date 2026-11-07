@@ -282,7 +282,7 @@ class SQLiteAuthorizationPolicyStore:
             raise ValueError("received_at must be timezone-aware")
         now = now.astimezone(timezone.utc)
         verified: dict[str, SignedEventEnvelope] = {}
-        seen_event_ids: set[str] = set()
+        seen_event_ids: dict[str, str] = {}
         veto = False
         for approval in approvals:
             approver = registry.verify(approval, received_at)
@@ -297,9 +297,14 @@ class SQLiteAuthorizationPolicyStore:
             }
             if set(approval_payload) != approval_fields:
                 raise ValueError("policy approval payload has missing or unsupported fields")
-            if approval.event["event_id"] in seen_event_ids:
+            approval_event_id = approval.event["event_id"]
+            approval_event_hash = approval.event["event_hash"]
+            previous_hash = seen_event_ids.get(approval_event_id)
+            if previous_hash is not None:
+                if previous_hash != approval_event_hash:
+                    raise ValueError("policy approval event ID reused with a different event hash")
                 continue
-            seen_event_ids.add(approval.event["event_id"])
+            seen_event_ids[approval_event_id] = approval_event_hash
             exact_binding = (
                 approval_payload["change_id"] == change_id
                 and approval_payload["tenant_id"] == tenant_id
