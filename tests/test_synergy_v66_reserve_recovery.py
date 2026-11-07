@@ -220,3 +220,20 @@ def test_ledger_rejects_multi_level_replenishment_without_canonical_period_and_c
     after = ledger.snapshot()
     assert after["cash_by_cell"] == before["cash_by_cell"]
     assert after["regional_pool_reserve_by_region"] == before["regional_pool_reserve_by_region"]
+
+
+def test_legacy_federation_api_cannot_bypass_period_cap_with_new_ids():
+    ledger = CreditLedger(initial_cash_per_cell=100.0, minimum_post_contribution_cash=10.0)
+    ledger.process_day(0)
+    first = _zero_map()
+    first["WEST-PR1"] = 10.0
+    ledger.replenish_federation_reserve(first, day=0, replenishment_id="LEGACY-TOPUP-1")
+    second = _zero_map()
+    second["WEST-PR1"] = 0.5
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match="cumulative period limit"):
+        ledger.replenish_federation_reserve(second, day=0, replenishment_id="LEGACY-TOPUP-2")
+    after = ledger.snapshot()
+    assert after["cash_by_cell"] == before["cash_by_cell"]
+    assert after["federation_pool_reserve_balance"] == before["federation_pool_reserve_balance"]
+    assert after["cash_conservation_error"] == pytest.approx(0.0)
