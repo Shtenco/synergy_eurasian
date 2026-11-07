@@ -1,6 +1,6 @@
 # SYNERGY V6.6.4-O — 100-cycle reserve survival experiment
 
-**Status:** research implementation added; 19 focused reserve-recovery tests are present. Full EIIOM CI on the exact current V6.6.4-O head is pending.  
+**Status:** research implementation added; 19 focused reserve-recovery tests are present, including a repeated-run determinism check. Full EIIOM CI on the exact current V6.6.4-O head is pending.  
 **Purpose:** compare no-replenishment and four contribution-allocation policies over 100 repeated reserve-claim / recovery cycles with paired exogenous paths and no external cash inflows.
 
 ## 1. What is being tested
@@ -54,7 +54,7 @@ For each seed and policy, the experiment records:
 - total claim requested, paid and uncovered;
 - claim coverage ratio;
 - total member contributions and unfunded recovery requirement;
-- reserve exhaustion cycles, measured immediately after claims and before recovery;
+- any-reserve, regional-reserve and federation-reserve exhaustion cycles, each measured immediately after claims and before recovery;
 - cycles ending with both regional reserves and the federation reserve restored to target;
 - member cash floor breaches and minimum closing member cash;
 - final member-cash Gini coefficient;
