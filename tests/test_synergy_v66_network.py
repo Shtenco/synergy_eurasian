@@ -126,6 +126,7 @@ def test_cash_constrained_network_paired_stress_invariants():
                 "initial_cash_per_cell": 80.0,
                 "bank_limit_per_cell": 25.0,
                 "trade_credit_limit_per_cell": 40.0,
+                "trade_receivable_limit_per_cell": 80.0,
                 "grace_days": 2,
                 "customer_terms_days": 2,
                 "local_terms_days": 2,
@@ -141,5 +142,6 @@ def test_cash_constrained_network_paired_stress_invariants():
             assert all(v >= -1e-9 for v in credit["cash_by_cell"].values())
             assert all(v <= 1.0 + 1e-9 for v in credit["bank_line_utilization_by_cell"].values())
             assert all(v <= 1.0 + 1e-9 for v in credit["trade_credit_utilization_by_cell"].values())
+            assert all(v <= 1.0 + 1e-9 for v in credit["trade_receivable_utilization_by_cell"].values())
             assert credit["production_rejection_count"] >= 0
             assert credit["purchase_rejection_count"] >= 0
