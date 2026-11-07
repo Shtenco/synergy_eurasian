@@ -561,6 +561,9 @@ def test_regional_member_assessment_covers_local_residual_loss_pro_rata():
     assert contributions["WEST-PR1"] == pytest.approx(0.0)
     assert contributions["WEST-AG1"] == pytest.approx(0.0)
     assert max(contributions.values()) <= 2.0 + 1e-9
+    positive = [value for value in contributions.values() if value > 0]
+    assert len(positive) == 8
+    assert all(value == pytest.approx(1.25) for value in positive)
     assert sum(contributions.values()) == pytest.approx(10.0)
     assert snap["cash_conservation_error"] == pytest.approx(0.0)
 
