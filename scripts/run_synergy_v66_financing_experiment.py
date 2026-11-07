@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from synergy_v66.financing_experiments import (
     compare_all_shock_regimes,
     compare_regional_pool_sensitivities,
+    compare_reserve_contribution_schemes,
 )
 
 
@@ -23,6 +24,7 @@ def main() -> int:
     parser.add_argument("--days", type=int, default=45)
     parser.add_argument("--output", default="outputs/synergy_v66_financing_experiment.json")
     parser.add_argument("--sensitivity", action="store_true")
+    parser.add_argument("--reserve-allocation", action="store_true")
     args = parser.parse_args()
     if args.seed_count < 1 or args.days < 1:
         parser.error("--seed-count and --days must be >= 1")
@@ -81,6 +83,31 @@ def main() -> int:
                 "hybrid_service_level_mean": case["summary"]["hybrid"]["service_level"]["mean"],
             }, sort_keys=True))
         print(f"SENSITIVITY_REPORT_WRITTEN: {sensitivity_path}")
+
+    if args.reserve_allocation:
+        allocation = compare_reserve_contribution_schemes(
+            seeds=range(args.seed_start, args.seed_start + args.seed_count),
+            days=args.days,
+            shock_regime="severe",
+            reserve_per_region=20.0,
+        )
+        allocation_path = output.with_name("synergy_v66_reserve_contribution_allocation.json")
+        allocation_path.write_text(json.dumps(allocation, indent=2, allow_nan=False), encoding="utf-8")
+        for scheme, payload in allocation["reports_by_contribution_scheme"].items():
+            comparison = payload["comparison"]
+            for mode in ("mutual_credit", "hybrid"):
+                metrics = comparison["summary"][mode]
+                print(json.dumps({
+                    "contribution_scheme": scheme,
+                    "mode": mode,
+                    "service_level_mean": metrics["service_level"]["mean"],
+                    "defaults_mean": metrics["defaulted_cells"]["mean"],
+                    "reserve_guarantee_paid_mean": metrics["regional_pool_guarantee_paid"]["mean"],
+                    "seller_trade_bad_debt_mean": metrics["trade_bad_debt"]["mean"],
+                    "reserve_balance_mean": metrics["regional_pool_reserve_balance"]["mean"],
+                    "cash_conservation_error_max": metrics["cash_conservation_error"]["max"],
+                }, sort_keys=True))
+        print(f"ALLOCATION_REPORT_WRITTEN: {allocation_path}")
     return 0
 
 
