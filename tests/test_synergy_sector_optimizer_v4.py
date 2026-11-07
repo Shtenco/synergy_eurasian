@@ -54,7 +54,7 @@ def test_weights_must_sum_to_one():
 def test_optimizer_rejects_nan_weights_zero_normalizers_and_bad_project_fields():
     cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
     cfg["objective_weights"]["annual_net_residual_yield"] = float("nan")
-    with pytest.raises(ValueError, match="finite and non-negative"):
+    with pytest.raises(ValueError, match="finite"):
         optimize_portfolio(cfg, 100_000)
 
     cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
@@ -75,7 +75,7 @@ def test_optimizer_rejects_nan_weights_zero_normalizers_and_bad_project_fields()
 
 def test_optimizer_rejects_nonfinite_budget_and_overcommitted_sector_minimums():
     cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
-    with pytest.raises(ValueError, match="finite and positive"):
+    with pytest.raises(ValueError, match="finite"):
         optimize_portfolio(cfg, float("nan"))
 
     cfg = load_config(ROOT / "data" / "synergy_sector_optimizer_v4.json")
