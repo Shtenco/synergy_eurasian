@@ -5,7 +5,7 @@ from .consolidation import (IntercompanyRecord, IntercompanyRecordType,
     post_intercompany_eliminations, reconcile_intercompany)
 from .journal import Account, AccountType, Journal, JournalEntry, JournalLine, NormalBalance
 from .inventory import InventoryLedger, InventoryLotAllocation, InventoryMovement, InventoryMovementType
-from .physical import FlowBoundary, PhysicalFlow, summarize_physical_flows
+from .physical import FlowBoundary, FlowEvidenceStatus, PhysicalFlow, summarize_physical_flows
 from .production import (BOMComponent, GRNIMatcher, GoodsReceipt, ProductionCompletionEvidence, ProductionCostEvent, ProductionCostType, ProductionExecution, ProductionInputConsumption, ProductionOrder, PurchaseOrderLine, SupplierInvoiceLine, execute_production_order, post_grni_invoice, post_grni_receipt)
 from .v7_adapter import (SUESRealizationBridge, SUESRealizationLink, SUESSourceEvent, adapt_v7_event_store, adapt_v7_realization_chain)
 from .v7_projectors import (ProjectorRegistry, ProjectorSpec, SUESProjection, replay_event_projections)
