@@ -80,6 +80,7 @@ class CreditLedger:
         self.bank_draws = 0.0
         self.customer_collections = 0.0
         self.external_supplier_payments = 0.0
+        self.bank_repayments = 0.0
         self.internal_transfer_in = 0.0
         self.internal_transfer_out = 0.0
         self.events: list[dict[str, Any]] = []
@@ -127,6 +128,22 @@ class CreditLedger:
         self.external_supplier_payments += float(variable_cost)
         self.events.append({"day": day, "type": "production_cost_paid", "cell_id": cell_id, "amount": float(variable_cost)})
         return {"authorized": True, "reason": None, "bank_draw": draw}
+
+    def repay_bank_credit(self, cell_id: str, amount: float, day: int) -> dict[str, Any]:
+        """Repay drawn bank credit from available cash without creating overdraft."""
+        self._day(day)
+        account = self._cell(cell_id)
+        if not math.isfinite(float(amount)) or amount <= 0:
+            raise ValueError("repayment amount must be finite and > 0")
+        if amount > account.cash + EPS:
+            return {"repaid": False, "reason": "insufficient_cash", "amount": 0.0}
+        if amount > account.bank_debt + EPS:
+            return {"repaid": False, "reason": "repayment_exceeds_bank_debt", "amount": 0.0}
+        account.cash -= float(amount)
+        account.bank_debt -= float(amount)
+        self.bank_repayments += float(amount)
+        self.events.append({"day": day, "type": "bank_repayment", "cell_id": cell_id, "amount": float(amount)})
+        return {"repaid": True, "reason": None, "amount": float(amount)}
 
     def authorize_purchase(
         self,
@@ -224,7 +241,7 @@ class CreditLedger:
     def snapshot(self) -> dict[str, Any]:
         cash = {cell: account.cash for cell, account in self.accounts.items()}
         bank_debt = {cell: account.bank_debt for cell, account in self.accounts.items()}
-        expected_cash = self.opening_cash + self.bank_draws + self.customer_collections - self.external_supplier_payments
+        expected_cash = self.opening_cash + self.bank_draws + self.customer_collections - self.external_supplier_payments - self.bank_repayments
         return {
             "model_id": "SYNERGY_V6.6.3A_MUTUAL_CREDIT_KERNEL",
             "current_day": self.current_day,
@@ -239,6 +256,7 @@ class CreditLedger:
             "bank_draws": self.bank_draws,
             "customer_collections": self.customer_collections,
             "external_supplier_payments": self.external_supplier_payments,
+            "bank_repayments": self.bank_repayments,
             "internal_transfer_in": self.internal_transfer_in,
             "internal_transfer_out": self.internal_transfer_out,
             "internal_transfer_net": self.internal_transfer_in - self.internal_transfer_out,
