@@ -277,15 +277,15 @@ def test_production_books_measured_output_not_planned_quantity():
     )
     result = execute_production_order(
         order, inventory, journal, "raw", "wip", "finished", NOW,
-        completion=completion("batch-measured", "1", {"steel": ("3", "kg", "meter:steel-measured")}),
+        completion=completion("batch-measured", "1", {"steel": ("2", "kg", "meter:steel-measured")}),
     )
     assert result.output_quantity == Quantity("1", "unit")
     assert result.output_movement.quantity == Quantity("1", "unit")
     assert result.completion_evidence_ref == "evidence:completion:batch-measured"
     pools = {row["item_id"]: row for row in inventory.summary()["pools"]}
-    assert pools["steel"]["quantity"] == "7"
+    assert pools["steel"]["quantity"] == "8"
     assert pools["part"]["quantity"] == "1"
-    assert result.direct_material_cost == Money("30", "USD")
+    assert result.direct_material_cost == Money("20", "USD")
 
 
 def test_production_execution_requires_completion_evidence_and_rejects_overproduction():
@@ -492,3 +492,27 @@ def test_backdated_invoice_cannot_make_later_invoice_unmatched_to_receipts():
             Money("4", "USD"), date(2026, 11, 4), "supplier:backdated",
         ))
     assert [row.invoice_line_id for row in matcher.invoices] == ["invoice-later"]
+
+
+
+def test_production_rejects_unapproved_bom_overconsumption_without_mutation():
+    journal = production_journal()
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("yield-input", "yield-lot", "steel", "factory",
+        Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 1), "receipt:yield")
+    before = inventory.summary()
+    order = ProductionOrder(
+        "batch-yield", "co1", "part", Quantity("1", "unit"), "factory",
+        (BOMComponent("steel", Quantity("2", "kg")),),
+        date(2026, 11, 6), "production:yield",
+    )
+    with pytest.raises(ValueError, match="exceeds BOM standard"):
+        execute_production_order(
+            order, inventory, journal, "raw", "wip", "finished", NOW,
+            completion=completion("batch-yield", "1", {
+                "steel": ("3", "kg", "meter:steel-yield")
+            }),
+        )
+    assert inventory.summary() == before
+    assert inventory.movements[0].movement_id == "yield-input"
+    assert journal.entries == ()
