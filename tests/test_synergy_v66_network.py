@@ -145,3 +145,34 @@ def test_cash_constrained_network_paired_stress_invariants():
             assert all(v <= 1.0 + 1e-9 for v in credit["trade_receivable_utilization_by_cell"].values())
             assert credit["production_rejection_count"] >= 0
             assert credit["purchase_rejection_count"] >= 0
+
+
+def test_customer_credit_limit_blocks_physical_sales_without_consuming_finished_goods():
+    environment = make_environment(404, 20, "normal")
+    baseline = simulate(environment)
+    constrained = simulate(environment, credit_config={
+        "initial_cash_per_cell": 1_000_000.0,
+        "bank_limit_per_cell": 0.0,
+        "trade_credit_limit_per_cell": 1_000_000.0,
+        "customer_receivable_limit_per_cell": 0.0,
+    })
+    assert sum(constrained["sold_by_sku"].values()) == pytest.approx(0.0)
+    assert sum(constrained["unmet_demand_by_sku"].values()) > sum(baseline["unmet_demand_by_sku"].values())
+    assert abs(constrained["physical_balance_error"]) < 1e-7
+    assert constrained["credit_ledger"]["customer_invoice_rejection_count"] > 0
+    assert abs(constrained["credit_ledger"]["cash_conservation_error"]) < 1e-6
+
+
+def test_customer_bad_debt_is_reported_without_breaking_cash_or_stock_balances():
+    result = simulate(make_environment(405, 25, "volatile"), credit_config={
+        "initial_cash_per_cell": 10_000.0,
+        "trade_credit_limit_per_cell": 10_000.0,
+        "customer_recovery_rate": 0.5,
+        "customer_grace_days": 2,
+    })
+    credit = result["credit_ledger"]
+    assert credit["customer_collections"] > 0.0
+    assert credit["customer_bad_debt"] > 0.0
+    assert credit["customer_default_count"] > 0
+    assert abs(credit["cash_conservation_error"]) < 1e-6
+    assert abs(result["physical_balance_error"]) < 1e-7
