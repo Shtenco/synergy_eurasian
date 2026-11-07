@@ -132,6 +132,8 @@ def main() -> int:
                     "defaults_mean": metrics["defaulted_cells"]["mean"],
                     "reserve_paid_mean": metrics["regional_pool_guarantee_paid"]["mean"],
                     "member_assessment_paid_mean": metrics["regional_member_assessment_paid"]["mean"],
+                    "member_assessment_requested_mean": metrics["regional_assessment_requested"]["mean"],
+                    "member_assessment_eligible_capacity_mean": metrics["regional_assessment_eligible_capacity"]["mean"],
                     "seller_trade_bad_debt_mean": metrics["trade_bad_debt"]["mean"],
                     "cash_conservation_error_max": metrics["cash_conservation_error"]["max"],
                 }, sort_keys=True))
