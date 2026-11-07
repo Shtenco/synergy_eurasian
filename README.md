@@ -470,3 +470,7 @@ The ledger can now replenish the federation reserve only through an explicit, at
 - [V6.6.4-L federation claim classes and priority rules](docs/82_SYNERGY_V6_6_4L_FEDERATION_CLAIM_PRIORITY.md)
 
 The paired allocation experiment now compares four synthetic rules: FCFS, batch pro-rata, priority-class-then-FCFS and priority-class-then-batch-pro-rata. The operational ledger still exposes only FCFS and batch pro-rata; class priority remains an analytical alternative pending governance and legal design.
+
+- [V6.6.4-M adversarial claim-class relabeling sensitivity](docs/83_SYNERGY_V6_6_4M_CLAIM_CLASS_RELABELING_SENSITIVITY.md)
+
+The research runner measures how relabeling an ordinary claim as essential can shift reserve coverage away from other claims under priority-class rules. This is an incentive-risk analysis; the system does not automatically assign or validate real claim classes.
