@@ -49,6 +49,11 @@ def test_productivity_flywheel_rejects_nonfinite_negative_and_zero_denominator_i
         calculate(bad)
 
     bad = copy.deepcopy(base)
+    bad["baseline"]["gross_cashflow_usd"] = 10**10000
+    with pytest.raises(ValueError, match="finite"):
+        calculate(bad)
+
+    bad = copy.deepcopy(base)
     bad["baseline"]["replacement_capex_usd"] = 0
     with pytest.raises(ValueError, match="must be positive"):
         calculate(bad)
