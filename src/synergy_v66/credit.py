@@ -6,6 +6,7 @@ from the physical simulator until its credit and cash invariants pass tests.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any
 
 from .network import CELLS
@@ -58,8 +59,9 @@ class CreditLedger:
         trade_credit_limit_per_cell: float = 100.0,
         grace_days: int = 2,
     ) -> None:
-        if min(initial_cash_per_cell, bank_limit_per_cell, trade_credit_limit_per_cell) < 0:
-            raise ValueError("cash and credit limits must be >= 0")
+        limits = (initial_cash_per_cell, bank_limit_per_cell, trade_credit_limit_per_cell)
+        if any(not math.isfinite(float(x)) or float(x) < 0 for x in limits):
+            raise ValueError("cash and credit limits must be finite and >= 0")
         if grace_days < 0:
             raise ValueError("grace_days must be >= 0")
         self.accounts = {
@@ -113,8 +115,8 @@ class CreditLedger:
         """Charge the modeled external variable cost before authorizing output."""
         self._day(day)
         account = self._cell(cell_id)
-        if variable_cost < 0:
-            raise ValueError("variable_cost must be >= 0")
+        if not math.isfinite(float(variable_cost)) or variable_cost < 0:
+            raise ValueError("variable_cost must be finite and >= 0")
         if account.defaulted:
             return {"authorized": False, "reason": "cell_defaulted", "bank_draw": 0.0}
         ok, draw = self._fund(cell_id, float(variable_cost), day)
@@ -142,8 +144,8 @@ class CreditLedger:
             self._cell(seller)
             if seller == buyer:
                 raise ValueError("buyer and seller must differ for internal trade")
-        if amount <= 0 or due_day < day:
-            raise ValueError("amount must be > 0 and due_day must be >= issue day")
+        if not math.isfinite(float(amount)) or amount <= 0 or not isinstance(due_day, int) or due_day < day:
+            raise ValueError("amount must be finite and > 0; due_day must be an integer >= issue day")
         if not invoice_id or invoice_id in self.payables or invoice_id in self.customer_invoices:
             raise ValueError("invoice_id must be non-empty and unique")
         if account.defaulted:
@@ -164,8 +166,8 @@ class CreditLedger:
     ) -> None:
         self._day(day)
         self._cell(seller)
-        if amount <= 0 or due_day < day:
-            raise ValueError("amount must be > 0 and due_day must be >= issue day")
+        if not math.isfinite(float(amount)) or amount <= 0 or not isinstance(due_day, int) or due_day < day:
+            raise ValueError("amount must be finite and > 0; due_day must be an integer >= issue day")
         if not invoice_id or invoice_id in self.payables or invoice_id in self.customer_invoices:
             raise ValueError("invoice_id must be non-empty and unique")
         account = self.accounts[seller]
