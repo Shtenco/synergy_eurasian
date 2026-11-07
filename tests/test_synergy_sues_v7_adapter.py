@@ -297,6 +297,11 @@ def test_realization_adapter_rejects_duplicate_source_ids_and_nonfinite_quantiti
             lambda *args: {}, [Output(observed_quantity="NaN")], [], [], [Invoice()],
             [], [], [], "2026-11-06",
         )
+    with pytest.raises(ValueError, match="float"):
+        adapt_v7_realization_chain(
+            lambda *args: {}, [Output(baseline_quantity=0.1)], [], [], [Invoice()],
+            [], [], [], "2026-11-06",
+        )
 
 
 def test_realization_adapter_rejects_allocation_to_unknown_invoice():
