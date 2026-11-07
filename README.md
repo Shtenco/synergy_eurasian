@@ -466,3 +466,7 @@ The credit ledger now supports an opt-in `batch_pro_rata` federation-reserve all
 - [V6.6.4-K explicit federation reserve replenishment](docs/81_SYNERGY_V6_6_4K_FEDERATION_RESERVE_REPLENISHMENT.md)
 
 The ledger can now replenish the federation reserve only through an explicit, atomic transfer from member cash. It rejects duplicate replenishment IDs, defaulted contributors and any contribution that breaches the member's minimum post-contribution cash floor.
+
+- [V6.6.4-L federation claim classes and priority rules](docs/82_SYNERGY_V6_6_4L_FEDERATION_CLAIM_PRIORITY.md)
+
+The paired allocation experiment now compares four synthetic rules: FCFS, batch pro-rata, priority-class-then-FCFS and priority-class-then-batch-pro-rata. The operational ledger still exposes only FCFS and batch pro-rata; class priority remains an analytical alternative pending governance and legal design.
