@@ -78,7 +78,11 @@ def test_recovery_period_cap_cannot_be_reset_by_repeated_replenishment_ids():
 
 
 def test_regional_recovery_uses_only_members_of_the_matching_region():
-    ledger = CreditLedger(initial_cash_per_cell=100.0, minimum_post_contribution_cash=10.0)
+    ledger = CreditLedger(
+        initial_cash_per_cell=100.0,
+        minimum_post_contribution_cash=10.0,
+        reserve_recovery_contribution_fraction=0.50,
+    )
     ledger.process_day(0)
     plan = plan_reserve_recovery(
         ledger,
@@ -94,7 +98,11 @@ def test_regional_recovery_uses_only_members_of_the_matching_region():
 
 
 def test_production_capacity_weighted_recovery_respects_member_caps():
-    ledger = CreditLedger(initial_cash_per_cell=100.0, minimum_post_contribution_cash=10.0)
+    ledger = CreditLedger(
+        initial_cash_per_cell=100.0,
+        minimum_post_contribution_cash=10.0,
+        reserve_recovery_contribution_fraction=0.50,
+    )
     ledger.process_day(0)
     plan = plan_reserve_recovery(
         ledger,
