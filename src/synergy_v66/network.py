@@ -1,15 +1,26 @@
 """Deterministic 20-cell physical inventory network for SYNERGY V6.6.2."""
 from __future__ import annotations
 from typing import Any
+from .credit import CreditLedger, TRANSFER_PRICE, EXTERNAL_SALE_PRICE, EXTERNAL_PRODUCTION_COST
 from .network_topology import (
     CELLS, CELL_BY_ID, REGIONS, SECTORS, DAYS_DEFAULT, RECIPES, SUPPLIERS, TARGET_STOCK,
     DEMAND_SKUS, SKUS, Lot, Shipment, make_environment, _fingerprint,
     _stock, _consume_fifo,
 )
 
-def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[str,Any]:
+def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0,credit_config:dict[str,Any]|None=None)->dict[str,Any]:
     if not environment: raise ValueError("environment must not be empty")
     if initial_inventory<0: raise ValueError("initial_inventory must be >= 0")
+    credit_ledger=None
+    customer_terms_days=2
+    local_terms_days=3
+    cross_border_terms_days=5
+    if credit_config is not None:
+        options=dict(credit_config)
+        customer_terms_days=int(options.pop("customer_terms_days",customer_terms_days))
+        local_terms_days=int(options.pop("local_terms_days",local_terms_days))
+        cross_border_terms_days=int(options.pop("cross_border_terms_days",cross_border_terms_days))
+        credit_ledger=CreditLedger(**options)
     inventory={c.cell_id:[] for c in CELLS}
     for c in CELLS:
         if c.role in RECIPES:
@@ -35,6 +46,8 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[
 
     for row in environment:
         day=int(row["day"]); p0=produced.copy(); d0=delivered.copy(); s0=sold.copy()
+        if credit_ledger is not None:
+            credit_ledger.process_day(day)
         arrived=[s for s in shipments if s.arrival_day<=day]
         shipments=[s for s in shipments if s.arrival_day>day]
         for s in arrived:
@@ -54,12 +67,18 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[
                 farm=next(c for c in CELLS if c.region==region and c.role==role)
                 room=max(0.0,CELL_BY_ID[f"{region}-WH"].warehouse_capacity-regional_load(region))
                 qty=min(farm.capacity*0.55*row["capacity_factor"][farm.cell_id],room)
+                if credit_ledger is not None and qty>1e-9:
+                    auth=credit_ledger.authorize_production(farm.cell_id,qty*EXTERNAL_PRODUCTION_COST[sku],day)
+                    if not auth["authorized"]: qty=0.0
                 inventory[farm.cell_id].append(Lot(f"H-{farm.cell_id}-{day}",sku,qty,day,day+365,farm.cell_id))
                 produced[sku]+=qty
                 production_audit.append({"day":day,"cell_id":farm.cell_id,"sku":sku,"quantity":qty})
             energy=f"{region}-EN"
             room=max(0.0,CELL_BY_ID[f"{region}-WH"].warehouse_capacity-regional_load(region))
             qty=min(18.0*row["capacity_factor"][energy],room)
+            if credit_ledger is not None and qty>1e-9:
+                auth=credit_ledger.authorize_production(energy,qty*EXTERNAL_PRODUCTION_COST["energy"],day)
+                if not auth["authorized"]: qty=0.0
             inventory[energy].append(Lot(f"E-{region}-{day}","energy",qty,day,day+1,energy))
             produced["energy"]+=qty
             production_audit.append({"day":day,"cell_id":energy,"sku":"energy","quantity":qty})
@@ -74,9 +93,12 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[
             room=max(0.0,CELL_BY_ID[f"{cell.region}-WH"].warehouse_capacity-regional_load(cell.region))
             batches=max(0.0,min(batches,room/recipe.output_per_batch))
             if batches<=1e-9: continue
+            output=batches*recipe.output_per_batch
+            if credit_ledger is not None:
+                auth=credit_ledger.authorize_production(cell.cell_id,output*EXTERNAL_PRODUCTION_COST[recipe.output_sku],day)
+                if not auth["authorized"]: continue
             for sku,per_batch in recipe.inputs.items():
                 qty=batches*per_batch; _consume_fifo(inventory[cell.cell_id],sku,qty,day); consumed[sku]+=qty
-            output=batches*recipe.output_per_batch
             inventory[cell.cell_id].append(Lot(f"P-{cell.cell_id}-{day}",recipe.output_sku,output,day,day+recipe.shelf_life_days,cell.cell_id))
             produced[recipe.output_sku]+=output
             production_audit.append({"day":day,"cell_id":cell.cell_id,"sku":recipe.output_sku,"quantity":output})
@@ -98,6 +120,14 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[
                     storage_room=max(0.0,CELL_BY_ID[f"{region}-WH"].warehouse_capacity-regional_load(region))
                     qty=min(need,available,transport_room,storage_room)
                     if qty<=1e-9: continue
+                    if credit_ledger is not None:
+                        cross=CELL_BY_ID[src].region!=CELL_BY_ID[dest].region
+                        terms=cross_border_terms_days if cross else local_terms_days
+                        auth=credit_ledger.authorize_purchase(
+                            buyer=dest,seller=src,amount=qty*TRANSFER_PRICE[sku],
+                            due_day=day+terms,day=day,invoice_id=f"PO-S{serial+1:06d}",
+                        )
+                        if not auth["authorized"]: continue
                     expiry_day=_consume_fifo(inventory[src],sku,qty,day); serial+=1
                     sh=Shipment(f"S{serial:06d}",src,dest,sku,qty,day,day+lead,expiry_day)
                     shipments.append(sh)
@@ -115,6 +145,12 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[
                 cap=CELL_BY_ID[f"{region}-LG"].capacity*row["capacity_factor"][f"{region}-LG"]
                 qty=min(need,available,room,max(0.0,cap-transport[region]))
                 if qty>1e-9:
+                    if credit_ledger is not None:
+                        auth=credit_ledger.authorize_purchase(
+                            buyer=cell.cell_id,seller=src,amount=qty*TRANSFER_PRICE["energy"],
+                            due_day=day+local_terms_days,day=day,invoice_id=f"PO-S{serial+1:06d}",
+                        )
+                        if not auth["authorized"]: continue
                     expiry_day=_consume_fifo(inventory[src],"energy",qty,day); serial+=1
                     sh=Shipment(f"S{serial:06d}",src,cell.cell_id,"energy",qty,day,day+1,expiry_day)
                     shipments.append(sh)
@@ -127,11 +163,22 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[
             for sku,role in DEMAND_SKUS.items():
                 cell=f"{region}-{role}"; demand=float(row["demand"][f"{region}-{sku}"])
                 qty=min(demand,_stock(inventory[cell],sku,day))
+                if credit_ledger is not None:
+                    if credit_ledger.accounts[cell].defaulted:
+                        qty=0.0
+                    elif qty>1e-9:
+                        credit_ledger.issue_customer_invoice(
+                            seller=cell,amount=qty*EXTERNAL_SALE_PRICE[sku],
+                            due_day=day+customer_terms_days,day=day,
+                            invoice_id=f"CUST-{region}-{sku}-{day}",
+                        )
                 if qty>1e-9: _consume_fifo(inventory[cell],sku,qty,day)
                 sold[sku]+=qty
                 sales_audit.append({"day":day,"cell_id":cell,"sku":sku,"quantity":qty})
                 unmet[sku]+=demand-qty
 
+        if credit_ledger is not None:
+            credit_ledger.process_day(day)
         for region in REGIONS:
             max_wh[region]=max(max_wh[region],regional_load(region))
             max_transport[region]=max(max_transport[region],transport[region])
@@ -159,6 +206,7 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[
         "warehouse_capacity_by_region":{r:CELL_BY_ID[f"{r}-WH"].warehouse_capacity for r in REGIONS},
         "pending_shipments":len(shipments),"shipment_dispatch_audit":dispatch_audit,
         "shipment_arrival_audit":arrival_audit,"daily_ledger":daily,
+        "credit_ledger":credit_ledger.snapshot() if credit_ledger is not None else None,
     }
 
 
