@@ -406,3 +406,20 @@ def test_exogenous_stress_claim_reports_uncovered_amount_without_creating_cash()
     assert after["exogenous_guarantee_claim_uncovered_total"] == pytest.approx(5.0)
     assert after["cash_by_cell"]["EAST-MF1"] - before["cash_by_cell"]["EAST-MF1"] == pytest.approx(5.0)
     assert after["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_recovery_plan_rejects_changed_opening_cash_capacity_schedule():
+    ledger = CreditLedger(initial_cash_per_cell=100.0)
+    ledger.process_day(0)
+    plan = plan_reserve_recovery(
+        ledger,
+        target_regional_by_region={"WEST": 5.0, "EAST": 5.0},
+        target_federation=0.0,
+    )
+    ledger.initial_cash_by_cell["WEST-PR1"] = 200.0
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match="ledger state changed"):
+        execute_reserve_recovery(ledger, plan, "OPENING-CASH-CHANGED", day=0)
+    after = ledger.snapshot()
+    assert after["cash_by_cell"] == before["cash_by_cell"]
+    assert after["regional_pool_reserve_by_region"] == before["regional_pool_reserve_by_region"]
