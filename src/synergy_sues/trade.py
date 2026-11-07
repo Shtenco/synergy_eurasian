@@ -172,10 +172,6 @@ class TradeSubledger:
         cutoff = as_of if as_of is not None else date.max
         _calendar_date(cutoff, "trade journal cutoff")
         self.project(cutoff)  # validate chronology and no over-settlement
-        if recorded_at.date() < cutoff and cutoff != date.max:
-            # A caller may request an as-of projection beyond the posting timestamp,
-            # but may not post a future-effective transaction into the journal.
-            pass
         fx_refs = fx_rate_refs_by_source_ref or {}
         account_map = {row.account_id: row for row in journal.accounts}
 
@@ -215,6 +211,8 @@ class TradeSubledger:
         for document in sorted(self.documents, key=lambda row: (row.issue_date, row.document_id)):
             if document.issue_date > cutoff:
                 continue
+            if document.issue_date > recorded_at.date():
+                raise ValueError(f"Trade document is future-effective at posting time: {document.document_id}")
             if document.side == TradeSide.RECEIVABLE:
                 debit_account, credit_account = accounts.receivable_account_id, accounts.revenue_account_id
                 debit_side, credit_side = PostingSide.DEBIT, PostingSide.CREDIT
@@ -255,6 +253,8 @@ class TradeSubledger:
         for settlement in sorted(self.settlements, key=lambda row: (row.settlement_date, row.settlement_id)):
             if settlement.settlement_date > cutoff:
                 continue
+            if settlement.settlement_date > recorded_at.date():
+                raise ValueError(f"Trade settlement is future-effective at posting time: {settlement.settlement_id}")
             document = self._documents[settlement.document_id]
             original_left = remaining_original[document.document_id]
             carrying_left = remaining_carrying[document.document_id]
