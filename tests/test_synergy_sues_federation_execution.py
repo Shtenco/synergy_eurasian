@@ -446,4 +446,6 @@ def test_executor_rejects_scope_guard_without_literal_true(tmp_path):
         )
     assert executor.receipts() == ()
     with sqlite3.connect(tmp_path / "scope-guard-false.db") as db:
-        assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 0
+        assert db.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='protected_effects'"
+        ).fetchone()[0] == 0
