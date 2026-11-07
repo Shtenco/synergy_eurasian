@@ -17,9 +17,12 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0,credit_
     cross_border_terms_days=5
     if credit_config is not None:
         options=dict(credit_config)
-        customer_terms_days=int(options.pop("customer_terms_days",customer_terms_days))
-        local_terms_days=int(options.pop("local_terms_days",local_terms_days))
-        cross_border_terms_days=int(options.pop("cross_border_terms_days",cross_border_terms_days))
+        customer_terms_days=options.pop("customer_terms_days",customer_terms_days)
+        local_terms_days=options.pop("local_terms_days",local_terms_days)
+        cross_border_terms_days=options.pop("cross_border_terms_days",cross_border_terms_days)
+        terms=(customer_terms_days,local_terms_days,cross_border_terms_days)
+        if any(not isinstance(x,int) or isinstance(x,bool) or x<0 for x in terms):
+            raise ValueError("credit payment terms must be non-negative integers")
         credit_ledger=CreditLedger(**options)
     inventory={c.cell_id:[] for c in CELLS}
     for c in CELLS:
@@ -192,7 +195,8 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0,credit_
     closing={s:sum(x.quantity for lots in inventory.values() for x in lots if x.sku==s and x.quantity>1e-9) for s in SKUS}
     balance={s:initial[s]+produced[s]-consumed[s]-sold[s]-expired[s]-closing[s]-transit[s] for s in SKUS}
     return {
-        "model_id":"SYNERGY_V6.6.2_20_CELL_INVENTORY_NETWORK","days":len(environment),
+        "model_id":"SYNERGY_V6.6.3B_CASH_CONSTRAINED_NETWORK" if credit_ledger is not None else "SYNERGY_V6.6.2_20_CELL_INVENTORY_NETWORK",
+        "credit_constrained":credit_ledger is not None,"days":len(environment),
         "cell_count":len(CELLS),"regions":list(REGIONS),"sector_count":len(SECTORS),
         "environment_hash":_fingerprint(environment),"initial_stock_by_sku":initial,
         "produced_by_sku":produced,"delivered_by_sku":delivered,"consumed_by_sku":consumed,
@@ -210,6 +214,6 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0,credit_
     }
 
 
-def run(seed:int,days:int=DAYS_DEFAULT,regime:str="volatile")->dict[str,Any]:
+def run(seed:int,days:int=DAYS_DEFAULT,regime:str="volatile",credit_config:dict[str,Any]|None=None)->dict[str,Any]:
     env=make_environment(seed,days,regime)
-    return {"seed":seed,"regime":regime,"environment_hash":_fingerprint(env),"result":simulate(env)}
+    return {"seed":seed,"regime":regime,"environment_hash":_fingerprint(env),"result":simulate(env,credit_config=credit_config)}
