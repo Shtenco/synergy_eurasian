@@ -861,18 +861,18 @@ def test_journal_close_blocks_backdated_posting_but_allows_forward_reversal():
     )
     with pytest.raises(ValueError, match="closed accounting period"):
         journal.post(late)
-    reversal = journal.reverse(
-        original.entry_id, "close-reversal", date(2026, 12, 1),
-        datetime(2026, 12, 1, 12, tzinfo=timezone.utc),
-        "close-reversal-event", "close-reversal-idem", "Reverse after close",
-    )
-    assert reversal.reversal_of == original.entry_id
     with pytest.raises(ValueError, match="cannot precede"):
         journal.reverse(
             original.entry_id, "too-early-reversal", date(2026, 11, 5),
             datetime(2026, 12, 1, 12, tzinfo=timezone.utc),
             "too-early-event", "too-early-idem", "Invalid early reversal",
         )
+    reversal = journal.reverse(
+        original.entry_id, "close-reversal", date(2026, 12, 1),
+        datetime(2026, 12, 1, 12, tzinfo=timezone.utc),
+        "close-reversal-event", "close-reversal-idem", "Reverse after close",
+    )
+    assert reversal.reversal_of == original.entry_id
 
 
 def test_bank_reconciliation_does_not_trust_caller_supplied_opening_ledger_balance():
