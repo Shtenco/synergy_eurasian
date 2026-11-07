@@ -5,7 +5,7 @@ Reference implementation only: callers must supply evidence and validated GL acc
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Iterable
