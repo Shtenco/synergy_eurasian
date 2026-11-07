@@ -363,5 +363,22 @@ def test_handler_cannot_issue_sql_transaction_control_or_drop_receipt_triggers(t
         assert db.execute(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='protected_effects'"
         ).fetchone()[0] == 0
-        with pytest.raises(sqlite3.DatabaseError):
-            db.execute("DROP TRIGGER execution_receipts_no_update")
+
+
+def test_handler_cannot_drop_executor_receipt_triggers(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="handler-drop-trigger")
+    path = str(tmp_path / "handler-drop-trigger.db")
+    executor = AuthorizedActionExecutor(path)
+
+    def trigger_dropping_handler(db, request, decision):
+        db.execute("DROP TRIGGER execution_receipts_no_update")
+
+    with pytest.raises(sqlite3.DatabaseError):
+        executor.execute(request, [approval], policy, registry, trigger_dropping_handler, now())
+    assert executor.receipts() == ()
+    with sqlite3.connect(path) as db:
+        exists = db.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name='execution_receipts_no_update'"
+        ).fetchone()[0]
+        assert exists == 1
