@@ -156,6 +156,8 @@ def compare_financing_modes(
                 else:
                     mode_config.pop("regional_pool_reserve_per_region", None)
                     mode_config.pop("regional_reserve_contributions_by_cell", None)
+                    mode_config.pop("regional_assessment_rate", None)
+                    mode_config.pop("regional_assessment_limit_per_cell", None)
                 result = simulate(environment, credit_config=mode_config)
             hashes[mode] = result["environment_hash"]
             metrics = _metrics(result)
@@ -364,5 +366,54 @@ def compare_reserve_contribution_schemes(
         "interpretation_guard": (
             "Synthetic burden-allocation comparison only. Capacity weighting is not a normative "
             "fairness rule; it may exclude support cells that still benefit from the guarantee."
+        ),
+    }
+
+
+def compare_regional_loss_waterfalls(
+    seeds: Iterable[int],
+    days: int = 45,
+    shock_regime: str = "severe",
+    reserve_per_region: float = 20.0,
+    assessment_rate: float = 0.10,
+    assessment_limit_per_cell: float = 2.0,
+    base_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Compare reserve-only loss coverage with a capped pro-rata member assessment."""
+    seed_list = list(seeds)
+    if not seed_list:
+        raise ValueError("at least one seed is required")
+    if not 0.0 <= assessment_rate <= 1.0 or assessment_limit_per_cell < 0:
+        raise ValueError("assessment rate must be in [0, 1] and member cap must be >= 0")
+    cases = {
+        "reserve_only": {
+            "regional_assessment_rate": 0.0,
+            "regional_assessment_limit_per_cell": 0.0,
+        },
+        "reserve_plus_capped_assessment": {
+            "regional_assessment_rate": float(assessment_rate),
+            "regional_assessment_limit_per_cell": float(assessment_limit_per_cell),
+        },
+    }
+    reports = {}
+    for case_name, assessment_config in cases.items():
+        config = dict(base_config or {})
+        config.update({
+            "regional_pool_reserve_per_region": float(reserve_per_region),
+            **assessment_config,
+        })
+        reports[case_name] = compare_financing_modes(seed_list, days, shock_regime, config)
+    return {
+        "model_id": "SYNERGY_V6.6.4E_REGIONAL_LOSS_WATERFALL",
+        "days": days,
+        "shock_regime": shock_regime,
+        "seeds": seed_list,
+        "reserve_per_region": float(reserve_per_region),
+        "assessment_rate": float(assessment_rate),
+        "assessment_limit_per_cell": float(assessment_limit_per_cell),
+        "reports_by_waterfall": reports,
+        "interpretation_guard": (
+            "Synthetic loss-waterfall comparison. Member assessments are cash transfers, not new "
+            "money; the model does not establish legal authority or normative fairness."
         ),
     }
