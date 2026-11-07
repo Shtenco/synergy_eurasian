@@ -356,7 +356,7 @@ def test_bank_reconciliation_matches_statement_lines_to_cash_journal():
     statement = BankStatement("stmt1", "cash", "USD", period, Money("100", "USD"),
         Money("130", "USD"), Money("100", "USD"),
         (BankStatementLine("b1", date(2026, 11, 6), Money("50", "USD"), "bank:1", "statement:1"),
-         BankStatementLine("b2", date(2026, 11, 6), Money("-20", "USD"), "bank:2", "statement:2")))
+         BankStatementLine("b2", date(2026, 11, 6), Money("-20", "USD"), "bank:2", "statement:2")), entity_id="co1")
     allocations = [
         BankAllocation("a1", "b1", "bank-sale", "cash-in", Money("50", "USD"), "allocation:1"),
         BankAllocation("a2", "b2", "bank-opex", "cash-out", Money("20", "USD"), "allocation:2"),
@@ -378,7 +378,7 @@ def test_bank_reconciliation_preserves_unmatched_cash_and_closing_difference():
     period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
     statement = BankStatement("stmt2", "cash", "USD", period, Money("100", "USD"),
         Money("150", "USD"), Money("100", "USD"),
-        (BankStatementLine("b1", date(2026, 11, 6), Money("50", "USD"), "bank:1", "statement:1"),))
+        (BankStatementLine("b1", date(2026, 11, 6), Money("50", "USD"), "bank:1", "statement:1"),), entity_id="co1")
     result = reconcile_bank_account(journal, statement, [
         BankAllocation("a1", "b1", "bank-sale", "cash-in", Money("45", "USD"), "allocation:1")
     ])
@@ -882,6 +882,7 @@ def test_bank_reconciliation_does_not_trust_caller_supplied_opening_ledger_balan
     statement = BankStatement(
         "stmt-wrong-opening", "cash", "USD", period,
         Money("100", "USD"), Money("100", "USD"), Money("90", "USD"), (),
+        entity_id="co1",
     )
     result = reconcile_bank_account(journal, statement, [])
     assert result["ledger_opening_balance_calculated"] == "100"
