@@ -19,6 +19,7 @@ from synergy_v66.financing_experiments import (
     make_synthetic_heterogeneous_cash_fixture,
     compare_regional_reserve_size_sensitivities,
     compare_liquidity_capped_federation_contributions,
+    compare_federation_reserve_allocation_rules,
 )
 
 
@@ -157,6 +158,26 @@ def main() -> int:
                 "cash_conservation_error": case["cash_conservation_error"],
             }, sort_keys=True))
         print(f"LOSS_WATERFALL_REPORT_WRITTEN: {waterfall_path}")
+        reserve_allocation = compare_federation_reserve_allocation_rules(
+            claims=[
+                {"invoice_id": "CLAIM-003", "due_day": 2, "eligible_amount": 30.0},
+                {"invoice_id": "CLAIM-001", "due_day": 1, "eligible_amount": 10.0},
+                {"invoice_id": "CLAIM-002", "due_day": 1, "eligible_amount": 20.0},
+            ],
+            reserve_available=25.0,
+        )
+        allocation_path = output.with_name("synergy_v66_federation_reserve_allocation_rules.json")
+        allocation_path.write_text(json.dumps(reserve_allocation, indent=2, allow_nan=False), encoding="utf-8")
+        for rule, allocation in reserve_allocation["reports_by_rule"].items():
+            print(json.dumps({
+                "federation_reserve_allocation_rule": rule,
+                "reserve_available": allocation["reserve_opening"],
+                "eligible_claim_total": allocation["eligible_claim_total"],
+                "allocated_total": allocation["allocated_total"],
+                "reserve_remaining": allocation["reserve_remaining"],
+                "uncovered_total": sum(allocation["uncovered_by_invoice"].values()),
+            }, sort_keys=True))
+        print(f"FEDERATION_RESERVE_ALLOCATION_REPORT_WRITTEN: {allocation_path}")
 
     if args.liquidity_capped_reserve:
         cash_fixture = make_synthetic_heterogeneous_cash_fixture()
