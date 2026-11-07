@@ -117,3 +117,29 @@ def test_credit_payment_terms_must_be_non_negative_integers():
         simulate(make_environment(1, 2, "normal"), credit_config={"customer_terms_days": -1})
     with pytest.raises(ValueError):
         simulate(make_environment(1, 2, "normal"), credit_config={"local_terms_days": 1.5})
+
+
+def test_cash_constrained_network_paired_stress_invariants():
+    for regime in ("normal", "volatile", "severe"):
+        for seed in range(3):
+            result = simulate(make_environment(700 + seed, 30, regime), credit_config={
+                "initial_cash_per_cell": 80.0,
+                "bank_limit_per_cell": 25.0,
+                "trade_credit_limit_per_cell": 40.0,
+                "grace_days": 2,
+                "customer_terms_days": 2,
+                "local_terms_days": 2,
+                "cross_border_terms_days": 4,
+            })
+            assert abs(result["physical_balance_error"]) < 1e-7
+            credit = result["credit_ledger"]
+            assert abs(credit["cash_conservation_error"]) < 1e-6
+            assert abs(credit["internal_transfer_net"]) < 1e-9
+            assert sum(credit["trade_payable_by_cell"].values()) == pytest.approx(
+                sum(credit["trade_receivable_by_cell"].values()), abs=1e-6
+            )
+            assert all(v >= -1e-9 for v in credit["cash_by_cell"].values())
+            assert all(v <= 1.0 + 1e-9 for v in credit["bank_line_utilization_by_cell"].values())
+            assert all(v <= 1.0 + 1e-9 for v in credit["trade_credit_utilization_by_cell"].values())
+            assert credit["production_rejection_count"] >= 0
+            assert credit["purchase_rejection_count"] >= 0
