@@ -268,3 +268,16 @@ def test_planner_cannot_raise_ledger_owned_period_cap():
             target_federation=0.0,
             contribution_fraction_per_period=0.50,
         )
+
+
+def test_recovery_plan_fingerprint_binds_ledger_policy_changes():
+    ledger = CreditLedger(initial_cash_per_cell=100.0)
+    ledger.process_day(0)
+    plan = plan_reserve_recovery(
+        ledger,
+        target_regional_by_region={"WEST": 5.0, "EAST": 5.0},
+        target_federation=0.0,
+    )
+    ledger.reserve_recovery_contribution_fraction = 0.05
+    with pytest.raises(ValueError, match="ledger state changed"):
+        execute_reserve_recovery(ledger, plan, "POLICY-CHANGED", day=0)
