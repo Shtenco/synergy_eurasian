@@ -466,3 +466,29 @@ def test_production_completion_books_measured_output_not_planned_output():
     assert result.output_movement.quantity == Quantity("6", "unit")
     assert inventory.available("part", "factory", "unit") == Quantity("6", "unit")
     assert inventory.available("steel", "factory", "kg") == Quantity("8", "kg")
+
+
+
+def test_backdated_invoice_cannot_make_later_invoice_unmatched_to_receipts():
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-timeline", "co1", "supplier", "steel",
+            Quantity("10", "kg"), Money("2", "USD"), date(2026, 11, 1), "po:timeline")
+    ])
+    matcher.record_receipt(GoodsReceipt(
+        "receipt-early", "po-timeline", Quantity("2", "kg"),
+        date(2026, 11, 3), "warehouse:early",
+    ))
+    matcher.record_receipt(GoodsReceipt(
+        "receipt-late", "po-timeline", Quantity("2", "kg"),
+        date(2026, 11, 6), "warehouse:late",
+    ))
+    matcher.record_invoice(SupplierInvoiceLine(
+        "invoice-later", "po-timeline", Quantity("2", "kg"),
+        Money("4", "USD"), date(2026, 11, 5), "supplier:later",
+    ))
+    with pytest.raises(ValueError, match="cumulative invoiced quantity"):
+        matcher.record_invoice(SupplierInvoiceLine(
+            "invoice-backdated", "po-timeline", Quantity("2", "kg"),
+            Money("4", "USD"), date(2026, 11, 4), "supplier:backdated",
+        ))
+    assert [row.invoice_line_id for row in matcher.invoices] == ["invoice-later"]
