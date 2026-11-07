@@ -773,7 +773,7 @@ def test_bank_reconciliation_excludes_backdated_entries_recorded_after_period_cl
     statement = BankStatement("stmt-late", "cash", "USD", period,
         Money("100", "USD"), Money("150", "USD"), Money("100", "USD"),
         (BankStatementLine("bank-line-late", date(2026, 11, 6),
-            Money("50", "USD"), "bank:late", "statement:late"),))
+            Money("50", "USD"), "bank:late", "statement:late"),), entity_id="co1")
     result = reconcile_bank_account(journal, statement, [])
     assert result["ledger_closing_balance"] == "100"
     assert result["bank_closing_balance"] == "150"
