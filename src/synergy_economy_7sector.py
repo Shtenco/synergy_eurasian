@@ -32,6 +32,27 @@ def _arrays(cfg: dict[str, Any]) -> dict[str, np.ndarray]:
     }
 
 
+def _validated_vector(
+    cfg: dict[str, Any], field: str, length: int | None = None,
+    minimum: float | None = None, maximum: float | None = None,
+) -> np.ndarray:
+    raw = cfg.get(field)
+    if not isinstance(raw, (list, tuple)):
+        raise ValueError(f"{field} must be a numeric vector")
+    if length is not None and len(raw) != length:
+        raise ValueError(f"{field} length must match sector count")
+    if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in raw):
+        raise ValueError(f"{field} must contain only numeric values, not booleans or strings")
+    result = np.asarray(raw, dtype=float)
+    if result.ndim != 1 or not np.isfinite(result).all():
+        raise ValueError(f"{field} must be a finite one-dimensional vector")
+    if minimum is not None and np.any(result < minimum):
+        raise ValueError(f"{field} values must be >= {minimum}")
+    if maximum is not None and np.any(result > maximum):
+        raise ValueError(f"{field} values must be <= {maximum}")
+    return result
+
+
 def _validated_leontief_components(cfg: dict[str, Any]) -> tuple[np.ndarray, float, float]:
     try:
         a = _arrays(cfg)["A"]
@@ -128,14 +149,24 @@ def solve_supply(
 
 
 def portfolio_accounting(cfg: dict[str, Any]) -> dict[str, Any]:
-    a = _arrays(cfg)
-    capital = a["capital"]
-    gross_cf = capital * a["yield"]
-    replacement = capital * a["replacement"]
+    sectors = cfg.get("sectors")
+    if (not isinstance(sectors, (list, tuple)) or not sectors
+            or any(not isinstance(name, str) or not name.strip() for name in sectors)
+            or len(sectors) != len(set(sectors))):
+        raise ValueError("sectors must be unique non-empty names")
+    n = len(sectors)
+    capital = _validated_vector(cfg, "capital_usd", n, minimum=0.0)
+    gross_yield = _validated_vector(cfg, "gross_cash_yield", n, minimum=0.0)
+    replacement_rate = _validated_vector(cfg, "replacement_rate", n, minimum=0.0)
+    public_share = _validated_vector(cfg, "public_ownership_share", n, minimum=0.0, maximum=1.0)
+    if capital.sum() <= 0:
+        raise ValueError("total productive capital must be positive")
+    gross_cf = capital * gross_yield
+    replacement = capital * replacement_rate
     net_after_replacement = gross_cf - replacement
-    public_capital = capital * a["public_share"]
-    public_gross_cf = gross_cf * a["public_share"]
-    public_replacement = replacement * a["public_share"]
+    public_capital = capital * public_share
+    public_gross_cf = gross_cf * public_share
+    public_replacement = replacement * public_share
     public_net = public_gross_cf - public_replacement
     return {
         "sectors": [
@@ -179,10 +210,15 @@ def reproduction_repair_results(cfg: dict[str, Any]) -> dict[str, Any]:
     cashflow uplift and a replacement-cost reduction, then reconciles public,
     private and sector balances. Internal cross-subsidies are not new value.
     """
+    portfolio_accounting(cfg)  # Validate all sector capital/yield/ownership vectors first.
     a = _arrays(cfg)
     plan = cfg["reproduction_repair_plan"]
     uplift = float(plan["operating_cashflow_uplift_target"])
     replacement_reduction = float(plan["replacement_cost_reduction_target"])
+    if not np.isfinite(uplift) or uplift < 0:
+        raise ValueError("operating_cashflow_uplift_target must be finite and non-negative")
+    if not np.isfinite(replacement_reduction) or not 0.0 <= replacement_reduction <= 1.0:
+        raise ValueError("replacement_cost_reduction_target must be between 0 and 1")
     capital = a["capital"]
     gross = capital * a["yield"]
     replacement = capital * a["replacement"]
@@ -252,14 +288,31 @@ def reproduction_repair_results(cfg: dict[str, Any]) -> dict[str, Any]:
 
 
 def productivity_results(cfg: dict[str, Any]) -> dict[str, Any]:
-    basket = np.asarray(cfg["basket_share"], dtype=float)
-    labor = np.asarray(cfg["labor_share"], dtype=float)
-    adoption = np.asarray(cfg["automation_adoption"], dtype=float)
-    employment = np.asarray(cfg["employment_share"], dtype=float)
+    sectors = cfg.get("sectors")
+    if not isinstance(sectors, (list, tuple)) or not sectors:
+        raise ValueError("sectors must be a non-empty list")
+    n = len(sectors)
+    basket = _validated_vector(cfg, "basket_share", n, minimum=0.0, maximum=1.0)
+    labor = _validated_vector(cfg, "labor_share", n, minimum=0.0, maximum=1.0)
+    adoption = _validated_vector(cfg, "automation_adoption", n, minimum=0.0, maximum=1.0)
+    employment = _validated_vector(cfg, "employment_share", n, minimum=0.0, maximum=1.0)
+    if not np.isclose(basket.sum(), 1.0) or not np.isclose(employment.sum(), 1.0):
+        raise ValueError("basket_share and employment_share must each sum to 1")
     efficacy = float(cfg["automation_effectiveness"])
     tech_cost = float(cfg["technology_cost_share_of_gross_labor_saving"])
     rebound = float(cfg["rebound_share"])
     supply_rebound = float(cfg["supply_chain_rebound_share"])
+    for name, value in (
+        ("automation_effectiveness", efficacy),
+        ("technology_cost_share_of_gross_labor_saving", tech_cost),
+        ("rebound_share", rebound),
+        ("supply_chain_rebound_share", supply_rebound),
+    ):
+        if not np.isfinite(value) or not 0.0 <= value <= 1.0:
+            raise ValueError(f"{name} must be between 0 and 1")
+    baseline_hours = float(cfg["baseline_weekly_hours"])
+    if not np.isfinite(baseline_hours) or baseline_hours <= 0:
+        raise ValueError("baseline_weekly_hours must be finite and positive")
 
     gross_basket_saving = float(np.sum(basket * labor * adoption * efficacy))
     net_basket_saving = gross_basket_saving * (1.0 - tech_cost)
