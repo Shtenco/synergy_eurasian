@@ -59,3 +59,6 @@ The full EIIOM CI run on code commit `4a55946af813ec44b7090ba7d684f233148dfb73` 
 
 
 The CI runner now writes the four-rule comparison using the explicit `essential` then `ordinary` priority order. The full test suite also includes repeated reserve replenishment stress checks; no claim-class rule has been enabled in the operational ledger.
+
+
+The subsequent full EIIOM CI run on code commit `d9c1f37664614f46353a320071b345669e049dd2` passed **172 tests** and included the adversarial relabeling sensitivity report.
