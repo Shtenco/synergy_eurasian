@@ -243,7 +243,12 @@ def test_production_json_schema_validates_all_procurement_and_production_contrac
          "source_ref": "payroll:1", "evidence_ref": "timesheet:1"},
         {"order_id": "batch", "direct_material_cost": {"amount": "10", "currency": "USD"},
          "conversion_cost": {"amount": "5", "currency": "USD"}, "capitalized_cost": {"amount": "15", "currency": "USD"},
-         "output_quantity": {"amount": "1", "unit": "unit"}, "journal_entry_ids": ["entry:1"]},
+         "output_quantity": {"amount": "1", "unit": "unit"}, "journal_entry_ids": ["entry:1"],
+         "completion_evidence_ref": "quality:accepted", "completed_at": "2026-11-06T10:00:00Z"},
+        {"order_id": "batch", "output_quantity": {"amount": "1", "unit": "unit"},
+         "completed_at": "2026-11-06T10:00:00Z", "evidence_ref": "quality:accepted",
+         "input_consumption": [{"item_id": "steel", "quantity": {"amount": "2", "unit": "kg"},
+                                "evidence_ref": "scale:steel"}]},
     ]
     for sample in samples:
         validator.validate(sample)
