@@ -18,6 +18,24 @@ def load_config(path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _finite_float(value: Any, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field} must be a finite JSON number")
+    try:
+        result = float(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be finite") from exc
+    if not math.isfinite(result):
+        raise ValueError(f"{field} must be finite")
+    return result
+
+
+def _strict_int(value: Any, field: str, minimum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"{field} must be an integer >= {minimum}")
+    return value
+
+
 def simulate_case(
     cfg: dict[str, Any],
     annual_cashflow_growth: float,
@@ -27,37 +45,69 @@ def simulate_case(
     rd_success_probability: float | None = None,
     rd_yield_if_success: float | None = None,
 ) -> dict[str, Any]:
+    if not isinstance(cfg, dict):
+        raise ValueError("Dynamic flywheel config must be an object")
     start = cfg["starting_point"]
     tech = cfg["technology_projects"]
     alloc = cfg["allocation"]
-    allocation_values = [float(v) for v in alloc.values()]
-    if not all(math.isfinite(v) and v >= 0 for v in allocation_values):
-        raise ValueError("Fund allocation shares must be finite and non-negative.")
+    if not isinstance(alloc, dict) or not alloc or any(
+        not isinstance(name, str) or not name.strip() for name in alloc
+    ):
+        raise ValueError("Fund allocation must be a non-empty object with named funds")
+    allocation_values = [_finite_float(v, "fund allocation share") for v in alloc.values()]
+    if not all(0.0 <= v <= 1.0 for v in allocation_values):
+        raise ValueError("Fund allocation shares must be in [0, 1].")
     if abs(sum(allocation_values) - 1.0) > 1e-9:
         raise ValueError("Fund allocation shares must sum to 1.0.")
-    if not math.isfinite(float(annual_cashflow_growth)) or annual_cashflow_growth < -1.0:
+    annual_cashflow_growth = _finite_float(annual_cashflow_growth, "annual_cashflow_growth")
+    annual_replacement_inflation = _finite_float(
+        annual_replacement_inflation, "annual_replacement_inflation"
+    )
+    if annual_cashflow_growth < -1.0:
         raise ValueError("Cashflow growth must be finite and at least -100%.")
-    if not math.isfinite(float(annual_replacement_inflation)) or annual_replacement_inflation < -1.0:
+    if annual_replacement_inflation < -1.0:
         raise ValueError("Replacement inflation must be finite and at least -100%.")
-    auto_yield = float(tech["automation_net_residual_yield_per_year"] if automation_yield is None else automation_yield)
-    rd_success = float(tech["rd_success_probability"] if rd_success_probability is None else rd_success_probability)
-    rd_yield = float(tech["rd_net_residual_yield_if_success_per_year"] if rd_yield_if_success is None else rd_yield_if_success)
-    if not 0 <= rd_success <= 1:
+    auto_yield = _finite_float(
+        tech["automation_net_residual_yield_per_year"] if automation_yield is None else automation_yield,
+        "automation_net_residual_yield_per_year",
+    )
+    rd_success = _finite_float(
+        tech["rd_success_probability"] if rd_success_probability is None else rd_success_probability,
+        "rd_success_probability",
+    )
+    rd_yield = _finite_float(
+        tech["rd_net_residual_yield_if_success_per_year"] if rd_yield_if_success is None else rd_yield_if_success,
+        "rd_net_residual_yield_if_success_per_year",
+    )
+    if auto_yield < 0 or rd_yield < 0:
+        raise ValueError("Project net residual yields must be non-negative")
+    if not 0.0 <= rd_success <= 1.0:
         raise ValueError("R&D success probability must be between 0 and 1.")
 
-    gross = float(start["gross_cashflow_after_opex_before_replacement_usd"])
-    replacement = float(start["replacement_capex_usd"])
-    reserve = float(start["productive_capital_usd"]) * float(start["initial_reserve_share_of_productive_capital"])
+    gross = _finite_float(
+        start["gross_cashflow_after_opex_before_replacement_usd"],
+        "starting gross cashflow",
+    )
+    replacement = _finite_float(start["replacement_capex_usd"], "starting replacement capex")
+    productive_capital = _finite_float(start["productive_capital_usd"], "productive capital")
+    reserve_share = _finite_float(
+        start["initial_reserve_share_of_productive_capital"], "initial reserve share"
+    )
+    if gross <= 0 or replacement <= 0 or productive_capital <= 0:
+        raise ValueError("Starting cashflow, replacement capex and productive capital must be positive")
+    if not 0.0 <= reserve_share <= 1.0:
+        raise ValueError("Initial reserve share must be in [0, 1]")
+    reserve = productive_capital * reserve_share
     initial_reserve = reserve
     auto_projects: list[tuple[int, float]] = []
     rd_projects: list[tuple[int, float]] = []
     rows: list[dict[str, float | int]] = []
 
-    auto_lag = int(tech["automation_deployment_lag_years"])
-    auto_life = int(tech["automation_benefit_life_years"])
-    rd_lag = int(tech["rd_deployment_lag_years"])
-    rd_life = int(tech["rd_benefit_life_years"])
-    horizon = int(cfg["horizon_years"])
+    auto_lag = _strict_int(tech["automation_deployment_lag_years"], "automation_deployment_lag_years", 0)
+    auto_life = _strict_int(tech["automation_benefit_life_years"], "automation_benefit_life_years", 1)
+    rd_lag = _strict_int(tech["rd_deployment_lag_years"], "rd_deployment_lag_years", 0)
+    rd_life = _strict_int(tech["rd_benefit_life_years"], "rd_benefit_life_years", 1)
+    horizon = _strict_int(cfg["horizon_years"], "horizon_years", 1)
 
     for year in range(1, horizon + 1):
         gross *= 1.0 + annual_cashflow_growth
@@ -138,6 +188,12 @@ def break_even_cashflow_growth(
     """Constant annual cashflow growth needed to cover year-N replacement,
     ignoring project returns and reserve draws.
     """
+    starting_cashflow = _finite_float(starting_cashflow, "starting_cashflow")
+    starting_replacement = _finite_float(starting_replacement, "starting_replacement")
+    replacement_inflation = _finite_float(replacement_inflation, "replacement_inflation")
+    years = _strict_int(years, "years", 1)
+    if starting_cashflow <= 0 or starting_replacement <= 0 or replacement_inflation < -1.0:
+        raise ValueError("Break-even inputs require positive cashflow/capex and inflation >= -100%")
     return (
         (starting_replacement * (1.0 + replacement_inflation) ** years / starting_cashflow)
         ** (1.0 / years)
@@ -152,15 +208,27 @@ def sector_reconciliation(
     annual_replacement_inflation: float,
 ) -> dict[str, Any]:
     """Sector-level year-N residuals before portfolio-level project returns."""
-    years = int(cfg["horizon_years"])
+    years = _strict_int(cfg["horizon_years"], "horizon_years", 1)
+    annual_cashflow_growth = _finite_float(annual_cashflow_growth, "annual_cashflow_growth")
+    annual_replacement_inflation = _finite_float(annual_replacement_inflation, "annual_replacement_inflation")
+    if annual_cashflow_growth < -1.0 or annual_replacement_inflation < -1.0:
+        raise ValueError("Sector growth and replacement inflation must be at least -100%")
     rows = []
+    if not isinstance(cfg["sector_starting_point"], list) or not cfg["sector_starting_point"]:
+        raise ValueError("sector_starting_point must be a non-empty array")
     for item in cfg["sector_starting_point"]:
-        cash = float(item["cashflow_after_opex_before_replacement_usd"]) * (1.0 + annual_cashflow_growth) ** years
-        replacement = float(item["replacement_capex_usd"]) * (1.0 + annual_replacement_inflation) ** years
+        if not isinstance(item.get("sector"), str) or not item["sector"].strip():
+            raise ValueError("Each sector starting point requires a name")
+        start_cash = _finite_float(item["cashflow_after_opex_before_replacement_usd"], "sector cashflow")
+        start_replacement = _finite_float(item["replacement_capex_usd"], "sector replacement capex")
+        if start_cash <= 0 or start_replacement <= 0:
+            raise ValueError("Sector starting cashflow and replacement capex must be positive")
+        cash = start_cash * (1.0 + annual_cashflow_growth) ** years
+        replacement = start_replacement * (1.0 + annual_replacement_inflation) ** years
         residual = cash - replacement
         required_growth = (
-            (float(item["replacement_capex_usd"]) * (1.0 + annual_replacement_inflation) ** years
-             / float(item["cashflow_after_opex_before_replacement_usd"])) ** (1.0 / years)
+            (start_replacement * (1.0 + annual_replacement_inflation) ** years
+             / start_cash) ** (1.0 / years)
             - 1.0
         )
         rows.append({
@@ -189,21 +257,21 @@ def build_report(cfg: dict[str, Any]) -> dict[str, Any]:
     for case in cfg["macro_scenarios"]:
         result = simulate_case(
             cfg,
-            float(case["annual_cashflow_growth"]),
-            float(case["annual_replacement_inflation"]),
+            case["annual_cashflow_growth"],
+            case["annual_replacement_inflation"],
         )
         sectors = sector_reconciliation(
             cfg,
-            float(case["annual_cashflow_growth"]),
-            float(case["annual_replacement_inflation"]),
+            case["annual_cashflow_growth"],
+            case["annual_replacement_inflation"],
         )
         scenarios.append({"name": case["name"], **result, "sector_reconciliation_before_project_returns": sectors})
     break_even = {
         f"replacement_inflation_{int(rate * 100)}pct": break_even_cashflow_growth(
-            float(start["gross_cashflow_after_opex_before_replacement_usd"]),
-            float(start["replacement_capex_usd"]),
-            float(rate),
-            int(cfg["horizon_years"]),
+            start["gross_cashflow_after_opex_before_replacement_usd"],
+            start["replacement_capex_usd"],
+            rate,
+            cfg["horizon_years"],
         )
         for rate in (0.02, 0.05, 0.10)
     }
