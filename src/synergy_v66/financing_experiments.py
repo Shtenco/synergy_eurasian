@@ -10,8 +10,18 @@ FINANCING_MODES = {
     "unconstrained_reference": None,
     "cash_only": {"bank_limit_per_cell": 0.0, "trade_credit_limit_per_cell": 0.0},
     "bank_only": {"bank_limit_per_cell": 80.0, "trade_credit_limit_per_cell": 0.0},
-    "mutual_credit": {"bank_limit_per_cell": 0.0, "trade_credit_limit_per_cell": 80.0},
-    "hybrid": {"bank_limit_per_cell": 80.0, "trade_credit_limit_per_cell": 80.0},
+    "mutual_credit": {
+        "bank_limit_per_cell": 0.0, "trade_credit_limit_per_cell": 80.0,
+        "regional_pool_limit_per_region": 150.0,
+        "regional_member_debit_limit_per_cell": 80.0,
+        "regional_member_credit_limit_per_cell": 80.0,
+    },
+    "hybrid": {
+        "bank_limit_per_cell": 80.0, "trade_credit_limit_per_cell": 80.0,
+        "regional_pool_limit_per_region": 150.0,
+        "regional_member_debit_limit_per_cell": 80.0,
+        "regional_member_credit_limit_per_cell": 80.0,
+    },
 }
 
 BASE_CONFIG = {
@@ -41,6 +51,10 @@ METRICS = (
     "production_rejections",
     "purchase_rejections",
     "customer_invoice_rejections",
+    "regional_pool_outstanding",
+    "regional_pool_rejections",
+    "regional_pool_net_position_error",
+    "regional_pool_utilization_max",
     "physical_balance_error",
     "cash_conservation_error",
 )
@@ -58,6 +72,10 @@ def _metrics(result: dict[str, Any]) -> dict[str, float]:
             "production_rejection_count": 0,
             "purchase_rejection_count": 0,
             "customer_invoice_rejection_count": 0,
+            "regional_pool_outstanding_by_region": {},
+            "regional_pool_rejection_count": 0,
+            "regional_pool_net_position_by_region": {},
+            "regional_pool_utilization_by_region": {},
             "cash_conservation_error": 0.0,
         }
     sold = sum(result["sold_by_sku"].values())
@@ -77,6 +95,10 @@ def _metrics(result: dict[str, Any]) -> dict[str, float]:
         "production_rejections": float(credit["production_rejection_count"]),
         "purchase_rejections": float(credit["purchase_rejection_count"]),
         "customer_invoice_rejections": float(credit["customer_invoice_rejection_count"]),
+        "regional_pool_outstanding": sum(credit["regional_pool_outstanding_by_region"].values()),
+        "regional_pool_rejections": float(credit["regional_pool_rejection_count"]),
+        "regional_pool_net_position_error": max((abs(v) for v in credit["regional_pool_net_position_by_region"].values()), default=0.0),
+        "regional_pool_utilization_max": max(credit["regional_pool_utilization_by_region"].values(), default=0.0),
         "physical_balance_error": abs(float(result["physical_balance_error"])),
         "cash_conservation_error": abs(float(credit["cash_conservation_error"])),
     }
