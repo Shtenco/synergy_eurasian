@@ -414,6 +414,9 @@ class CreditLedger:
                     seller = self.accounts[invoice.seller]
                     seller.cash += amount
                     seller.trade_receivable -= amount
+                    if CELL_BY_ID[invoice.buyer].region == CELL_BY_ID[invoice.seller].region:
+                        account.regional_credit_balance += amount
+                        seller.regional_credit_balance -= amount
                     self.internal_transfer_out += amount
                     self.internal_transfer_in += amount
                 if invoice.remaining <= EPS:
@@ -452,6 +455,10 @@ class CreditLedger:
             "production_rejection_count": sum(e["type"] == "production_rejected" for e in self.events),
             "purchase_rejection_count": sum(e["type"] == "purchase_rejected" for e in self.events),
             "customer_invoice_rejection_count": sum(e["type"] == "customer_invoice_rejected" for e in self.events),
+            "regional_pool_rejection_count": sum(
+                e.get("reason") in {"regional_member_debit_limit", "regional_member_credit_limit", "regional_pool_limit"}
+                for e in self.events if e["type"] == "purchase_rejected"
+            ),
             "default_event_count": sum(e["type"] == "default" for e in self.events),
             "customer_default_count": sum(e["type"] == "customer_default" for e in self.events),
             "bank_line_utilization_by_cell": {
@@ -465,6 +472,41 @@ class CreditLedger:
             "trade_receivable_limit_by_cell": {k: v.trade_receivable_limit for k, v in self.accounts.items()},
             "trade_receivable_utilization_by_cell": {
                 k: (v.trade_receivable / v.trade_receivable_limit if v.trade_receivable_limit is not None and v.trade_receivable_limit > EPS else 0.0)
+                for k, v in self.accounts.items()
+            },
+            "regional_credit_balance_by_cell": {k: v.regional_credit_balance for k, v in self.accounts.items()},
+            "regional_pool_outstanding_by_region": {
+                r: self._regional_pool_outstanding(r) for r in REGIONS
+            },
+            "regional_pool_net_position_by_region": {
+                r: sum(v.regional_credit_balance for k, v in self.accounts.items() if CELL_BY_ID[k].region == r)
+                for r in REGIONS
+            },
+            "regional_pool_limit_by_region": {
+                r: self.regional_pool_limit_per_region for r in REGIONS
+            },
+            "regional_pool_utilization_by_region": {
+                r: (
+                    self._regional_pool_outstanding(r) / self.regional_pool_limit_per_region
+                    if self.regional_pool_limit_per_region is not None and self.regional_pool_limit_per_region > EPS
+                    else 0.0
+                )
+                for r in REGIONS
+            },
+            "regional_member_debit_utilization_by_cell": {
+                k: (
+                    max(0.0, -v.regional_credit_balance) / self.regional_member_debit_limit_per_cell
+                    if self.regional_member_debit_limit_per_cell is not None and self.regional_member_debit_limit_per_cell > EPS
+                    else 0.0
+                )
+                for k, v in self.accounts.items()
+            },
+            "regional_member_credit_utilization_by_cell": {
+                k: (
+                    max(0.0, v.regional_credit_balance) / self.regional_member_credit_limit_per_cell
+                    if self.regional_member_credit_limit_per_cell is not None and self.regional_member_credit_limit_per_cell > EPS
+                    else 0.0
+                )
                 for k, v in self.accounts.items()
             },
             "open_payables": {k: v.remaining for k, v in self.payables.items() if v.remaining > EPS},
