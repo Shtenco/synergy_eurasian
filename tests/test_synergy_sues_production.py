@@ -516,3 +516,32 @@ def test_production_rejects_unapproved_bom_overconsumption_without_mutation():
     assert inventory.summary() == before
     assert inventory.movements[0].movement_id == "yield-input"
     assert journal.entries == ()
+
+
+def test_grni_invoice_cannot_clear_forged_journal_entry_with_receipt_id():
+    journal = production_journal()
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-forged", "co1", "supplier", "steel",
+            Quantity("2", "kg"), Money("5", "USD"), date(2026, 11, 1), "po:forged")
+    ])
+    receipt = matcher.record_receipt(GoodsReceipt(
+        "receipt-forged", "po-forged", Quantity("2", "kg"),
+        date(2026, 11, 3), "warehouse:receipt-forged",
+    ))
+    invoice = matcher.record_invoice(SupplierInvoiceLine(
+        "invoice-forged", "po-forged", Quantity("2", "kg"),
+        Money("10", "USD"), date(2026, 11, 4), "supplier:invoice-forged",
+    ))
+    fake_entry_id = f"inventory:{receipt.receipt_id}"
+    journal.post(JournalEntry(
+        fake_entry_id, receipt.received_date, NOW, "USD",
+        (
+            JournalLine(f"{fake_entry_id}:dr", "raw", "DEBIT",
+                Money("10", "USD"), Money("10", "USD"), "co1", "fake:source"),
+            JournalLine(f"{fake_entry_id}:cr", "grni", "CREDIT",
+                Money("10", "USD"), Money("10", "USD"), "co1", "fake:source"),
+        ),
+        "not-the-inventory-event", "not-the-inventory-idempotency", "Forged receipt posting",
+    ))
+    with pytest.raises(ValueError, match="cannot clear more GRNI"):
+        post_grni_invoice(invoice, matcher, journal, "grni", "ap", "co1", NOW)
