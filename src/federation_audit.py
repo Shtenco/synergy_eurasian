@@ -82,14 +82,22 @@ def audit(config: dict) -> list[str]:
     if architecture != "Shtenco/synergy_system":
         errors.append("architecture root must be synergy_system")
 
-    if objects.get("AccountingSnapshot", {}).get("authority") != accounting:
-        errors.append("AccountingSnapshot authority mismatch")
-    if objects.get("SettlementReceipt", {}).get("authority") != settlement:
-        errors.append("SettlementReceipt authority mismatch")
-    if objects.get("ProjectProposal", {}).get("authority") != real_economy:
-        errors.append("ProjectProposal authority mismatch")
-    if objects.get("ResourceState", {}).get("authority") != real_economy:
-        errors.append("ResourceState authority mismatch")
+    expected_object_authorities = {
+        "AccountingSnapshot": accounting,
+        "SettlementReceipt": settlement,
+        "ProjectProposal": real_economy,
+        "ResourceState": real_economy,
+        "CapitalAuthorization": accounting,
+        "TechnologyCandidate": "Shtenco/nexus_science_agent",
+        "EvidencePackage": "independent_verifier",
+        "DemandSignal": "distributed_sources",
+        "PaymentIntent": "authorized_business_or_finance_domain",
+    }
+    for object_name, expected_authority in expected_object_authorities.items():
+        if objects.get(object_name, {}).get("authority") != expected_authority:
+            errors.append(f"{object_name} authority mismatch")
+    if objects.get("PaymentIntent", {}).get("executor") != settlement:
+        errors.append("PaymentIntent executor must be the canonical settlement authority")
 
     if accounting in FORBIDDEN_ACCOUNTING_AUTHORITIES:
         errors.append("forbidden component selected as accounting authority")
@@ -102,6 +110,8 @@ def audit(config: dict) -> list[str]:
         "flash_principal_to_owned_capital",
         "ai_recommendation_to_capital_authorization",
         "blockchain_commitment_to_economic_truth",
+        "network_role_to_financial_authority",
+        "project_sponsor_claim_to_independent_evidence",
     }
     missing_promotions = expected_promotions - promotions
     if missing_promotions:
