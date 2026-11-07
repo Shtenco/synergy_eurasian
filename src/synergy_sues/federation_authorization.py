@@ -6,6 +6,7 @@ module evaluates explicit policy; it does not execute the requested action.
 from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from threading import RLock
 from typing import Iterable
 
 from .federation_identity import SignedEventEnvelope, TrustedKeyRegistry, _utc
@@ -52,8 +53,18 @@ class FederationAuthorizationPolicy:
             raise ValueError("max_request_age_seconds must be a positive integer")
         self.max_request_age_seconds = max_request_age_seconds
         self._rules: dict[str, AuthorizationRule] = {}
+        self._execution_lock = RLock()
+
+    @property
+    def execution_lock(self):
+        """Serialize in-memory policy mutation with an authorized execution."""
+        return self._execution_lock
 
     def register_rule(self, rule: AuthorizationRule) -> None:
+        with self._execution_lock:
+            self._register_rule_unlocked(rule)
+
+    def _register_rule_unlocked(self, rule: AuthorizationRule) -> None:
         if not isinstance(rule, AuthorizationRule):
             raise ValueError("rule must be an AuthorizationRule")
         required = (rule.rule_id, rule.tenant_id, rule.effect, rule.action, rule.resource_type)
@@ -99,6 +110,13 @@ class FederationAuthorizationPolicy:
                   approvals: Iterable[SignedEventEnvelope],
                   registry: TrustedKeyRegistry,
                   received_at: datetime | str | None = None) -> AuthorizationDecision:
+        with self._execution_lock:
+            return self._authorize_unlocked(request, approvals, registry, received_at)
+
+    def _authorize_unlocked(self, request: SignedEventEnvelope,
+                            approvals: Iterable[SignedEventEnvelope],
+                            registry: TrustedKeyRegistry,
+                            received_at: datetime | str | None = None) -> AuthorizationDecision:
         """Verify signed request and approvals, then evaluate policy without execution."""
         requester = registry.verify(request, received_at)
         payload = self._payload_fields(request, "AUTHORIZATION_REQUEST",
