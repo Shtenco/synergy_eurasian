@@ -519,44 +519,60 @@ def execute_production_order(
 def post_grni_receipt(
     receipt: GoodsReceipt,
     matcher: GRNIMatcher,
+    inventory: InventoryLedger,
     journal: Journal,
     inventory_account_id: str,
     grni_account_id: str,
     entity_id: str,
     recorded_at: datetime,
 ) -> JournalEntry:
-    """Accrue received-but-not-invoiced goods: Dr inventory / Cr GRNI.
+    """Accrue a physically recorded receipt through the inventory subledger.
 
-    For one physical receipt, use this journal bridge OR InventoryLedger.post_to_journal
-    with the GRNI offset account; never post both paths for the same receipt.
+    A GRNI journal entry cannot be created from a purchase receipt object alone:
+    the same receipt must exist as a matching physical inventory movement.
     """
     _aware(recorded_at, "recorded_at")
     po = matcher._orders.get(receipt.po_line_id)
     if po is None or matcher._receipts.get(receipt.receipt_id) != receipt:
         raise ValueError("Receipt must first be accepted by this GRNI matcher")
-    if po.entity_id != entity_id or journal.entity_id != entity_id:
-        raise ValueError("GRNI receipt entity mismatch")
+    if receipt.receipt_id in matcher._journalized_receipts:
+        raise ValueError(f"GRNI receipt already journalized: {receipt.receipt_id}")
+    if (
+        po.entity_id != entity_id
+        or inventory.entity_id != entity_id
+        or journal.entity_id != entity_id
+    ):
+        raise ValueError("GRNI receipt inventory, journal and PO entity mismatch")
     if po.unit_price.currency != journal.functional_currency:
         raise ValueError("GRNI reference posting requires PO currency equal to journal functional currency")
-    _account_map(journal, inventory_account_id, AccountType.ASSET, NormalBalance.DEBIT, "Inventory account")
-    _account_map(journal, grni_account_id, AccountType.LIABILITY, NormalBalance.CREDIT, "GRNI account")
-    amount = Money(receipt.received_quantity.amount * po.unit_price.amount, journal.functional_currency)
-    if amount.amount <= 0:
-        raise ValueError("Zero-value GRNI receipt cannot be posted")
-    entry_id = f"grni:receipt:{receipt.receipt_id}"
-    posted = journal.post(JournalEntry(
-        entry_id, receipt.received_date, recorded_at, journal.functional_currency,
-        (
-            JournalLine(f"{entry_id}:dr", inventory_account_id, PostingSide.DEBIT,
-                amount, amount, entity_id, receipt.evidence_ref),
-            JournalLine(f"{entry_id}:cr", grni_account_id, PostingSide.CREDIT,
-                amount, amount, entity_id, receipt.evidence_ref),
-        ),
-        f"grni-receipt:{receipt.receipt_id}", f"grni-receipt:{receipt.receipt_id}",
-        f"Accrue received goods {receipt.receipt_id}",
-    ))
+    movement = next((
+        row for row in inventory.movements if row.movement_id == receipt.receipt_id
+    ), None)
+    if movement is None:
+        raise ValueError("GRNI receipt must have a matching physical inventory movement")
+    if (
+        movement.movement_type.value != "RECEIPT"
+        or movement.item_id != po.item_id
+        or movement.quantity != receipt.received_quantity
+        or movement.movement_date != receipt.received_date
+        or movement.source_ref != receipt.evidence_ref
+    ):
+        raise ValueError("GRNI receipt does not match the physical inventory movement")
+    expected_cost = Money(
+        receipt.received_quantity.amount * po.unit_price.amount,
+        journal.functional_currency,
+    )
+    if movement.cost != expected_cost:
+        raise ValueError("GRNI PO valuation differs from the inventory receipt cost")
+    posted = inventory.post_to_journal(
+        receipt.receipt_id, journal, inventory_account_id, grni_account_id,
+        entity_id, recorded_at,
+    )
+    if posted is None:
+        raise ValueError("GRNI receipt movement did not produce a journal entry")
     matcher._journalized_receipts.add(receipt.receipt_id)
     return posted
+
 
 
 def post_grni_invoice(
