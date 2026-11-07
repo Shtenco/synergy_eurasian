@@ -202,9 +202,9 @@ def _run_one_path(
 
     final = ledger.snapshot()
     final_cash = list(final["cash_by_cell"].values())
-    total_initial_cash_and_reserves = (
-        sum(opening_cash.values()) + len(REGIONS) * REGIONAL_TARGET + FEDERATION_TARGET
-    )
+    # Opening cash is the total member funding before initial reserve allocations;
+    # adding initial reserves again would double-count the same contributed money.
+    total_initial_cash_and_reserves = sum(opening_cash.values())
     final_cash_and_reserves = (
         sum(final_cash)
         + sum(final["regional_pool_reserve_by_region"].values())
