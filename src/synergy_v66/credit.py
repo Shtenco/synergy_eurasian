@@ -110,7 +110,7 @@ class CreditLedger:
             raise ValueError("regional pool and member limits must be finite and >= 0")
         if not math.isfinite(float(regional_pool_reserve_per_region)) or regional_pool_reserve_per_region < 0:
             raise ValueError("regional_pool_reserve_per_region must be finite and >= 0")
-        if not math.isfinite(float(regional_assessment_rate)) or not 0.0 <= regional_assessment_rate <= 1.0:
+        if isinstance(regional_assessment_rate, bool) or not math.isfinite(float(regional_assessment_rate)) or not 0.0 <= regional_assessment_rate <= 1.0:
             raise ValueError("regional_assessment_rate must be between 0 and 1")
         if regional_assessment_limit_per_cell is not None and (
             isinstance(regional_assessment_limit_per_cell, bool)
