@@ -67,10 +67,10 @@ def _period_bounds(period_id: str) -> tuple[date, date]:
     """Resolve only canonical year, quarter, month and ISO-week period IDs."""
     if not isinstance(period_id, str):
         raise ValueError("Unsupported or non-canonical intercompany period_id")
-    year_match = re.fullmatch(r"(\\d{4})", period_id)
-    quarter_match = re.fullmatch(r"(\\d{4})-Q([1-4])", period_id)
-    month_match = re.fullmatch(r"(\\d{4})-(0[1-9]|1[0-2])", period_id)
-    week_match = re.fullmatch(r"(\\d{4})-W(0[1-9]|[1-4][0-9]|5[0-3])", period_id)
+    year_match = re.fullmatch(r"(\d{4})", period_id)
+    quarter_match = re.fullmatch(r"(\d{4})-Q([1-4])", period_id)
+    month_match = re.fullmatch(r"(\d{4})-(0[1-9]|1[0-2])", period_id)
+    week_match = re.fullmatch(r"(\d{4})-W(0[1-9]|[1-4][0-9]|5[0-3])", period_id)
     try:
         if year_match:
             year = int(year_match.group(1))
