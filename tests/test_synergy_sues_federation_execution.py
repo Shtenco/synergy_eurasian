@@ -324,3 +324,41 @@ def test_executor_rejects_authorization_decision_reused_for_another_action(tmp_p
             lambda *_: called.append(True), now())
     assert called == []
     assert executor.receipts() == ()
+
+
+def test_handler_cannot_commit_or_rollback_executor_transaction(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="handler-commit-escape")
+    path = str(tmp_path / "handler-commit-escape.db")
+    executor = AuthorizedActionExecutor(path)
+
+    def committing_handler(db, request, decision):
+        db.execute("CREATE TABLE IF NOT EXISTS protected_effects (value TEXT)")
+        db.execute("INSERT INTO protected_effects VALUES('must-rollback')")
+        db.commit()
+
+    with pytest.raises(AttributeError):
+        executor.execute(request, [approval], policy, registry, committing_handler, now())
+    assert executor.receipts() == ()
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 0
+
+
+def test_handler_cannot_issue_sql_transaction_control_or_drop_receipt_triggers(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="handler-sql-escape")
+    path = str(tmp_path / "handler-sql-escape.db")
+    executor = AuthorizedActionExecutor(path)
+
+    def committing_handler(db, request, decision):
+        db.execute("CREATE TABLE IF NOT EXISTS protected_effects (value TEXT)")
+        db.execute("INSERT INTO protected_effects VALUES('must-rollback')")
+        db.execute("COMMIT")
+
+    with pytest.raises(sqlite3.DatabaseError):
+        executor.execute(request, [approval], policy, registry, committing_handler, now())
+    assert executor.receipts() == ()
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 0
+        with pytest.raises(sqlite3.DatabaseError):
+            db.execute("DROP TRIGGER execution_receipts_no_update")
