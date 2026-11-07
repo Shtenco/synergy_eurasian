@@ -38,3 +38,8 @@ The consolidated cash identity includes member cash plus the federation reserve.
 There is no automatic levy, mandatory dues schedule, interest, penalty, legal enforcement, appeal, insolvency priority or replenishment trigger. This method only records a voluntarily supplied, explicitly funded contribution map. Governance must define who may call it, who is liable, how contributions are approved, and whether defaulted or distressed members receive exemptions.
 
 All values are synthetic. This mechanism is an accounting prototype, not a legal contribution obligation or recommendation for a real EAEU guarantee institution.
+
+
+## 5. CI validation
+
+The full EIIOM CI workflow passed on code commit `436eee06d48ea01e190f7294b295254bbd90f7e4` with **167 pytest tests passed**. The replenishment tests verify successful member-funded reserve top-ups, cash conservation, duplicate-ID rejection, atomic rejection when any member would breach the floor, and exclusion of defaulted contributors.
