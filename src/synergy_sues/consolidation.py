@@ -10,7 +10,7 @@ import calendar
 import re
 from typing import Iterable
 
-from .contracts import Money, _aware
+from .contracts import Money, _aware, _calendar_date
 from .journal import AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide
 
 
@@ -268,6 +268,7 @@ def post_intercompany_eliminations(
                 if period_id not in effective_dates_by_period:
                     raise ValueError(f"Missing effective date for intercompany period: {period_id}")
                 effective_date = effective_dates_by_period[period_id]
+                _calendar_date(effective_date, f"effective date for period {period_id}")
                 period_start, period_end = _period_bounds(period_id)
                 if not period_start <= effective_date <= period_end:
                     raise ValueError(
