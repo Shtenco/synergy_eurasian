@@ -62,3 +62,6 @@ The credit ledger independently enforces the same floor at initialization after 
 The allocator also accepts `minimum_post_contribution_cash`. The effective per-member contribution cap is the lower of the fractional cap and the amount that leaves the declared minimum cash balance. If no fractional cap is supplied in the reserve-sizing experiment, the absolute floor still applies.
 
 Crucially, the `CreditLedger` independently validates the combined regional and federation reserve contributions against this floor and initializes each member's cash only after subtracting both contributions. The floor is therefore enforced by the accounting kernel, not merely by the experiment allocator. If any member would fall below it, ledger initialization fails. The floor is a synthetic operating-liquidity guard, not a calibrated working-capital requirement.
+
+
+**Additional validation:** 158 pytest tests passed and the full EIIOM CI completed successfully on commit `b9d767165ea55e4fb77c37266d5ee3b3614361fd`. This run included the ledger-level absolute cash-floor guard, reserve sizing with the floor, the heterogeneous reserve-allocation comparison and the federation liquidity-cap smoke experiment. Maximum consolidated cash-conservation residuals in the reserve experiments remained at approximately 10⁻¹².
