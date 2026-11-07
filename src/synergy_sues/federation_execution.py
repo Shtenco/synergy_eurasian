@@ -89,13 +89,19 @@ class AuthorizedActionExecutor:
     Enqueue external work transactionally in an outbox and dispatch after commit.
     """
 
-    def __init__(self, database_path: str, busy_timeout_ms: int = 5000) -> None:
+    def __init__(
+        self, database_path: str, busy_timeout_ms: int = 5000,
+        require_scope_guard: bool = False,
+    ) -> None:
         if not isinstance(database_path, str) or not database_path.strip() or database_path == ":memory:":
             raise ValueError("authorized action executor requires a file-backed database")
         if isinstance(busy_timeout_ms, bool) or not isinstance(busy_timeout_ms, int) or busy_timeout_ms < 0:
             raise ValueError("busy_timeout_ms must be a non-negative integer")
+        if not isinstance(require_scope_guard, bool):
+            raise ValueError("require_scope_guard must be a boolean")
         self.database_path = database_path
         self.busy_timeout_ms = busy_timeout_ms
+        self.require_scope_guard = require_scope_guard
         with self._session() as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS execution_receipts (
@@ -116,6 +122,26 @@ class AuthorizedActionExecutor:
                     previous_hash TEXT NOT NULL,
                     receipt_hash TEXT NOT NULL UNIQUE
                 );
+                CREATE TABLE IF NOT EXISTS authority_scope_reservation_events (
+                    event_id TEXT PRIMARY KEY,
+                    request_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL CHECK(event_type IN ('RESERVED','RELEASED')),
+                    scope_id TEXT NOT NULL,
+                    tenant_id TEXT NOT NULL,
+                    period_key TEXT NOT NULL,
+                    currency TEXT NOT NULL,
+                    amount TEXT NOT NULL,
+                    source_ref TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS authority_scope_reservations_period
+                    ON authority_scope_reservation_events(scope_id,tenant_id,period_key,currency,request_id);
+                CREATE TRIGGER IF NOT EXISTS authority_scope_reservations_no_update
+                BEFORE UPDATE ON authority_scope_reservation_events
+                BEGIN SELECT RAISE(ABORT, 'authority scope reservation events are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS authority_scope_reservations_no_delete
+                BEFORE DELETE ON authority_scope_reservation_events
+                BEGIN SELECT RAISE(ABORT, 'authority scope reservation events are append-only'); END;
                 CREATE TABLE IF NOT EXISTS execution_outbox (
                     message_id TEXT PRIMARY KEY,
                     idempotency_key TEXT NOT NULL,
@@ -218,9 +244,14 @@ class AuthorizedActionExecutor:
         registry: TrustedKeyRegistry,
         handler: Callable[[_HandlerConnection, SignedEventEnvelope, AuthorizationDecision], Any],
         received_at: datetime | str | None = None,
+        scope_guard: Callable[[_HandlerConnection, SignedEventEnvelope, AuthorizationDecision], None] | None = None,
     ) -> ExecutionResult:
         if not callable(handler):
             raise ValueError("handler must be callable")
+        if scope_guard is not None and not callable(scope_guard):
+            raise ValueError("scope_guard must be callable when supplied")
+        if self.require_scope_guard and scope_guard is None:
+            raise ValueError("this executor requires an atomic authority-scope guard for every execution")
         if received_at is None:
             now = datetime.now(timezone.utc)
         elif isinstance(received_at, str):
@@ -333,7 +364,10 @@ class AuthorizedActionExecutor:
                 # Handlers participate in the executor's transaction but cannot
                 # commit/rollback it, alter the append-only receipt/outbox controls,
                 # or remove the database triggers that protect those controls.
-                protected_tables = {"execution_receipts", "execution_outbox"}
+                protected_tables = {
+                    "execution_receipts", "execution_outbox",
+                    "authority_scope_reservation_events",
+                }
                 def authorize_handler_sql(action, arg1, arg2, database_name, trigger_name):
                     if action in (
                         sqlite3.SQLITE_TRANSACTION, sqlite3.SQLITE_SAVEPOINT,
@@ -356,7 +390,10 @@ class AuthorizedActionExecutor:
 
                 db.set_authorizer(authorize_handler_sql)
                 try:
-                    result = handler(_HandlerConnection(db), handler_request, decision)
+                    handler_connection = _HandlerConnection(db)
+                    if scope_guard is not None:
+                        scope_guard(handler_connection, handler_request, decision)
+                    result = handler(handler_connection, handler_request, decision)
                 finally:
                     db.set_authorizer(None)
                 result_json = _canonical(result).decode("utf-8")
