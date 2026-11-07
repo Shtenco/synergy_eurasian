@@ -5,12 +5,12 @@ Reference implementation only: callers must supply evidence and validated GL acc
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Iterable
 
-from .contracts import Money, Quantity, _aware, _calendar_date
+from .contracts import Money, Quantity, _aware, _calendar_date, _calendar_date
 from .inventory import InventoryLedger, InventoryMovement
 from .journal import (
     AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide,
@@ -336,9 +336,11 @@ def execute_production_order(
         raise ValueError("Measured production output unit differs from the production order")
     if completion.output_quantity.amount > order.output_quantity.amount:
         raise ValueError("Measured production output exceeds the authorized order quantity")
-    if completion.completed_at > recorded_at:
+    completion_instant = completion.completed_at.astimezone(timezone.utc)
+    recorded_instant = recorded_at.astimezone(timezone.utc)
+    if completion_instant > recorded_instant:
         raise ValueError("Production completion evidence cannot post-date its recording time")
-    completion_date = completion.completed_at.date()
+    completion_date = completion_instant.date()
     if inventory.entity_id != order.entity_id:
         raise ValueError("Production inventory ledger must be bound to the production order entity")
     if journal.entity_id not in (None, order.entity_id):
