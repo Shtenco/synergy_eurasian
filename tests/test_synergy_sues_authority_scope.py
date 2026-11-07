@@ -103,7 +103,10 @@ def test_currency_organization_account_and_counterparty_are_bounded():
         ({"account_id": "account:other"}, "account_id_not_permitted"),
         ({"counterparty_id": "vendor:unknown"}, "counterparty_id_not_permitted"),
     ):
-        result = evaluate_scope(engine(), request(**change), decision(), "0")
+        result = evaluate_scope(
+            engine(), request(**change), decision(), "0",
+            currency=change.get("currency", "USD"),
+        )
         assert not result.allowed and result.reason == reason
 
 
