@@ -465,3 +465,38 @@ def test_retained_inbox_envelope_is_reverified_against_stored_identity(tmp_path)
             (json.dumps(tampered, sort_keys=True, separators=(",", ":")),),
         )
     assert not receiver.verify_inbox(authenticator)
+
+
+def test_legacy_inbox_duplicate_is_not_silently_treated_as_authenticated(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "legacy-sender.db"))
+    sender.append(event(), now=utc())
+    claimed = sender.claim_outbox(now=utc())[0]
+    message = {
+        "message_id": claimed.message_id,
+        "event_id": claimed.event_id,
+        "event_hash": claimed.event_hash,
+        "payload_json": claimed.payload_json,
+    }
+    receiver_path = str(tmp_path / "legacy-receiver.db")
+    with sqlite3.connect(receiver_path) as db:
+        db.execute("""CREATE TABLE inbox (
+            consumer TEXT NOT NULL, message_id TEXT NOT NULL, event_id TEXT NOT NULL,
+            event_hash TEXT NOT NULL, received_at TEXT NOT NULL,
+            PRIMARY KEY(consumer,message_id)
+        )""")
+        db.execute(
+            "CREATE UNIQUE INDEX inbox_consumer_event_unique ON inbox(consumer,event_id)"
+        )
+        db.execute(
+            "INSERT INTO inbox VALUES(?,?,?,?,?)",
+            ("legacy-consumer", message["message_id"], message["event_id"],
+             message["event_hash"], utc().isoformat()),
+        )
+
+    receiver = DurableEventStore(receiver_path)
+    with pytest.raises(ValueError, match="Legacy inbox receipt lacks retained publisher proof"):
+        receiver.consume_inbox(
+            "legacy-consumer", message, lambda *_: None,
+            received_at=utc(), authenticator=trusted_authenticator,
+        )
+    assert not receiver.verify_inbox(trusted_authenticator)
