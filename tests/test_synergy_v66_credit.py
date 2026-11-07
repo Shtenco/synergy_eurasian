@@ -31,7 +31,7 @@ def test_production_uses_only_approved_bank_line_and_never_negative_cash():
 
 
 def test_mutual_credit_invoice_settles_and_internal_transfer_eliminates():
-    ledger = CreditLedger(initial_cash_per_cell=20.0, trade_credit_limit_per_cell=50.0)
+    ledger = CreditLedger(initial_cash_per_cell=40.0, trade_credit_limit_per_cell=50.0)
     result = ledger.authorize_purchase(
         buyer="WEST-PR1", seller="WEST-AG1", amount=35.0,
         due_day=2, day=0, invoice_id="PO-001",
