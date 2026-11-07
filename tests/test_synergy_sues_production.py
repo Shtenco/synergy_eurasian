@@ -347,13 +347,10 @@ def test_production_completion_requires_measured_inputs_for_every_bom_component(
         (BOMComponent("steel", Quantity("1", "kg")),),
         date(2026, 11, 6), "production:input-evidence",
     )
-    missing = ProductionCompletionEvidence(
-        "batch-input-evidence", Quantity("1", "unit"), NOW,
-        "evidence:completion:missing-input", (),
-    )
     with pytest.raises(ValueError, match="measured input consumption"):
-        execute_production_order(
-            order, inventory, journal, "raw", "wip", "finished", NOW, completion=missing
+        ProductionCompletionEvidence(
+            "batch-input-evidence", Quantity("1", "unit"), NOW,
+            "evidence:completion:missing-input", (),
         )
     assert inventory.summary()["pools"][0]["quantity"] == "5"
     assert journal.entries == ()
