@@ -72,6 +72,10 @@ def reconcile_intercompany(records: Iterable[IntercompanyRecord]) -> dict:
     ids = [row.record_id for row in rows]
     if len(ids) != len(set(ids)):
         raise ValueError("Duplicate intercompany record_id")
+    # Validate every record's period, including cash-only transactions that
+    # never create a journal elimination entry.
+    for row in rows:
+        _period_bounds(row.period_id)
 
     grouped: dict[str, list[IntercompanyRecord]] = {}
     for row in rows:
