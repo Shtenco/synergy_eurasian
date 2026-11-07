@@ -8,6 +8,7 @@ integration with the executor and the authoritative economic ledger.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Mapping, Sequence
 
@@ -160,6 +161,9 @@ class AuthorityScopeEngine:
         request: SignedEventEnvelope,
         decision: AuthorizationDecision,
         committed_period_total: str,
+        period_reference_at: datetime | str | None = None,
+        committed_period_key: str | None = None,
+        committed_period_currency: str | None = None,
     ) -> ScopeEvaluation:
         """Return a fail-closed scope result; no funds are reserved here."""
         payload = request.event.get("payload", {}) if isinstance(request.event, dict) else {}
@@ -186,6 +190,29 @@ class AuthorityScopeEngine:
                 raise ValueError("authorization decision requester does not match signed request")
             if decision.request_id != payload["request_id"]:
                 raise ValueError("authorization decision request_id does not match signed request")
+            if (
+                decision.request_event_id != request.event.get("event_id")
+                or decision.request_event_hash != request.event.get("event_hash")
+                or decision.action != payload["action"]
+                or decision.resource_type != payload["resource_type"]
+                or decision.resource_id != payload["resource_id"]
+                or decision.tenant_id != request.tenant_id
+            ):
+                raise ValueError("authorization decision is not bound to this signed event and exact action/resource")
+            if period_reference_at is None or not committed_period_key or not committed_period_currency:
+                raise ValueError("authoritative period context is required")
+            if isinstance(period_reference_at, str):
+                try:
+                    period_instant = datetime.fromisoformat(period_reference_at.replace("Z", "+00:00"))
+                except ValueError as exc:
+                    raise ValueError("period_reference_at must be an ISO timestamp") from exc
+            elif isinstance(period_reference_at, datetime):
+                period_instant = period_reference_at
+            else:
+                raise ValueError("period_reference_at must be a timezone-aware datetime")
+            if period_instant.tzinfo is None or period_instant.utcoffset() is None:
+                raise ValueError("period_reference_at must be timezone-aware")
+            period_instant = period_instant.astimezone(timezone.utc)
             amount = _decimal(payload["amount"], "amount")
             # Period usage is a same-currency bucket. Cross-currency totals require
             # a separately governed FX conversion and are never added implicitly.
@@ -195,6 +222,8 @@ class AuthorityScopeEngine:
             currency = payload["currency"]
             if currency != currency.upper() or len(currency) != 3 or not currency.isascii() or not currency.isalpha():
                 raise ValueError("currency must use a canonical uppercase three-letter code")
+            if committed_period_currency != currency:
+                raise ValueError("committed period currency does not match request currency")
             candidates = [
                 scope for scope in self._scopes.values()
                 if scope.tenant_id == request.tenant_id
@@ -214,6 +243,18 @@ class AuthorityScopeEngine:
             if len(candidates) > 1 and specificity(candidates[0]) == specificity(candidates[1]):
                 raise ValueError("ambiguous_authority_scope")
             scope = candidates[0]
+            if scope.period_window == "DAY":
+                authoritative_period_key = period_instant.date().isoformat()
+            elif scope.period_window == "WEEK":
+                iso_year, iso_week, _ = period_instant.isocalendar()
+                authoritative_period_key = f"{iso_year}-W{iso_week:02d}"
+            elif scope.period_window == "MONTH":
+                authoritative_period_key = period_instant.strftime("%Y-%m")
+            else:
+                authoritative_period_key = period_instant.strftime("%Y")
+            if (payload["period_key"] != authoritative_period_key
+                    or committed_period_key != authoritative_period_key):
+                raise ValueError("period_key does not match authoritative execution period")
             if currency not in scope.currencies:
                 raise ValueError("currency_not_permitted")
             if amount > _decimal(scope.max_per_transaction, "max_per_transaction"):
@@ -246,7 +287,7 @@ class AuthorityScopeEngine:
                 used_approvers.update(eligible[:requirement.minimum_approvals])
             return ScopeEvaluation(
                 True, "within_authority_scope", scope.scope_id, str(request_id),
-                format(amount, "f"), currency, payload["period_key"], approvers,
+                format(amount, "f"), currency, authoritative_period_key, approvers,
             )
         except (ValueError, TypeError, InvalidOperation) as exc:
             return ScopeEvaluation(False, str(exc) or "invalid_scope_request", None, str(request_id))
