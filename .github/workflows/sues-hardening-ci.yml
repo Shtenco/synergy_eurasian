@@ -1,0 +1,44 @@
+name: SUES hardening CI
+
+on:
+  push:
+    branches:
+      - fix/sues-hardening-clean-20261107
+  pull_request:
+    branches:
+      - research/sues-audit-v1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sues-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile Python sources
+        run: python -m compileall -q src tests
+
+      - name: Run full test suite
+        run: python -m pytest -q
+
+      - name: Audit federation authority boundaries
+        run: python src/federation_audit.py --config config/federation_v4.json

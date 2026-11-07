@@ -41,7 +41,8 @@ def request(**overrides):
         tenant_id="tenant:one", key_id="key:1",
         signed_at="2026-11-06T10:00:00+00:00",
         event={"event_type": "AUTHORIZATION_REQUEST", "event_id": "evt:1",
-               "event_hash": "a" * 64, "payload": payload},
+               "event_hash": "a" * 64, "effective_at": "2026-11-06T10:00:00+00:00",
+               "payload": payload},
         signature_b64="c2lnbmF0dXJl",
     )
 
@@ -51,9 +52,20 @@ def decision(**overrides):
         allowed=True, reason="authorized_by_policy", request_id="req:1",
         requester_identity_id="user:treasurer",
         approval_identity_ids=("user:finance", "user:risk"),
+        request_event_id="evt:1", request_event_hash="a" * 64,
+        action="PAYMENT_RELEASE", resource_type="BANK_ACCOUNT",
+        resource_id="account:operating",
     )
     values.update(overrides)
     return AuthorizationDecision(**values)
+
+
+def evaluate_scope(engine_instance, signed_request, auth_decision, committed_total):
+    return engine_instance.evaluate(
+        signed_request, auth_decision, committed_total,
+        committed_period_key="2026-11",
+        committed_period_currency=signed_request.event["payload"].get("currency", "USD"),
+    )
 
 
 def engine():
@@ -68,7 +80,7 @@ def engine():
 
 
 def test_valid_scope_passes_with_independent_role_quorums():
-    result = engine().evaluate(request(), decision(), "1000.00")
+    result = evaluate_scope(engine(), request(), decision(), "1000.00")
     assert result.allowed
     assert result.reason == "within_authority_scope"
     assert result.scope_id == "scope:treasury"
@@ -76,8 +88,8 @@ def test_valid_scope_passes_with_independent_role_quorums():
 
 
 def test_transaction_and_period_limits_fail_closed():
-    assert engine().evaluate(request(amount="10000.01"), decision(), "0").reason == "transaction_limit_exceeded"
-    assert engine().evaluate(request(amount="1000"), decision(), "49500").reason == "period_limit_exceeded"
+    assert evaluate_scope(engine(), request(amount="10000.01"), decision(), "0").reason == "transaction_limit_exceeded"
+    assert evaluate_scope(engine(), request(amount="1000"), decision(), "49500").reason == "period_limit_exceeded"
 
 
 def test_currency_organization_account_and_counterparty_are_bounded():
@@ -87,34 +99,34 @@ def test_currency_organization_account_and_counterparty_are_bounded():
         ({"account_id": "account:other"}, "account_id_not_permitted"),
         ({"counterparty_id": "vendor:unknown"}, "counterparty_id_not_permitted"),
     ):
-        result = engine().evaluate(request(**change), decision(), "0")
+        result = evaluate_scope(engine(), request(**change), decision(), "0")
         assert not result.allowed and result.reason == reason
 
 
 def test_initiator_and_approver_roles_are_independent():
     no_finance = decision(approval_identity_ids=("user:risk",))
-    result = engine().evaluate(request(), no_finance, "0")
+    result = evaluate_scope(engine(), request(), no_finance, "0")
     assert result.reason == "approval_role_quorum_not_met:FINANCE_DIRECTOR"
     self_approval = decision(approval_identity_ids=("user:treasurer", "user:finance", "user:risk"))
-    assert engine().evaluate(request(), self_approval, "0").reason == "initiator_cannot_approve"
+    assert evaluate_scope(engine(), request(), self_approval, "0").reason == "initiator_cannot_approve"
 
 
 def test_untrusted_or_malformed_amounts_and_missing_fields_fail_closed():
     for amount in ("NaN", "Infinity", "-1", "1.2.3", 100):
-        result = engine().evaluate(request(amount=amount), decision(), "0")
+        result = evaluate_scope(engine(), request(amount=amount), decision(), "0")
         assert not result.allowed
-    assert not engine().evaluate(request(), decision(), "NaN").allowed
+    assert not evaluate_scope(engine(), request(), decision(), "NaN").allowed
     payload = request().event["payload"].copy()
     del payload["period_key"]
     broken = replace(request(), event={**request().event, "payload": payload})
-    assert not engine().evaluate(broken, decision(), "0").allowed
+    assert not evaluate_scope(engine(), broken, decision(), "0").allowed
 
 
 def test_missing_scope_and_denied_authorization_never_pass():
     missing = AuthorityScopeEngine([scope(action="TOKEN_MINT")], {})
-    assert missing.evaluate(request(), decision(), "0").reason == "no_matching_authority_scope"
+    assert evaluate_scope(missing, request(), decision(), "0").reason == "no_matching_authority_scope"
     denied = decision(allowed=False)
-    assert missing.evaluate(request(), denied, "0").reason == "authorization_not_allowed"
+    assert evaluate_scope(missing, request(), denied, "0").reason == "authorization_not_allowed"
 
 
 def test_scope_configuration_rejects_ambiguous_limits_and_duplicate_roles():
@@ -133,8 +145,8 @@ def test_one_identity_cannot_fill_two_distinct_control_roles():
             "user:dual": ("FINANCE_DIRECTOR", "RISK_OFFICER"),
         },
     )
-    result = engine_with_shared_identity.evaluate(
-        request(), decision(approval_identity_ids=("user:dual",)), "0"
+    result = evaluate_scope(
+        engine_with_shared_identity, request(), decision(approval_identity_ids=("user:dual",)), "0"
     )
     assert result.reason == "approval_role_quorum_not_met:RISK_OFFICER"
 
@@ -142,21 +154,71 @@ def test_one_identity_cannot_fill_two_distinct_control_roles():
 def test_equal_specificity_matching_scopes_are_rejected_as_ambiguous():
     first = scope(scope_id="scope:a")
     second = scope(scope_id="scope:b")
-    result = AuthorityScopeEngine(
+    ambiguous_engine = AuthorityScopeEngine(
         [first, second],
         {
             "user:treasurer": ("TREASURER",),
             "user:finance": ("FINANCE_DIRECTOR",),
             "user:risk": ("RISK_OFFICER",),
         },
-    ).evaluate(request(), decision(), "0")
+    )
+    result = evaluate_scope(ambiguous_engine, request(), decision(), "0")
     assert result.reason == "ambiguous_authority_scope"
 
 
 def test_decision_must_be_bound_to_the_exact_signed_request():
-    assert engine().evaluate(
-        request(), decision(request_id="req:other"), "0"
+    assert evaluate_scope(
+        engine(), request(), decision(request_id="req:other"), "0"
     ).reason == "authorization decision request_id does not match signed request"
-    assert engine().evaluate(
-        request(), decision(requester_identity_id="user:other"), "0"
+    assert evaluate_scope(
+        engine(), request(), decision(requester_identity_id="user:other"), "0"
     ).reason == "authorization decision requester does not match signed request"
+
+
+def test_period_key_is_derived_from_signed_effective_at_and_usage_bucket_must_match():
+    spoofed = request(period_key="2026-12")
+    result = evaluate_scope(engine(), spoofed, decision(), "0")
+    assert not result.allowed
+    assert "period_key does not match" in result.reason
+
+    wrong_bucket = engine().evaluate(
+        request(), decision(), "0",
+        committed_period_key="2026-12", committed_period_currency="USD",
+    )
+    assert not wrong_bucket.allowed
+    assert "committed period usage key" in wrong_bucket.reason
+
+
+def test_authorization_decision_is_bound_to_event_hash_and_resource_scope():
+    changed_event = replace(request(), event={**request().event, "event_id": "evt:other"})
+    assert "event ID" in evaluate_scope(engine(), changed_event, decision(), "0").reason
+
+    wrong_hash = decision(request_event_hash="b" * 64)
+    assert "event hash" in evaluate_scope(engine(), request(), wrong_hash, "0").reason
+
+    wrong_action = decision(action="TOKEN_MINT", resource_type="TOKEN", resource_id="token:SYNA")
+    assert "action/resource" in evaluate_scope(engine(), request(), wrong_action, "0").reason
+
+
+def test_day_week_month_and_year_period_keys_are_derived_from_signed_time():
+    for window, key in (
+        ("DAY", "2026-11-06"),
+        ("WEEK", "2026-W45"),
+        ("MONTH", "2026-11"),
+        ("YEAR", "2026"),
+    ):
+        scoped = AuthorityScopeEngine(
+            [scope(period_window=window)],
+            {
+                "user:treasurer": ("TREASURER",),
+                "user:finance": ("FINANCE_DIRECTOR",),
+                "user:risk": ("RISK_OFFICER",),
+            },
+        )
+        signed_request = request(period_key=key)
+        result = scoped.evaluate(
+            signed_request, decision(), "0",
+            committed_period_key=key, committed_period_currency="USD",
+        )
+        assert result.allowed
+        assert result.period_key == key

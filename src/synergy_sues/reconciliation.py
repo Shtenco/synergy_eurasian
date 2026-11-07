@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timezone
 from decimal import Decimal
 from typing import Iterable
 
-from .contracts import EconomicPeriod, Money
+from .contracts import EconomicPeriod, Money, _calendar_date
 from .journal import AccountType, Journal, NormalBalance, PostingSide
 
 
@@ -21,8 +21,7 @@ class BankStatementLine:
     def __post_init__(self) -> None:
         if not all((self.line_id, self.bank_reference, self.source_ref)):
             raise ValueError("Bank statement line identity and provenance are required")
-        if not isinstance(self.booked_date, date):
-            raise ValueError("booked_date must be a date")
+        _calendar_date(self.booked_date, "bank booked_date")
         if self.signed_amount.amount == 0:
             raise ValueError("Bank statement movement cannot be zero")
 
@@ -37,10 +36,13 @@ class BankStatement:
     closing_bank_balance: Money
     opening_ledger_balance: Money
     lines: tuple[BankStatementLine, ...]
+    entity_id: str | None = None
 
     def __post_init__(self) -> None:
         if not all((self.statement_id, self.account_id, self.currency)):
             raise ValueError("Bank statement identity and currency are required")
+        if self.entity_id is not None and (not isinstance(self.entity_id, str) or not self.entity_id.strip()):
+            raise ValueError("Bank statement entity_id must be a non-empty string")
         for name in ("opening_bank_balance", "closing_bank_balance", "opening_ledger_balance"):
             value = getattr(self, name)
             if value.currency != self.currency:
@@ -90,6 +92,8 @@ def reconcile_bank_account(
     remain visible as exceptions. The bank statement's own opening/movement/
     closing identity is checked when the statement object is created.
     """
+    if journal.entity_id is None or statement.entity_id != journal.entity_id:
+        raise ValueError("Bank statement and journal must share one bound legal entity")
     account_map = {account.account_id: account for account in journal.accounts}
     account = account_map.get(statement.account_id)
     if account is None:
@@ -98,8 +102,42 @@ def reconcile_bank_account(
         raise ValueError("Bank reconciliation requires a debit-normal asset cash account")
 
     journal_movements = {}
+    late_recorded_journal_lines = []
+    late_recorded_opening_journal_lines = []
+    calculated_opening_ledger_balance = Decimal("0")
     for entry in journal.entries:
+        recorded_date_utc = entry.recorded_at.astimezone(timezone.utc).date()
+        if entry.effective_date < statement.period.start:
+            if recorded_date_utc >= statement.period.start:
+                for line in entry.lines:
+                    if line.account_id == statement.account_id:
+                        late_recorded_opening_journal_lines.append({
+                            "journal_line_ref": f"{entry.entry_id}:{line.line_id}",
+                            "effective_date": entry.effective_date.isoformat(),
+                            "recorded_at": entry.recorded_at.isoformat(),
+                            "opening_cutoff": statement.period.start.isoformat(),
+                        })
+                continue
+            for line in entry.lines:
+                if line.account_id != statement.account_id:
+                    continue
+                if line.amount.currency != statement.currency:
+                    raise ValueError(f"Cash journal line currency mismatch: {entry.entry_id}:{line.line_id}")
+                calculated_opening_ledger_balance += (
+                    line.amount.amount if line.side == PostingSide.DEBIT else -line.amount.amount
+                )
+            continue
         if not statement.period.contains(entry.effective_date):
+            continue
+        if recorded_date_utc > statement.period.end:
+            for line in entry.lines:
+                if line.account_id == statement.account_id:
+                    late_recorded_journal_lines.append({
+                        "journal_line_ref": f"{entry.entry_id}:{line.line_id}",
+                        "effective_date": entry.effective_date.isoformat(),
+                        "recorded_at": entry.recorded_at.isoformat(),
+                        "recorded_after_period_end": statement.period.end.isoformat(),
+                    })
             continue
         for line in entry.lines:
             if line.account_id != statement.account_id:
@@ -111,6 +149,10 @@ def reconcile_bank_account(
             if ref in journal_movements:
                 raise ValueError(f"Duplicate journal cash line reference: {ref}")
             journal_movements[ref] = signed
+
+    opening_ledger_difference = (
+        statement.opening_ledger_balance.amount - calculated_opening_ledger_balance
+    )
 
     bank_lines = {line.line_id: line for line in statement.lines}
     allocation_rows = list(allocations)
@@ -171,17 +213,20 @@ def reconcile_bank_account(
     statement_net = sum((line.signed_amount.amount for line in statement.lines), Decimal("0"))
     ledger_net = sum(journal_movements.values(), Decimal("0"))
     bank_close = statement.opening_bank_balance.amount + statement_net
-    ledger_close = statement.opening_ledger_balance.amount + ledger_net
+    ledger_close = calculated_opening_ledger_balance + ledger_net
     closing_difference = bank_close - ledger_close
 
     return {
         "statement_id": statement.statement_id,
         "account_id": statement.account_id,
+        "entity_id": statement.entity_id,
         "currency": statement.currency,
         "period_id": statement.period.period_id,
         "bank_opening_balance": str(statement.opening_bank_balance.amount),
         "bank_closing_balance": str(bank_close),
-        "ledger_opening_balance": str(statement.opening_ledger_balance.amount),
+        "ledger_opening_balance_reported": str(statement.opening_ledger_balance.amount),
+        "ledger_opening_balance_calculated": str(calculated_opening_ledger_balance),
+        "opening_ledger_balance_difference": str(opening_ledger_difference),
         "ledger_closing_balance": str(ledger_close),
         "bank_minus_ledger_closing_difference": str(closing_difference),
         "statement_line_count": len(statement.lines),
@@ -189,6 +234,12 @@ def reconcile_bank_account(
         "allocations": allocation_results,
         "unmatched_statement_lines": bank_exceptions,
         "unmatched_journal_lines": journal_exceptions,
-        "fully_reconciled": closing_difference == 0 and not bank_exceptions and not journal_exceptions,
+        "late_recorded_journal_lines": late_recorded_journal_lines,
+        "late_recorded_opening_journal_lines": late_recorded_opening_journal_lines,
+        "fully_reconciled": (
+            closing_difference == 0 and opening_ledger_difference == 0
+            and not bank_exceptions and not journal_exceptions
+            and not late_recorded_journal_lines and not late_recorded_opening_journal_lines
+        ),
         "automatic_matching_performed": False,
     }

@@ -70,13 +70,28 @@ def entry(entry_id="je1", key="idem1", amount="100"):
 
 
 def new_journal():
-    journal = Journal("USD")
+    journal = Journal("USD", entity_id="co1")
     journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
     journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
     journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
     journal.add_account(account("fx", "7990", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_account(account("opening-equity", "3000", AccountType.EQUITY, NormalBalance.CREDIT))
     return journal
 
+
+
+def post_opening_cash(journal, amount="100"):
+    now = datetime(2026, 10, 31, 12, tzinfo=timezone.utc)
+    journal.post(JournalEntry(
+        "cash-opening-balance", date(2026, 10, 31), now, "USD",
+        (
+            JournalLine("opening-cash-dr", "cash", "DEBIT", Money(amount, "USD"),
+                Money(amount, "USD"), "co1", "opening:cash"),
+            JournalLine("opening-equity-cr", "opening-equity", "CREDIT", Money(amount, "USD"),
+                Money(amount, "USD"), "co1", "opening:equity"),
+        ),
+        "opening-cash-event", "opening-cash-idem", "Opening cash balance",
+    ))
 
 def test_journal_posts_balanced_entry_and_builds_trial_balance():
     journal = new_journal()
@@ -324,6 +339,7 @@ def test_intercompany_reconciliation_reports_missing_reciprocal_side():
 
 def test_bank_reconciliation_matches_statement_lines_to_cash_journal():
     journal = new_journal()
+    post_opening_cash(journal)
     journal.add_account(account("opex", "6000", AccountType.EXPENSE, NormalBalance.DEBIT))
     now = datetime(2026, 11, 6, 9, tzinfo=timezone.utc)
     sale = JournalEntry("bank-sale", date(2026, 11, 6), now, "USD",
@@ -340,7 +356,7 @@ def test_bank_reconciliation_matches_statement_lines_to_cash_journal():
     statement = BankStatement("stmt1", "cash", "USD", period, Money("100", "USD"),
         Money("130", "USD"), Money("100", "USD"),
         (BankStatementLine("b1", date(2026, 11, 6), Money("50", "USD"), "bank:1", "statement:1"),
-         BankStatementLine("b2", date(2026, 11, 6), Money("-20", "USD"), "bank:2", "statement:2")))
+         BankStatementLine("b2", date(2026, 11, 6), Money("-20", "USD"), "bank:2", "statement:2")), entity_id="co1")
     allocations = [
         BankAllocation("a1", "b1", "bank-sale", "cash-in", Money("50", "USD"), "allocation:1"),
         BankAllocation("a2", "b2", "bank-opex", "cash-out", Money("20", "USD"), "allocation:2"),
@@ -352,6 +368,7 @@ def test_bank_reconciliation_matches_statement_lines_to_cash_journal():
 
 def test_bank_reconciliation_preserves_unmatched_cash_and_closing_difference():
     journal = new_journal()
+    post_opening_cash(journal)
     now = datetime(2026, 11, 6, 9, tzinfo=timezone.utc)
     sale = JournalEntry("bank-sale", date(2026, 11, 6), now, "USD",
         (JournalLine("cash-in", "cash", "DEBIT", Money("45", "USD"), Money("45", "USD"), "co1", "bank:in"),
@@ -361,7 +378,7 @@ def test_bank_reconciliation_preserves_unmatched_cash_and_closing_difference():
     period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
     statement = BankStatement("stmt2", "cash", "USD", period, Money("100", "USD"),
         Money("150", "USD"), Money("100", "USD"),
-        (BankStatementLine("b1", date(2026, 11, 6), Money("50", "USD"), "bank:1", "statement:1"),))
+        (BankStatementLine("b1", date(2026, 11, 6), Money("50", "USD"), "bank:1", "statement:1"),), entity_id="co1")
     result = reconcile_bank_account(journal, statement, [
         BankAllocation("a1", "b1", "bank-sale", "cash-in", Money("45", "USD"), "allocation:1")
     ])
@@ -482,7 +499,7 @@ def test_trial_balance_translation_rejects_missing_historical_rate_and_future_ra
 
 
 def test_trade_subledger_posts_invoices_and_settlements_to_balanced_gl():
-    journal = Journal("USD")
+    journal = Journal("USD", entity_id="co1")
     journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
     journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
     journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
@@ -524,12 +541,14 @@ def test_trade_subledger_rejects_over_settlement_and_wrong_cash_account():
 
 
 def test_trade_subledger_foreign_currency_posting_uses_dated_fx_for_each_event():
-    journal = Journal("USD")
+    journal = Journal("USD", entity_id="co1")
     journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
     journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
     journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
     journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
     journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_account(account("fx-gain", "7100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("fx-loss", "8100", AccountType.EXPENSE, NormalBalance.DEBIT))
     journal.add_fx_rate(FXRate("eurusd-invoice", "EUR", "USD", "1.1",
         datetime(2026, 11, 1, 12, tzinfo=timezone.utc), "fx:invoice"))
     journal.add_fx_rate(FXRate("eurusd-settlement", "EUR", "USD", "1.2",
@@ -541,12 +560,13 @@ def test_trade_subledger_foreign_currency_posting_uses_dated_fx_for_each_event()
             Money("20", "EUR"), "cash", "bank:eur")],
     )
     result = subledger.post_to_journal(
-        journal, TradeAccountMap("ar", "revenue", "ap", "purchases"),
+        journal, TradeAccountMap("ar", "revenue", "ap", "purchases", "fx-gain", "fx-loss"),
         datetime(2026, 11, 6, 13, tzinfo=timezone.utc),
         {"invoice:eur": "eurusd-invoice", "bank:eur": "eurusd-settlement"},
     )
-    assert result["expected_ar_control_delta"] == "86.0"
-    assert result["actual_ar_control_delta"] == "86.0"
+    assert result["expected_ar_control_delta"] == "88.0"
+    assert result["actual_ar_control_delta"] == "88.0"
+    assert journal.trial_balance()["accounts"]["fx-gain"]["credit"] == "2.0"
     assert journal.trial_balance()["balanced"]
 
 
@@ -586,7 +606,7 @@ def test_journal_post_many_is_atomic_when_later_entry_is_invalid():
 
 
 def test_trade_subledger_batch_is_atomic_when_later_fx_evidence_is_invalid():
-    journal = Journal("USD")
+    journal = Journal("USD", entity_id="co1")
     journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
     journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
     journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
@@ -669,7 +689,7 @@ def test_fifo_inventory_rejects_insufficient_stock_without_mutation_and_mixed_un
 
 
 def test_fifo_inventory_movements_post_to_balanced_journal():
-    ledger = InventoryLedger("USD")
+    ledger = InventoryLedger("USD", entity_id="co1")
     receipt = ledger.receive("r1", "lot-1", "components", "factory",
         Quantity("10", "unit"), Money("100", "USD"), date(2026, 11, 1), "receipt:components")
     issue = ledger.issue("i1", "components", "factory", Quantity("4", "unit"),
@@ -690,3 +710,242 @@ def test_fifo_inventory_movements_post_to_balanced_journal():
     assert journal.trial_balance()["balanced"]
     assert journal.trial_balance()["total_debits"] == journal.trial_balance()["total_credits"] == "140"
     assert [x.movement_type for x in ledger.movements].count(InventoryMovementType.TRANSFER_OUT) == 1
+
+
+def test_calendar_date_contracts_reject_datetime_subclasses():
+    instant = datetime(2026, 11, 6, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="calendar date"):
+        EconomicPeriod("bad", instant, date(2026, 11, 30))
+    period = EconomicPeriod("good", date(2026, 11, 1), date(2026, 11, 30))
+    with pytest.raises(ValueError, match="calendar date"):
+        period.contains(instant)
+    with pytest.raises(ValueError, match="calendar date"):
+        EvidenceRecord("e-date", "source", EvidenceStatus.OBSERVED, instant, instant)
+
+
+def test_money_and_quantity_reject_binary_float_inputs():
+    with pytest.raises(ValueError, match="binary floats are rejected"):
+        Money(0.1, "USD")
+    with pytest.raises(ValueError, match="binary floats are rejected"):
+        Quantity(0.1, "kg")
+    with pytest.raises(ValueError, match="binary floats are rejected"):
+        Money("1", "USD").scale(0.1)
+
+
+def test_inventory_fifo_excludes_future_receipts_from_historical_availability_and_issue():
+    ledger = InventoryLedger("USD")
+    ledger.receive("future-r", "future-lot", "steel", "factory",
+        Quantity("5", "kg"), Money("50", "USD"), date(2026, 11, 7), "receipt:future")
+    assert ledger.available("steel", "factory", "kg", date(2026, 11, 6)) == Quantity("0", "kg")
+    assert ledger.available("steel", "factory", "kg") == Quantity("5", "kg")
+    before = ledger.summary()
+    with pytest.raises(ValueError, match="Insufficient inventory"):
+        ledger.issue("early-issue", "steel", "factory", Quantity("1", "kg"),
+            date(2026, 11, 6), "production:early")
+    assert ledger.summary() == before
+
+
+def test_intercompany_cash_only_records_reject_noncanonical_periods():
+    record = IntercompanyRecord(
+        "cash-bad-period", "tx-cash-only", "seller", "buyer",
+        "SELLER_CASH_IN", Money("25", "USD"), "2026-Q5", "bank:cash-transfer",
+    )
+    with pytest.raises(ValueError, match="Unsupported or non-canonical"):
+        reconcile_intercompany([record])
+
+
+def test_bank_reconciliation_excludes_backdated_entries_recorded_after_period_close():
+    journal = new_journal()
+    post_opening_cash(journal)
+    late = JournalEntry(
+        "late-backdated-cash", date(2026, 11, 6),
+        datetime(2026, 12, 2, 9, tzinfo=timezone.utc), "USD",
+        (
+            JournalLine("late-cash", "cash", "DEBIT", Money("50", "USD"),
+                Money("50", "USD"), "co1", "bank:late"),
+            JournalLine("late-revenue", "revenue", "CREDIT", Money("50", "USD"),
+                Money("50", "USD"), "co1", "sale:late"),
+        ),
+        "evt-late", "idem-late", "Late backdated bank receipt",
+    )
+    journal.post(late)
+    period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
+    statement = BankStatement("stmt-late", "cash", "USD", period,
+        Money("100", "USD"), Money("150", "USD"), Money("100", "USD"),
+        (BankStatementLine("bank-line-late", date(2026, 11, 6),
+            Money("50", "USD"), "bank:late", "statement:late"),), entity_id="co1")
+    result = reconcile_bank_account(journal, statement, [])
+    assert result["ledger_closing_balance"] == "100"
+    assert result["bank_closing_balance"] == "150"
+    assert not result["fully_reconciled"]
+    assert result["late_recorded_journal_lines"][0]["journal_line_ref"] == "late-backdated-cash:late-cash"
+
+
+def test_inventory_movement_cannot_be_posted_to_another_entity_or_second_journal():
+    ledger = InventoryLedger("USD", entity_id="co1")
+    receipt = ledger.receive("entity-receipt", "entity-lot", "steel", "factory",
+        Quantity("2", "kg"), Money("20", "USD"), date(2026, 11, 1), "receipt:entity")
+    wrong = Journal("USD", entity_id="co2")
+    wrong.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    wrong.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    with pytest.raises(ValueError, match="ownership mismatch"):
+        ledger.post_to_journal(receipt.movement_id, wrong, "inventory", "grni", "co2",
+            datetime(2026, 11, 2, tzinfo=timezone.utc))
+    assert wrong.entries == ()
+
+    right = Journal("USD", entity_id="co1")
+    right.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    right.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    ledger.post_to_journal(receipt.movement_id, right, "inventory", "grni", "co1",
+        datetime(2026, 11, 2, tzinfo=timezone.utc))
+    second = Journal("USD", entity_id="co1")
+    second.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    second.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    with pytest.raises(ValueError, match="already journalized"):
+        ledger.post_to_journal(receipt.movement_id, second, "inventory", "grni", "co1",
+            datetime(2026, 11, 2, tzinfo=timezone.utc))
+
+
+def test_trade_subledger_foreign_currency_payable_settlement_recognizes_fx_loss():
+    journal = Journal("USD", entity_id="co1")
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("ar", "1100", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
+    journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_account(account("fx-gain", "7100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("fx-loss", "8100", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_fx_rate(FXRate("eurusd-ap-invoice", "EUR", "USD", "1.1",
+        datetime(2026, 11, 1, 12, tzinfo=timezone.utc), "fx:ap-invoice"))
+    journal.add_fx_rate(FXRate("eurusd-ap-payment", "EUR", "USD", "1.2",
+        datetime(2026, 11, 6, 12, tzinfo=timezone.utc), "fx:ap-payment"))
+    subledger = TradeSubledger(
+        [TradeDocument("inv-ap-eur", TradeSide.PAYABLE, "co1", "supplier",
+            date(2026, 11, 1), date(2026, 11, 30), Money("100", "EUR"), "invoice:ap-eur")],
+        [TradeSettlement("settle-ap-eur", "inv-ap-eur", date(2026, 11, 6),
+            Money("20", "EUR"), "cash", "bank:ap-eur")],
+    )
+    result = subledger.post_to_journal(
+        journal, TradeAccountMap("ar", "revenue", "ap", "purchases", "fx-gain", "fx-loss"),
+        datetime(2026, 11, 6, 13, tzinfo=timezone.utc),
+        {"invoice:ap-eur": "eurusd-ap-invoice", "bank:ap-eur": "eurusd-ap-payment"},
+    )
+    assert result["expected_ap_credit_control_delta"] == "88.0"
+    assert result["actual_ap_credit_control_delta"] == "88.0"
+    assert journal.trial_balance()["accounts"]["fx-loss"]["debit"] == "2.0"
+    assert journal.trial_balance()["balanced"]
+
+
+def test_journal_rejects_duplicate_source_event_ids():
+    journal = new_journal()
+    journal.post(entry("source-first", "source-first-idem"))
+    with pytest.raises(ValueError, match="Duplicate source_event_id"):
+        journal.post(entry("source-second", "source-second-idem"))
+
+
+def test_journal_close_blocks_backdated_posting_but_allows_forward_reversal():
+    journal = new_journal()
+    original = journal.post(entry("close-original", "close-original-idem"))
+    journal.close_through(date(2026, 11, 30))
+    assert journal.closed_through == date(2026, 11, 30)
+    late = JournalEntry(
+        "late-after-close", date(2026, 11, 15),
+        datetime(2026, 12, 2, 9, tzinfo=timezone.utc), "USD",
+        (
+            JournalLine("late-dr", "cash", "DEBIT", Money("5", "USD"),
+                Money("5", "USD"), "co1", "bank:late"),
+            JournalLine("late-cr", "revenue", "CREDIT", Money("5", "USD"),
+                Money("5", "USD"), "co1", "sale:late"),
+        ),
+        "late-event", "late-idem", "Late backdated posting",
+    )
+    with pytest.raises(ValueError, match="closed accounting period"):
+        journal.post(late)
+    with pytest.raises(ValueError, match="cannot precede"):
+        journal.reverse(
+            original.entry_id, "too-early-reversal", date(2026, 11, 5),
+            datetime(2026, 12, 1, 12, tzinfo=timezone.utc),
+            "too-early-event", "too-early-idem", "Invalid early reversal",
+        )
+    reversal = journal.reverse(
+        original.entry_id, "close-reversal", date(2026, 12, 1),
+        datetime(2026, 12, 1, 12, tzinfo=timezone.utc),
+        "close-reversal-event", "close-reversal-idem", "Reverse after close",
+    )
+    assert reversal.reversal_of == original.entry_id
+
+
+def test_bank_reconciliation_does_not_trust_caller_supplied_opening_ledger_balance():
+    journal = new_journal()
+    post_opening_cash(journal, "100")
+    period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
+    statement = BankStatement(
+        "stmt-wrong-opening", "cash", "USD", period,
+        Money("100", "USD"), Money("100", "USD"), Money("90", "USD"), (),
+        entity_id="co1",
+    )
+    result = reconcile_bank_account(journal, statement, [])
+    assert result["ledger_opening_balance_calculated"] == "100"
+    assert result["opening_ledger_balance_difference"] == "-10"
+    assert not result["fully_reconciled"]
+
+
+def test_journal_rejects_stale_foreign_exchange_rate():
+    journal = Journal("USD", entity_id="co1", max_fx_rate_age_days=7)
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_fx_rate(FXRate(
+        "stale-eurusd", "EUR", "USD", "1.1",
+        datetime(2026, 10, 1, 12, tzinfo=timezone.utc), "fx:stale",
+    ))
+    now = datetime(2026, 11, 6, 12, tzinfo=timezone.utc)
+    stale_entry = JournalEntry(
+        "stale-fx-entry", date(2026, 11, 6), now, "USD",
+        (
+            JournalLine("stale-dr", "cash", "DEBIT", Money("2", "EUR"),
+                Money("2.2", "USD"), "co1", "bank:stale", fx_rate_ref="stale-eurusd"),
+            JournalLine("stale-cr", "revenue", "CREDIT", Money("2.2", "USD"),
+                Money("2.2", "USD"), "co1", "sale:stale"),
+        ),
+        "stale-fx-event", "stale-fx-idem", "Stale FX valuation",
+    )
+    with pytest.raises(ValueError, match="FX rate is stale"):
+        journal.post(stale_entry)
+
+
+def test_bank_reconciliation_rejects_statement_from_another_legal_entity():
+    journal = new_journal()
+    period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
+    statement = BankStatement(
+        "stmt-wrong-entity", "cash", "USD", period,
+        Money("0", "USD"), Money("0", "USD"), Money("0", "USD"), (),
+        entity_id="co2",
+    )
+    with pytest.raises(ValueError, match="share one bound legal entity"):
+        reconcile_bank_account(journal, statement, [])
+
+
+def test_journal_close_date_is_monotonic_and_rejects_datetime():
+    journal = new_journal()
+    journal.close_through(date(2026, 11, 30))
+    with pytest.raises(ValueError, match="cannot move backwards"):
+        journal.close_through(date(2026, 11, 29))
+    with pytest.raises(ValueError, match="calendar date"):
+        journal.close_through(datetime(2026, 12, 1, tzinfo=timezone.utc))
+
+
+def test_intercompany_elimination_effective_date_must_fall_inside_period():
+    journal = Journal("USD")
+    journal.add_account(account("seller-revenue", "4100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("buyer-expense", "5100", AccountType.EXPENSE, NormalBalance.DEBIT))
+    rows = [
+        IntercompanyRecord("rev-period", "tx-period", "seller", "buyer",
+            "SELLER_REVENUE", Money("10", "USD"), "2026-Q4", "erp:rev", "seller-revenue"),
+        IntercompanyRecord("exp-period", "tx-period", "buyer", "seller",
+            "BUYER_EXPENSE", Money("10", "USD"), "2026-Q4", "erp:exp", "buyer-expense"),
+    ]
+    with pytest.raises(ValueError, match="falls outside intercompany period"):
+        post_intercompany_eliminations(
+            journal, rows, {"2026-Q4": date(2027, 1, 15)},
+            datetime(2027, 1, 15, tzinfo=timezone.utc), "event-period", "idem-period",
+        )

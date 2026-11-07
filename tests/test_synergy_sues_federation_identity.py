@@ -72,6 +72,9 @@ def test_revocation_and_key_window(tmp_path):
     registry.revoke_key("org:a","k1","2026-11-06T10:00:30+00:00")
     with pytest.raises(ValueError,match="revoked"):
         registry.verify(signed,"2026-11-06T10:01:00+00:00")
+    assert registry.verify_historical(
+        signed, "2026-11-06T10:01:00+00:00"
+    ).identity_id == "org:a"
     private, registry = setup(valid_from="2026-11-06T10:00:30+00:00")
     early = sign_event(event(tmp_path,"early.db"),"org:a","tenant:a","k1",private,
         "2026-11-06T10:00:00+00:00")
@@ -130,6 +133,7 @@ def test_sqlite_revocation_is_durable_and_visible_to_existing_registry_instance(
     first.revoke_key("org:revoked", "key-1", "2026-11-06T10:00:30+00:00")
     with pytest.raises(ValueError, match="revoked"):
         second.verify(signed, "2026-11-06T10:01:00+00:00")
+    assert second.verify_historical(signed, "2026-11-06T10:01:00+00:00").identity_id == "org:revoked"
     reopened = SQLiteTrustedKeyRegistry(path)
     assert reopened.resolve("org:revoked", "key-1").revoked_at == "2026-11-06T10:00:30+00:00"
     assert reopened.verify_audit()

@@ -173,7 +173,8 @@ class TrustedKeyRegistry:
             raise ValueError("unknown signing key") from exc
 
     def verify(self, envelope: SignedEventEnvelope | Mapping[str, Any],
-               received_at: datetime | str | None = None) -> FederationIdentity:
+               received_at: datetime | str | None = None, *,
+               allow_historical: bool = False) -> FederationIdentity:
         if isinstance(envelope, Mapping):
             try:
                 envelope = SignedEventEnvelope(**dict(envelope))
@@ -207,10 +208,13 @@ class TrustedKeyRegistry:
             raise ValueError("signature timestamp is outside key validity window")
         if revoked is not None and signed_at >= revoked:
             raise ValueError("signing key was revoked at signing time")
-        if now < start or (end is not None and now >= end):
-            raise ValueError("signing key is not currently valid")
-        if revoked is not None and now >= revoked:
-            raise ValueError("signing key is revoked")
+        if not isinstance(allow_historical, bool):
+            raise ValueError("allow_historical must be a boolean")
+        if not allow_historical:
+            if now < start or (end is not None and now >= end):
+                raise ValueError("signing key is not currently valid")
+            if revoked is not None and now >= revoked:
+                raise ValueError("signing key is revoked")
         _event_hash(envelope.event)
         try:
             public_bytes = base64.b64decode(key.public_key_b64, validate=True)
@@ -222,6 +226,20 @@ class TrustedKeyRegistry:
         except Exception as exc:
             raise ValueError("signed event signature verification failed") from exc
         return identity
+
+    def verify_historical(
+        self,
+        envelope: SignedEventEnvelope | Mapping[str, Any],
+        received_at: datetime | str | None = None,
+    ) -> FederationIdentity:
+        """Verify signature authenticity at signing time after key expiry/revocation.
+
+        Revocation still invalidates signatures at or after the recorded revoked_at
+        instant. Callers must set revoked_at to the effective compromise cutoff when
+        a key compromise is known to have started earlier than its discovery.
+        This method is for audit/replay only, never authorization of new actions.
+        """
+        return self.verify(envelope, received_at, allow_historical=True)
 
 def generate_ed25519_keypair() -> tuple[bytes, str]:
     """Generate raw private key bytes and a base64 public key; do not persist private material."""
@@ -475,9 +493,10 @@ class SQLiteTrustedKeyRegistry(TrustedKeyRegistry):
         self._refresh()
 
     def verify(self, envelope: SignedEventEnvelope | Mapping[str, Any],
-               received_at: datetime | str | None = None) -> FederationIdentity:
+               received_at: datetime | str | None = None, *,
+               allow_historical: bool = False) -> FederationIdentity:
         self._refresh()
-        return super().verify(envelope, received_at)
+        return super().verify(envelope, received_at, allow_historical=allow_historical)
 
     def audit_events(self) -> tuple[dict[str, Any], ...]:
         with self._session() as db:

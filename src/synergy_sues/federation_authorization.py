@@ -6,9 +6,11 @@ module evaluates explicit policy; it does not execute the requested action.
 from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from threading import RLock
+from hashlib import sha256
 from typing import Iterable
 
-from .federation_identity import SignedEventEnvelope, TrustedKeyRegistry, _utc
+from .federation_identity import SignedEventEnvelope, TrustedKeyRegistry, _canonical, _utc
 
 
 @dataclass(frozen=True)
@@ -37,15 +39,62 @@ class AuthorizationDecision:
     approval_event_refs: tuple[tuple[str, str], ...] = ()
     policy_version: int | None = None
     policy_hash: str | None = None
+    request_event_id: str = ""
+    request_event_hash: str = ""
+    action: str = ""
+    resource_type: str = ""
+    resource_id: str = ""
 
 
 class FederationAuthorizationPolicy:
     """Explicit exact-scope policy; deny-by-default with deny-rule precedence."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_request_age_seconds: int = 300) -> None:
+        if isinstance(max_request_age_seconds, bool) or not isinstance(max_request_age_seconds, int) or max_request_age_seconds <= 0:
+            raise ValueError("max_request_age_seconds must be a positive integer")
+        self.max_request_age_seconds = max_request_age_seconds
         self._rules: dict[str, AuthorizationRule] = {}
+        self._execution_lock = RLock()
+        self._version = 0
+        self._policy_hash = self._compute_policy_hash()
+
+    @property
+    def execution_lock(self):
+        """Serialize in-memory policy mutation with an authorized execution."""
+        return self._execution_lock
+
+    @property
+    def policy_version(self) -> int:
+        return self._version
+
+    @property
+    def policy_hash(self) -> str:
+        return self._policy_hash
+
+    def _compute_policy_hash(self) -> str:
+        documents = [
+            {
+                "rule_id": rule.rule_id,
+                "tenant_id": rule.tenant_id,
+                "effect": rule.effect,
+                "action": rule.action,
+                "resource_type": rule.resource_type,
+                "subject_ids": list(rule.subject_ids),
+                "approver_ids": list(rule.approver_ids),
+                "min_approvals": rule.min_approvals,
+                "resource_id": rule.resource_id,
+                "valid_from": rule.valid_from,
+                "valid_until": rule.valid_until,
+            }
+            for rule in sorted(self._rules.values(), key=lambda item: item.rule_id)
+        ]
+        return sha256(_canonical(documents)).hexdigest()
 
     def register_rule(self, rule: AuthorizationRule) -> None:
+        with self._execution_lock:
+            self._register_rule_unlocked(rule)
+
+    def _register_rule_unlocked(self, rule: AuthorizationRule) -> None:
         if not isinstance(rule, AuthorizationRule):
             raise ValueError("rule must be an AuthorizationRule")
         required = (rule.rule_id, rule.tenant_id, rule.effect, rule.action, rule.resource_type)
@@ -73,6 +122,8 @@ class FederationAuthorizationPolicy:
         if rule.rule_id in self._rules:
             raise ValueError("authorization rule ID already exists")
         self._rules[rule.rule_id] = rule
+        self._version += 1
+        self._policy_hash = self._compute_policy_hash()
 
     @staticmethod
     def _payload_fields(envelope: SignedEventEnvelope, event_type: str,
@@ -91,12 +142,32 @@ class FederationAuthorizationPolicy:
                   approvals: Iterable[SignedEventEnvelope],
                   registry: TrustedKeyRegistry,
                   received_at: datetime | str | None = None) -> AuthorizationDecision:
+        with self._execution_lock:
+            return self._authorize_unlocked(request, approvals, registry, received_at)
+
+    def _authorize_unlocked(self, request: SignedEventEnvelope,
+                            approvals: Iterable[SignedEventEnvelope],
+                            registry: TrustedKeyRegistry,
+                            received_at: datetime | str | None = None) -> AuthorizationDecision:
         """Verify signed request and approvals, then evaluate policy without execution."""
         requester = registry.verify(request, received_at)
         payload = self._payload_fields(request, "AUTHORIZATION_REQUEST",
             ("request_id", "action", "resource_type", "resource_id"))
         request_id = payload["request_id"]
         action, resource_type, resource_id = payload["action"], payload["resource_type"], payload["resource_id"]
+        def make_decision(
+            allowed: bool, reason: str, matched_rule_ids: tuple[str, ...] = (),
+            approval_identity_ids: tuple[str, ...] = (),
+            approval_event_refs: tuple[tuple[str, str], ...] = (),
+        ) -> AuthorizationDecision:
+            return AuthorizationDecision(
+                allowed, reason, request_id, requester.identity_id,
+                matched_rule_ids, approval_identity_ids, approval_event_refs,
+                request_event_id=request.event["event_id"],
+                request_event_hash=request.event["event_hash"],
+                action=action, resource_type=resource_type, resource_id=resource_id,
+                policy_version=self._version, policy_hash=self._policy_hash,
+            )
         if any(not isinstance(x, str) or not x.strip() for x in (request_id, action, resource_type, resource_id)):
             raise ValueError("authorization request scope fields must be non-empty strings")
         requested_at = _utc(request.signed_at, "signed_at")
@@ -105,6 +176,9 @@ class FederationAuthorizationPolicy:
         if now.tzinfo is None or now.utcoffset() is None:
             raise ValueError("received_at must be timezone-aware")
         now = now.astimezone(timezone.utc)
+        request_age = (now - requested_at).total_seconds()
+        if request_age < 0 or request_age > self.max_request_age_seconds:
+            raise ValueError("authorization request is stale or not yet effective")
 
         matching = []
         for rule in self._rules.values():
@@ -124,23 +198,30 @@ class FederationAuthorizationPolicy:
 
         denies = tuple(sorted(rule.rule_id for rule in matching if rule.effect == "DENY"))
         if denies:
-            return AuthorizationDecision(False, "explicit_deny_rule", request_id,
-                requester.identity_id, denies)
+            return make_decision(False, "explicit_deny_rule", denies)
         allows = [rule for rule in matching if rule.effect == "ALLOW"]
         if not allows:
-            return AuthorizationDecision(False, "no_matching_allow_rule", request_id,
-                requester.identity_id)
+            return make_decision(False, "no_matching_allow_rule")
 
         verified_approvals: dict[str, tuple[str, str]] = {}
         vetoes: list[tuple[str, str, str]] = []
-        seen_events: set[str] = set()
+        seen_events: dict[str, str] = {}
         for approval in approvals:
             approver = registry.verify(approval, received_at)
             approval_payload = self._payload_fields(approval, "AUTHORIZATION_APPROVAL",
                 ("request_id", "request_event_id", "request_event_hash", "action", "resource_type", "resource_id", "requester_identity_id", "decision"))
-            if approval.event["event_id"] in seen_events:
+            approval_event_id = approval.event["event_id"]
+            approval_event_hash = approval.event["event_hash"]
+            previous_hash = seen_events.get(approval_event_id)
+            if previous_hash is not None:
+                if previous_hash != approval_event_hash:
+                    raise ValueError("approval event ID collision with conflicting event hash")
                 continue
-            seen_events.add(approval.event["event_id"])
+            seen_events[approval_event_id] = approval_event_hash
+            approval_time = _utc(approval.signed_at, "signed_at")
+            approval_age = (now - approval_time).total_seconds()
+            if approval_age < 0 or approval_age > self.max_request_age_seconds:
+                raise ValueError("authorization approval is stale or not yet effective")
             scope_matches = (
                 approval_payload["request_id"] == request_id
                 and approval_payload["request_event_id"] == request.event["event_id"]
@@ -150,7 +231,7 @@ class FederationAuthorizationPolicy:
                 and approval_payload["resource_id"] == resource_id
                 and approval_payload["requester_identity_id"] == requester.identity_id
                 and approver.tenant_id == requester.tenant_id
-                and _utc(approval.signed_at, "signed_at") >= requested_at
+                and approval_time >= requested_at
             )
             if not scope_matches:
                 continue
@@ -168,8 +249,8 @@ class FederationAuthorizationPolicy:
                     approval.event["event_id"], approval.event["event_hash"])
 
         if vetoes:
-            return AuthorizationDecision(False, "approval_veto", request_id,
-                requester.identity_id, tuple(sorted(rule.rule_id for rule in allows)),
+            return make_decision(False, "approval_veto",
+                tuple(sorted(rule.rule_id for rule in allows)),
                 tuple(sorted({item[0] for item in vetoes})),
                 tuple(sorted({(item[1], item[2]) for item in vetoes})))
 
@@ -185,13 +266,13 @@ class FederationAuthorizationPolicy:
             if len(approvals_for_rule) >= rule.min_approvals:
                 eligible.append((rule, approvals_for_rule))
         if not eligible:
-            return AuthorizationDecision(False, "insufficient_approvals", request_id,
-                requester.identity_id, tuple(sorted(rule.rule_id for rule in allows)),
+            return make_decision(False, "insufficient_approvals",
+                tuple(sorted(rule.rule_id for rule in allows)),
                 tuple(sorted(verified_approvals)),
                 tuple(sorted(set(verified_approvals.values()))))
         # Prefer the narrowest resource scope; rule IDs provide deterministic tie-break.
         eligible.sort(key=lambda item: (item[0].resource_id is None, item[0].rule_id))
         selected, selected_approvals = eligible[0]
         approval_refs = tuple(sorted(verified_approvals[identity_id] for identity_id in selected_approvals))
-        return AuthorizationDecision(True, "authorized_by_policy", request_id,
-            requester.identity_id, (selected.rule_id,), selected_approvals, approval_refs)
+        return make_decision(True, "authorized_by_policy",
+            (selected.rule_id,), selected_approvals, approval_refs)
