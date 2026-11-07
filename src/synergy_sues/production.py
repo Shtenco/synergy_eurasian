@@ -235,6 +235,21 @@ class ProductionCostEvent:
 
 
 @dataclass(frozen=True)
+class ProductionInputConsumption:
+    """Measured consumption of one BOM component, supported by source evidence."""
+
+    item_id: str
+    quantity: Quantity
+    evidence_ref: str
+
+    def __post_init__(self) -> None:
+        if not self.item_id or not self.evidence_ref:
+            raise ValueError("Production input consumption requires item and evidence references")
+        if self.quantity.amount <= 0:
+            raise ValueError("Measured production input quantity must be positive")
+
+
+@dataclass(frozen=True)
 class ProductionCompletionEvidence:
     """Measured good output for one completed batch, tied to a source evidence record."""
 
@@ -242,12 +257,22 @@ class ProductionCompletionEvidence:
     output_quantity: Quantity
     completed_at: datetime
     evidence_ref: str
+    input_consumption: tuple[ProductionInputConsumption, ...]
 
     def __post_init__(self) -> None:
         if not self.order_id or not self.evidence_ref:
             raise ValueError("Production completion order and evidence reference are required")
         if self.output_quantity.amount <= 0:
             raise ValueError("Measured production output must be positive")
+        if not isinstance(self.input_consumption, tuple):
+            object.__setattr__(self, "input_consumption", tuple(self.input_consumption))
+        if not self.input_consumption or any(
+            not isinstance(item, ProductionInputConsumption) for item in self.input_consumption
+        ):
+            raise ValueError("Production completion requires measured input consumption for each BOM component")
+        input_ids = [item.item_id for item in self.input_consumption]
+        if len(input_ids) != len(set(input_ids)):
+            raise ValueError("Production input consumption item IDs must be unique")
         _aware(self.completed_at, "production completed_at")
 
 
@@ -364,13 +389,19 @@ def execute_production_order(
     if expected_idempotency & {row.idempotency_key for row in journal.entries}:
         raise ValueError(f"Production order idempotency key already used: {order.order_id}")
 
-    required: list[tuple[BOMComponent, Quantity]] = []
+    input_evidence_by_item = {
+        item.item_id: item for item in completion.input_consumption
+    }
+    component_ids = {component.item_id for component in order.components}
+    if set(input_evidence_by_item) != component_ids:
+        raise ValueError("Measured input evidence must cover exactly the production BOM components")
+    required: list[tuple[BOMComponent, Quantity, ProductionInputConsumption]] = []
     previewed_cost = Decimal("0")
     for component in order.components:
-        quantity = Quantity(
-            component.quantity_per_output_unit.amount * completion.output_quantity.amount,
-            component.quantity_per_output_unit.unit,
-        )
+        input_evidence = input_evidence_by_item[component.item_id]
+        quantity = input_evidence.quantity
+        if quantity.unit != component.quantity_per_output_unit.unit:
+            raise ValueError(f"Measured input unit differs from BOM for component {component.item_id}")
         available = inventory.available(component.item_id, order.location_id, quantity.unit)
         if available.amount < quantity.amount:
             raise ValueError(
@@ -379,7 +410,7 @@ def execute_production_order(
         previewed_cost += inventory.preview_issue_cost(
             component.item_id, order.location_id, quantity, completion_date
         ).amount
-        required.append((component, quantity))
+        required.append((component, quantity, input_evidence))
     # Validate output pool units and zero-cost policy before consuming any input.
     inventory.available(order.product_id, order.location_id, completion.output_quantity.unit)
     if previewed_cost <= 0:
@@ -391,9 +422,9 @@ def execute_production_order(
             inventory.issue(
                 f"production:{order.order_id}:issue:{component.item_id}",
                 component.item_id, order.location_id, quantity, completion_date,
-                f"production-order:{order.order_id}:component:{component.item_id}",
+                f"production-order:{order.order_id}:component:{component.item_id}:{input_evidence.evidence_ref}",
             )
-            for component, quantity in required
+            for component, quantity, input_evidence in required
         )
         direct_material_cost = Money(
             sum((movement.cost.amount for movement in input_movements), Decimal("0")),
@@ -427,9 +458,11 @@ def execute_production_order(
                 entry_id, movement.movement_date, recorded_at, journal.functional_currency,
                 (
                     JournalLine(f"{entry_id}:dr", wip_account_id, PostingSide.DEBIT,
-                        money, money, order.entity_id, movement.source_ref),
+                        money, money, order.entity_id, movement.source_ref,
+                        evidence_ids=(input_evidence_by_item[movement.item_id].evidence_ref,)),
                     JournalLine(f"{entry_id}:cr", inventory_account_id, PostingSide.CREDIT,
-                        money, money, order.entity_id, movement.source_ref),
+                        money, money, order.entity_id, movement.source_ref,
+                        evidence_ids=(input_evidence_by_item[movement.item_id].evidence_ref,)),
                 ),
                 f"production-consumption:{movement.movement_id}",
                 f"production-consumption:{movement.movement_id}",
