@@ -104,15 +104,29 @@ def solve_supply(
 ) -> dict[str, Any]:
     inverse, rho, condition_number = _validated_leontief_components(cfg)
     n = inverse.shape[0]
+    if not isinstance(enforce_critical_floor, bool):
+        raise ValueError("enforce_critical_floor must be a boolean")
+    if (not isinstance(capacity_multipliers, (list, tuple, np.ndarray))
+            or any(isinstance(value, (bool, np.bool_))
+                   or not isinstance(value, (int, float, np.integer, np.floating))
+                   for value in capacity_multipliers)):
+        raise ValueError("Capacity multipliers must be numeric values, not booleans or strings")
     multipliers = np.asarray(capacity_multipliers, dtype=float)
     if multipliers.ndim != 1 or len(multipliers) != n:
         raise ValueError("Capacity multiplier count must match sector count")
     if not np.isfinite(multipliers).all() or np.any(multipliers < 0):
         raise ValueError("Capacity multipliers must be finite and non-negative")
-    critical = set(cfg["critical_sector_indices"])
-    if any(not isinstance(i, int) or i < 0 or i >= n for i in critical):
+    raw_critical = cfg["critical_sector_indices"]
+    if (not isinstance(raw_critical, (list, tuple))
+            or any(isinstance(i, bool) or not isinstance(i, int) for i in raw_critical)):
+        raise ValueError("Critical sector indices must be integer indices, not booleans")
+    critical = set(raw_critical)
+    if any(i < 0 or i >= n for i in critical):
         raise ValueError("Critical sector indices must be valid integer indices")
-    floor = float(cfg["critical_minimum_service_share"])
+    raw_floor = cfg["critical_minimum_service_share"]
+    if isinstance(raw_floor, bool) or not isinstance(raw_floor, (int, float)):
+        raise ValueError("Critical minimum service share must be numeric")
+    floor = float(raw_floor)
     if not np.isfinite(floor) or not 0.0 <= floor <= 1.0:
         raise ValueError("Critical minimum service share must be between 0 and 1")
     baseline_capacity = inverse @ np.ones(n)
@@ -168,17 +182,19 @@ def portfolio_accounting(cfg: dict[str, Any]) -> dict[str, Any]:
     public_gross_cf = gross_cf * public_share
     public_replacement = replacement * public_share
     public_net = public_gross_cf - public_replacement
+    if public_capital.sum() <= 0:
+        raise ValueError("public ownership share must allocate positive capital for public portfolio metrics")
     return {
         "sectors": [
             {
                 "sector": name,
                 "capital_usd": float(capital[i]),
-                "gross_cash_yield": float(a["yield"][i]),
+                "gross_cash_yield": float(gross_yield[i]),
                 "gross_cashflow_usd": float(gross_cf[i]),
-                "replacement_rate": float(a["replacement"][i]),
+                "replacement_rate": float(replacement_rate[i]),
                 "replacement_capex_usd": float(replacement[i]),
                 "net_after_replacement_usd": float(net_after_replacement[i]),
-                "public_ownership_share": float(a["public_share"][i]),
+                "public_ownership_share": float(public_share[i]),
                 "public_capital_usd": float(public_capital[i]),
                 "public_gross_cashflow_usd": float(public_gross_cf[i]),
                 "public_replacement_capex_usd": float(public_replacement[i]),
@@ -320,7 +336,7 @@ def productivity_results(cfg: dict[str, Any]) -> dict[str, Any]:
         employment * labor * adoption * efficacy
         * (1.0 - rebound) * (1.0 - supply_rebound)
     ))
-    weekly_hours = float(cfg["baseline_weekly_hours"] * (1.0 - labor_release))
+    weekly_hours = float(baseline_hours * (1.0 - labor_release))
     return {
         "gross_labor_cost_saving_share_of_basket": gross_basket_saving,
         "technology_cost_share": tech_cost,
