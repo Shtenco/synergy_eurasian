@@ -405,7 +405,9 @@ def run_paired_production_default_batch_experiment(
     }
     return {
         "model_id": "SYNERGY_V6.6.4P_PRODUCTION_DEFAULT_BATCH",
-        "invoice_cohort_size": INVOICE_COUNT_PER_BUYER * sum(\n            sum(cell.region == region for cell in CELLS) // 2 for region in REGIONS\n        ),
+        "invoice_cohort_size": INVOICE_COUNT_PER_BUYER * sum(
+            sum(cell.region == region for cell in CELLS) // 2 for region in REGIONS
+        ),
         "seeds": seed_list,
         "clearing_rules": clear_list,
         "recovery_rules": recovery_list,
