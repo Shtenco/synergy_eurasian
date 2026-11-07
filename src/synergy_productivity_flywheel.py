@@ -21,7 +21,10 @@ def load_config(path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
 def _finite_number(value: Any, field: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{field} must be a finite JSON number")
-    result = float(value)
+    try:
+        result = float(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be finite") from exc
     if not math.isfinite(result):
         raise ValueError(f"{field} must be finite")
     return result
@@ -50,6 +53,8 @@ def calculate(cfg: dict[str, Any]) -> dict[str, Any]:
     allocation = cfg["residual_fund_allocation"]
     if not isinstance(allocation, Mapping) or not allocation:
         raise ValueError("Residual fund allocation must be a non-empty object")
+    if any(not isinstance(name, str) or not name.strip() for name in allocation):
+        raise ValueError("Residual fund allocation names must be non-empty strings")
     allocation_values = {
         name: _finite_number(value, f"residual_fund_allocation.{name}")
         for name, value in allocation.items()
