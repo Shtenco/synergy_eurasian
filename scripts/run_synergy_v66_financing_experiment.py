@@ -137,6 +137,15 @@ def main() -> int:
                     "seller_trade_bad_debt_mean": metrics["trade_bad_debt"]["mean"],
                     "cash_conservation_error_max": metrics["cash_conservation_error"]["max"],
                 }, sort_keys=True))
+        for case_name, case in waterfall["targeted_default_stress"]["cases"].items():
+            print(json.dumps({
+                "targeted_default_case": case_name,
+                "guarantee_paid": case["guarantee_paid"],
+                "member_assessment_paid": case["member_assessment_paid"],
+                "written_off": case["written_off"],
+                "assessment_attempts": case["regional_assessment_attempt_count"],
+                "cash_conservation_error": case["cash_conservation_error"],
+            }, sort_keys=True))
         print(f"LOSS_WATERFALL_REPORT_WRITTEN: {waterfall_path}")
     return 0
 
