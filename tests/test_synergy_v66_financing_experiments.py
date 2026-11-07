@@ -698,3 +698,42 @@ def test_claim_priority_order_must_list_every_class_once():
             claims, 3.0, "priority_class_then_first_come_first_served",
             priority_order=["essential", "essential"],
         )
+
+
+def test_claim_class_relabeling_sensitivity_exposes_priority_gaming_incentive():
+    from synergy_v66.financing_experiments import analyze_claim_class_relabeling_incentives
+
+    claims = [
+        {"invoice_id": "ORDINARY", "due_day": 0, "eligible_amount": 30.0, "claim_class": "ordinary"},
+        {"invoice_id": "ESSENTIAL", "due_day": 1, "eligible_amount": 10.0, "claim_class": "essential"},
+    ]
+    fcfs = analyze_claim_class_relabeling_incentives(
+        claims, 20.0, ["essential", "ordinary"],
+        allocation_rule="priority_class_then_first_come_first_served",
+    )
+    row = fcfs["relabeling_sensitivity"][0]
+    assert row["invoice_id"] == "ORDINARY"
+    assert row["payout_before"] == pytest.approx(10.0)
+    assert row["payout_after"] == pytest.approx(20.0)
+    assert row["claimant_payout_delta"] == pytest.approx(10.0)
+    assert row["other_claim_payout_delta_total"] == pytest.approx(-10.0)
+
+    pro_rata = analyze_claim_class_relabeling_incentives(
+        claims, 20.0, ["essential", "ordinary"],
+        allocation_rule="priority_class_then_batch_pro_rata",
+    )
+    row = pro_rata["relabeling_sensitivity"][0]
+    assert row["payout_before"] == pytest.approx(10.0)
+    assert row["payout_after"] == pytest.approx(15.0)
+    assert row["claimant_payout_delta"] == pytest.approx(5.0)
+    assert row["other_claim_payout_delta_total"] == pytest.approx(-5.0)
+
+
+def test_claim_class_relabeling_analysis_rejects_nonpriority_rules_and_missing_order():
+    from synergy_v66.financing_experiments import analyze_claim_class_relabeling_incentives
+
+    claims = [{"invoice_id": "A", "eligible_amount": 1.0, "claim_class": "ordinary"}]
+    with pytest.raises(ValueError):
+        analyze_claim_class_relabeling_incentives(claims, 1.0, ["ordinary"], "batch_pro_rata")
+    with pytest.raises(ValueError):
+        analyze_claim_class_relabeling_incentives(claims, 1.0, [])
