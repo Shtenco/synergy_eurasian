@@ -462,3 +462,7 @@ The federation reserve is also tested under multiple cross-region defaults: clai
 - [V6.6.4-J federation reserve allocation rules](docs/80_SYNERGY_V6_6_4J_FEDERATION_RESERVE_ALLOCATION_RULES.md)
 
 The credit ledger now supports an opt-in `batch_pro_rata` federation-reserve allocation rule for claims from buyers defaulting on the same processing day. FCFS remains the default; local regional reserves retain first-loss priority.
+
+- [V6.6.4-K explicit federation reserve replenishment](docs/81_SYNERGY_V6_6_4K_FEDERATION_RESERVE_REPLENISHMENT.md)
+
+The ledger can now replenish the federation reserve only through an explicit, atomic transfer from member cash. It rejects duplicate replenishment IDs, defaulted contributors and any contribution that breaches the member's minimum post-contribution cash floor.
