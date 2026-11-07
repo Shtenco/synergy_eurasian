@@ -52,3 +52,6 @@ The allocator also accepts `minimum_post_contribution_cash`. For each member, th
 `cap_i = min(alpha * opening_cash_i, max(0, opening_cash_i - minimum_post_contribution_cash))`.
 
 If the reserve target cannot be met without violating either constraint, allocation fails. The floor is a nominal synthetic cash constraint, not a working-capital model: production cycles, payroll, supplier obligations, seasonal cash needs and regional cost differences are not yet calibrated. CI uses a 75-unit synthetic floor in its liquidity-capped reserve scenarios.
+
+
+The credit ledger independently enforces the same floor at initialization after both regional and federation contributions are applied. Thus, a manually supplied contribution map cannot bypass the allocator's liquidity-floor check. The floor is exposed in the ledger snapshot for audit.
