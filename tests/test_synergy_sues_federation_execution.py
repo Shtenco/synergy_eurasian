@@ -410,8 +410,8 @@ def test_executor_can_require_scope_guard_inside_the_same_transaction(tmp_path):
         executor.execute(request, [approval], policy, registry, insert_effect, now())
 
     calls = []
-    def scope_guard(db, signed_request, decision):
-        calls.append(signed_request.event["event_id"])
+    def scope_guard(db, signed_request, decision, execution_time):
+        calls.append((signed_request.event["event_id"], execution_time))
         db.execute(
             "INSERT INTO authority_scope_reservation_events "
             "(event_id,request_id,event_type,scope_id,tenant_id,period_key,currency,amount,source_ref,created_at) "
@@ -425,7 +425,7 @@ def test_executor_can_require_scope_guard_inside_the_same_transaction(tmp_path):
         request, [approval], policy, registry, insert_effect, now(), scope_guard=scope_guard
     )
     assert result.executed
-    assert calls == [request.event["event_id"]]
+    assert calls == [(request.event["event_id"], now())]
     with sqlite3.connect(tmp_path / "required-scope-guard.db") as db:
         assert db.execute(
             "SELECT COUNT(*) FROM authority_scope_reservation_events WHERE event_type='RESERVED'"
