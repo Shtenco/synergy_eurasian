@@ -72,3 +72,17 @@ The loss-waterfall experiment now also emits four forced one-day ledger cases:
 - cross-region default while local reserve and assessment are configured.
 
 These cases are intentionally constructed to exercise the mechanics and exclusions. They are not stochastic simulations and must not be used to infer default probabilities. Their purpose is to ensure that the local assessment can activate, that a binding cap leaves a measurable residual seller loss, and that a local pool does not silently guarantee a cross-region claim.
+
+
+## 8. Targeted CI fixture results
+
+The CI run on commit `e9897e1` executed the four deterministic cases with zero cash-conservation residual in every case:
+
+| Case | Reserve paid | Member assessment paid | Seller loss written off | Assessment attempts |
+|---|---:|---:|---:|---:|
+| Local, reserve only | 5.0 | 0.0 | 5.5 | 0 |
+| Local, reserve + assessment | 5.0 | 5.5 | 0.0 | 1 |
+| Local, tight member cap | 5.0 | 2.0 | 3.5 | 1 |
+| Cross-region, assessment configured | 0.0 | 0.0 | 10.5 | 0 |
+
+These are controlled one-day fixtures, not forecast outcomes. They demonstrate that the mechanism covers local losses in the configured order, respects the per-member cap, leaves residual loss with the seller when assessment capacity is insufficient, and does not use a local region's reserve or member assessment to cover a cross-region claim.
