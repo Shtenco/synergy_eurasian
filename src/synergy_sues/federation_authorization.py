@@ -5,6 +5,7 @@ module evaluates explicit policy; it does not execute the requested action.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Iterable
 
@@ -97,7 +98,15 @@ class FederationAuthorizationPolicy:
                   approvals: Iterable[SignedEventEnvelope],
                   registry: TrustedKeyRegistry,
                   received_at: datetime | str | None = None) -> AuthorizationDecision:
-        """Verify signed request and approvals, then evaluate policy without execution."""
+        """Verify signed request and approvals, then evaluate policy without execution.
+
+        Snapshot caller-owned nested event mappings before signature verification.
+        All subsequent scope checks use the exact objects that were verified.
+        """
+        if not isinstance(request, SignedEventEnvelope):
+            raise ValueError("request must be a SignedEventEnvelope")
+        request = deepcopy(request)
+        approvals = tuple(deepcopy(item) for item in approvals)
         requester = registry.verify(request, received_at)
         payload = self._payload_fields(request, "AUTHORIZATION_REQUEST",
             ("request_id", "action", "resource_type", "resource_id"))
