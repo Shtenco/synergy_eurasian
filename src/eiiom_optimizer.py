@@ -339,7 +339,7 @@ def validate_invariants(config: dict, solution: dict, tol: float = 1e-5) -> None
     for country in COUNTRIES:
         if compute_by_country[country] > dc_by_country[country] + tol:
             raise ValueError(f"Country {country} compute load exceeds its own data-center shell capacity")
-        power_demand = total_compute * 0.0 + sum(
+        power_demand = sum(
             float(item["capex_bn_usd"]) * overhead
             * float(tech["compute_it_mw_per_bn"][item["stage"]])
             for item in allocation if item["country"] == country and item["sector"] == "Compute"
