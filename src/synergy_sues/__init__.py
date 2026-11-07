@@ -13,7 +13,7 @@ from .event_transport import DurableEvent, DurableEventStore, OutboxMessage
 from .federation_identity import (FederationIdentity, SignedEventEnvelope, SQLiteTrustedKeyRegistry, TrustedKeyRegistry, TrustedSigningKey, generate_ed25519_keypair, sign_event)
 from .federation_authorization import (AuthorizationDecision, AuthorizationRule, FederationAuthorizationPolicy)
 from .federation_execution import AuthorizedActionExecutor, ExecutionResult
-from .federation_policy_store import PolicyChangeResult, PolicySnapshot, SQLiteAuthorizationPolicyStore
+from .federation_policy_store import PolicyAuditPersistenceError, PolicyChangeResult, PolicySnapshot, SQLiteAuthorizationPolicyStore
 from .authority_scope import AuthorityScope, AuthorityScopeEngine, ScopeEvaluation, ScopeRoleRequirement
 from .reconciliation import BankAllocation, BankStatement, BankStatementLine, reconcile_bank_account
 from .translation import TranslationPolicy, TrialBalanceAccount, translate_trial_balance
@@ -25,7 +25,7 @@ __all__ = [
     "FlowBoundary", "FXRate", "InventoryLedger", "InventoryLotAllocation", "InventoryMovement", "InventoryMovementType", "IntercompanyRecord", "IntercompanyRecordType", "Journal", "JournalEntry", "JournalLine",
     "Money", "NormalBalance", "OutboxMessage", "PhysicalFlow", "ProjectorRegistry", "ProjectorSpec", "ProductionCompletionEvidence", "ProductionCostEvent", "ProductionCostType", "ProductionExecution", "ProductionOrder", "PurchaseOrderLine", "Quantity", "SUESProjection", "SUESRealizationBridge", "SUESRealizationLink", "SUESSourceEvent", "SupplierInvoiceLine", "TradeAccountMap", "TradeDocument",
     "AuthorizationDecision", "AuthorizationRule", "FederationAuthorizationPolicy", "AuthorizedActionExecutor", "ExecutionResult",
-    "PolicyChangeResult", "PolicySnapshot", "SQLiteAuthorizationPolicyStore",
+    "PolicyAuditPersistenceError", "PolicyChangeResult", "PolicySnapshot", "SQLiteAuthorizationPolicyStore",
     "AuthorityScope", "AuthorityScopeEngine", "ScopeEvaluation", "ScopeRoleRequirement",
     "FederationIdentity", "SignedEventEnvelope", "SQLiteTrustedKeyRegistry", "TrustedKeyRegistry", "TrustedSigningKey", "generate_ed25519_keypair", "sign_event",
     "TradeSettlement", "TradeSide", "TradeSubledger", "TranslationPolicy", "TrialBalanceAccount",
