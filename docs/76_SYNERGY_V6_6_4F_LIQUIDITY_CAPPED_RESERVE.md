@@ -45,7 +45,7 @@ CI ran three seeds for 20 days in the severe synthetic regime with 10 units of r
 These are smoke-test observations from a small synthetic sample, not estimates of real-world performance and not a comparison against an otherwise identical uncapped allocation. The key verified properties are that the requested reserve was funded, no member exceeded the 10% contribution cap, and cash remained conserved.
 
 
-## 4. Absolute post-contribution liquidity floor
+## 6. Absolute post-contribution liquidity floor
 
 The allocator also accepts `minimum_post_contribution_cash`. For each member, the maximum contribution is the smaller of the fractional cap and the amount above the absolute floor:
 
