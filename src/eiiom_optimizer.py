@@ -252,8 +252,9 @@ def solve(config: dict) -> dict:
 
 def validate_invariants(config: dict, solution: dict, tol: float = 1e-5) -> None:
     """Independently re-check the returned allocation; never rely on assert."""
-    if isinstance(tol, bool) or not isinstance(tol, (int, float)) or not np.isfinite(tol) or tol <= 0:
-        raise ValueError("Invariant tolerance must be finite and positive")
+    if (isinstance(tol, bool) or not isinstance(tol, (int, float))
+            or not np.isfinite(tol) or tol <= 0 or tol > 1e-3):
+        raise ValueError("Invariant tolerance must be finite, positive and no greater than 1e-3")
     if solution.get("status") != "optimal":
         raise ValueError("Only an optimal solution can pass invariant validation")
     if config.get("productive_escrow", {}).get("implemented_in_this_repo") is not False:
