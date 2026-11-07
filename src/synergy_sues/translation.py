@@ -83,6 +83,20 @@ def translate_trial_balance(
         if rate.observed_at.date() > policy.reporting_date:
             raise ValueError("FX translation rate cannot post-date reporting date")
 
+    # CTA is a currency translation adjustment, not a suspense plug for an
+    # unbalanced source ledger. Validate the functional-currency trial balance
+    # before applying any exchange rates.
+    for row in rows:
+        if row.debit_balance.currency != base_currency:
+            raise ValueError(f"Account {row.account_id} currency differs from translation base")
+    source_debits = sum((row.debit_balance.amount for row in rows), Decimal("0"))
+    source_credits = sum((row.credit_balance.amount for row in rows), Decimal("0"))
+    if source_debits != source_credits:
+        raise ValueError(
+            "Source functional-currency trial balance is unbalanced; "
+            "currency translation cannot be used to plug the difference"
+        )
+
     translated = []
     total_debits = Decimal("0")
     total_credits = Decimal("0")
