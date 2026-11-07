@@ -386,7 +386,7 @@ def execute_production_order(
         input_movements = tuple(
             inventory.issue(
                 f"production:{order.order_id}:issue:{component.item_id}",
-                component.item_id, order.location_id, quantity, order.planned_date,
+                component.item_id, order.location_id, quantity, completion_date,
                 f"production-order:{order.order_id}:component:{component.item_id}",
             )
             for component, quantity in required
