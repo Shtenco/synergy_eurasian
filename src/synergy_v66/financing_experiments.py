@@ -9,6 +9,8 @@ from .network import make_environment, simulate
 from .network_topology import CELLS
 from .credit import CreditLedger
 
+EPS = 1e-9
+
 FINANCING_MODES = {
     "unconstrained_reference": None,
     "cash_only": {"bank_limit_per_cell": 0.0, "trade_credit_limit_per_cell": 0.0},
