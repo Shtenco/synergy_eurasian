@@ -39,6 +39,12 @@ def utc(hour=9, minute=0, second=0):
     return datetime(2026, 11, 6, hour, minute, second, tzinfo=timezone.utc)
 
 
+def trusted_authenticator(_message):
+    # Test seam only; production adapters must verify SignedEventEnvelope
+    # against a configured TrustedKeyRegistry.
+    return True
+
+
 def test_event_and_outbox_are_durable_and_atomic_across_restart(tmp_path):
     path = str(tmp_path / "sues.db")
     store = DurableEventStore(path)
@@ -129,8 +135,8 @@ def test_inbox_handler_effect_and_receipt_commit_atomically_and_deduplicate(tmp_
             (incoming["event_id"],),
         )
 
-    assert receiver.consume_inbox("graph-projector", message, apply, received_at=utc())
-    assert not receiver.consume_inbox("graph-projector", message, apply, received_at=utc(9, 1))
+    assert receiver.consume_inbox("graph-projector", message, apply, received_at=utc(), authenticator=trusted_authenticator)
+    assert not receiver.consume_inbox("graph-projector", message, apply, received_at=utc(9, 1), authenticator=trusted_authenticator)
     with sqlite3.connect(receiver.database_path) as db:
         assert db.execute("SELECT COUNT(*) FROM applied").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM inbox").fetchone()[0] == 1
@@ -153,7 +159,7 @@ def test_inbox_handler_failure_rolls_back_effect_and_receipt(tmp_path):
         raise RuntimeError("consumer failed")
 
     with pytest.raises(RuntimeError, match="consumer failed"):
-        receiver.consume_inbox("consumer", message, fail_after_write, received_at=utc())
+        receiver.consume_inbox("consumer", message, fail_after_write, received_at=utc(), authenticator=trusted_authenticator)
     assert not receiver.inbox_contains("consumer", claimed.message_id)
     with sqlite3.connect(receiver.database_path) as db:
         assert db.execute("SELECT COUNT(*) FROM applied").fetchone()[0] == 0
@@ -171,12 +177,12 @@ def test_inbox_rejects_tampered_payload_and_message_id_hash_reuse(tmp_path):
     handler = lambda db, incoming: None
     tampered = {**message, "payload_json": message["payload_json"].replace("project-1", "changed")}
     with pytest.raises(ValueError, match="hash verification"):
-        receiver.consume_inbox("consumer", tampered, handler, received_at=utc())
+        receiver.consume_inbox("consumer", tampered, handler, received_at=utc(), authenticator=trusted_authenticator)
 
-    assert receiver.consume_inbox("consumer", message, handler, received_at=utc())
+    assert receiver.consume_inbox("consumer", message, handler, received_at=utc(), authenticator=trusted_authenticator)
     conflicting = {**message, "event_hash": "f" * 64}
     with pytest.raises(ValueError, match="identity does not match"):
-        receiver.consume_inbox("consumer", conflicting, handler, received_at=utc())
+        receiver.consume_inbox("consumer", conflicting, handler, received_at=utc(), authenticator=trusted_authenticator)
 
 
 def test_inbox_message_id_reuse_with_another_valid_event_hash_is_rejected(tmp_path):
@@ -190,9 +196,9 @@ def test_inbox_message_id_reuse_with_another_valid_event_hash_is_rejected(tmp_pa
     two = next(x for x in messages if x.event_id == second.event_id)
     message_one = {"message_id": "forced-id", "event_id": one.event_id, "event_hash": one.event_hash, "payload_json": one.payload_json}
     message_two = {"message_id": "forced-id", "event_id": two.event_id, "event_hash": two.event_hash, "payload_json": two.payload_json}
-    assert receiver.consume_inbox("consumer", message_one, handler, received_at=utc())
+    assert receiver.consume_inbox("consumer", message_one, handler, received_at=utc(), authenticator=trusted_authenticator)
     with pytest.raises(ValueError, match="reused with a different event hash"):
-        receiver.consume_inbox("consumer", message_two, handler, received_at=utc(9, 3))
+        receiver.consume_inbox("consumer", message_two, handler, received_at=utc(9, 3), authenticator=trusted_authenticator)
 
 
 def test_event_store_requires_file_backed_database(tmp_path):
@@ -225,10 +231,10 @@ def test_inbox_deduplicates_by_event_id_and_rejects_conflicting_event_hash(tmp_p
     }
     applied = []
     assert receiver.consume_inbox("consumer", message,
-        lambda db, incoming: applied.append(incoming["event_id"]), received_at=utc())
+        lambda db, incoming: applied.append(incoming["event_id"]), received_at=utc(), authenticator=trusted_authenticator)
     duplicate_message = {**message, "message_id": "message-redelivered"}
     assert not receiver.consume_inbox("consumer", duplicate_message,
-        lambda db, incoming: applied.append("duplicate"), received_at=utc(9, 1))
+        lambda db, incoming: applied.append("duplicate"), received_at=utc(9, 1), authenticator=trusted_authenticator)
     assert applied == [original.event_id]
 
     conflicting_source = replace(
@@ -247,7 +253,7 @@ def test_inbox_deduplicates_by_event_id_and_rejects_conflicting_event_hash(tmp_p
     assert conflicting.event_id == original.event_id
     assert conflicting.event_hash != original.event_hash
     with pytest.raises(ValueError, match="event ID reused with a different event hash"):
-        receiver.consume_inbox("consumer", conflicting_message, lambda *_: None, received_at=utc(9, 2))
+        receiver.consume_inbox("consumer", conflicting_message, lambda *_: None, received_at=utc(9, 2), authenticator=trusted_authenticator)
     assert len(applied) == 1
 
 
@@ -266,9 +272,9 @@ def test_inbox_handler_cannot_mutate_receipt_identity_and_receipts_are_append_on
         incoming["event_id"] = "forged-event-id"
         incoming["payload_json"] = "{}"
 
-    assert receiver.consume_inbox("consumer", message, mutate, received_at=utc())
+    assert receiver.consume_inbox("consumer", message, mutate, received_at=utc(), authenticator=trusted_authenticator)
     assert not receiver.consume_inbox("consumer", {**message, "message_id": "message-replay"},
-        lambda *_: None, received_at=utc(9, 1))
+        lambda *_: None, received_at=utc(9, 1), authenticator=trusted_authenticator)
     with sqlite3.connect(receiver.database_path) as db:
         row = db.execute("SELECT event_id,event_hash FROM inbox").fetchone()
         assert row == (stored.event_id, stored.event_hash)
