@@ -3,7 +3,7 @@
 **Status:** weighted contribution ledger and paired allocation comparison implemented.  
 **Purpose:** make the funding burden of a regional guarantee reserve explicit and auditable.
 
-## 1. Two allocation rules
+## 1. Three allocation rules
 
 ### Equal all-member contribution
 
@@ -14,6 +14,10 @@ Each of the ten cells in a region contributes one tenth of the reserve. This is 
 Only primary, processing and manufacturing cells contribute. Each contribution is proportional to the cell's configured production capacity. Warehouse, logistics, energy and maintenance support cells contribute zero under this rule.
 
 This rule links contribution to production capacity, not observed turnover, actual risk, guarantee utilization, wealth or benefit received. It is a sensitivity scenario, not a normative fairness conclusion. It can exclude support cells that still benefit from the regional guarantee.
+
+### Opening-cash-weighted contribution
+
+Each cell contributes in proportion to its own opening cash. Within a region, all members therefore contribute the same fraction of their opening cash when the uncapped rule is feasible. It avoids a flat nominal burden on low-cash cells, but it is not a measure of ability to pay: opening cash is only a point-in-time balance and says nothing about operating cash needs, future obligations, wealth, risk or benefit received.
 
 ## 2. Accounting contract
 
@@ -30,7 +34,7 @@ The snapshot exposes the per-cell contribution map. Consolidated cash conservati
 
 ## 3. Paired comparison
 
-`compare_reserve_contribution_schemes(...)` replays equal and capacity-weighted allocation under identical seed-specific environments and compares the same five financing modes. Reserve size is held constant between allocation rules. It reports the contribution map and all standard credit, service-level, default, reserve-coverage, seller-loss and conservation metrics.
+`compare_reserve_contribution_schemes(...)` replays equal-member, production-capacity-weighted and opening-cash-weighted allocation under identical seed-specific environments and compares the same five financing modes. Reserve size is held constant between allocation rules. It reports the contribution map and all standard credit, service-level, default, reserve-coverage, seller-loss and conservation metrics.
 
 Example:
 
@@ -47,7 +51,7 @@ report = compare_reserve_contribution_schemes(
 
 ## 4. What this does not decide
 
-Neither rule is proven fair or optimal. A more defensible design may use a hybrid of:
+None of the three rules is proven fair or optimal. A more defensible design may use a hybrid of:
 - equal membership dues for basic access;
 - usage-based contributions linked to actual guarantee exposure;
 - risk-based premiums linked to independently measured default risk;
@@ -68,4 +72,11 @@ A three-seed, 20-day severe-regime sample was run with 20 synthetic currency uni
 | Equal all-members | Hybrid | 70.535% | 1.00 | 12.742 | 7.873 | 27.258 |
 | Capacity-weighted | Hybrid | 70.535% | 1.00 | 13.533 | 7.873 | 26.467 |
 
-The smoke run is not a fairness verdict. It shows that changing who contributes changes member liquidity and can change reserve utilization and downstream losses even when total reserve capital is fixed. A larger paired sample is needed before drawing conclusions. The first displayed service-level value should be read from the CI log rather than inferred; the raw CI observation is 0.6997929 for equal mutual-credit and 0.7003472 for capacity-weighted mutual-credit.
+The smoke run is not a fairness verdict. It shows that changing who contributes changes member liquidity and can change reserve utilization and downstream losses even when total reserve capital is fixed. The opening-cash-weighted rule is now available for explicit heterogeneous opening-cash maps; with a uniform cash map it mathematically collapses to equal-all-member contributions. A larger paired sample is needed before drawing conclusions. The first displayed service-level value should be read from the CI log rather than inferred; the raw CI observation is 0.6997929 for equal mutual-credit and 0.7003472 for capacity-weighted mutual-credit.
+
+
+## 6. Heterogeneous opening cash and capped contributions
+
+The ledger accepts `initial_cash_by_cell`. The allocation experiment uses that same map when computing opening-cash weights. This allows the comparison to vary contribution allocation without accidentally using a different cash endowment.
+
+A separate liquidity-capped allocator (V6.6.4-F) supports hard member caps as a fraction of opening cash and uses deterministic water-filling to redistribute the target among eligible members. The cap is a constraint, not a fairness criterion. If the aggregate eligible cap is insufficient, the requested reserve is rejected rather than silently underfunded or financed by newly created cash.
