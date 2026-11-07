@@ -198,3 +198,27 @@ def test_authorization_decision_is_bound_to_event_hash_and_resource_scope():
 
     wrong_action = decision(action="TOKEN_MINT", resource_type="TOKEN", resource_id="token:SYNA")
     assert "action/resource" in evaluate_scope(engine(), request(), wrong_action, "0").reason
+
+
+def test_day_week_month_and_year_period_keys_are_derived_from_signed_time():
+    for window, key in (
+        ("DAY", "2026-11-06"),
+        ("WEEK", "2026-W45"),
+        ("MONTH", "2026-11"),
+        ("YEAR", "2026"),
+    ):
+        scoped = AuthorityScopeEngine(
+            [scope(period_window=window)],
+            {
+                "user:treasurer": ("TREASURER",),
+                "user:finance": ("FINANCE_DIRECTOR",),
+                "user:risk": ("RISK_OFFICER",),
+            },
+        )
+        signed_request = request(period_key=key)
+        result = scoped.evaluate(
+            signed_request, decision(), "0",
+            committed_period_key=key, committed_period_currency="USD",
+        )
+        assert result.allowed
+        assert result.period_key == key
