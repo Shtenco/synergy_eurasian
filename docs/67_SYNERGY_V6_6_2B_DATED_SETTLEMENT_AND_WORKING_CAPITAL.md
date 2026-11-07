@@ -26,7 +26,7 @@ Consolidated cash identity:
 
 Internal cash-in and cash-out are separately reported and must net to zero. Outstanding customer receivables reconcile as accrued sales less collections. Outstanding supplier payables reconcile as accrued production costs less payments. Internal receivables and payables must match in aggregate.
 
-`peak_unfunded_working_capital_by_cell` reports the largest amount by which a cell's cash falls below its configured credit limit. The scalar `peak_unfunded_working_capital` is the maximum single-cell requirement, not the sum across all cells.
+`peak_unfunded_working_capital_by_cell` reports the largest amount by which a cell's cash falls below its configured credit limit. The scalar `peak_unfunded_working_capital` is the maximum single-cell requirement, not the sum across all cells. Payments are netted in a daily batch; intraday cash sequencing and intraday liquidity are not modeled.
 
 ## 4. Important limitation
 
