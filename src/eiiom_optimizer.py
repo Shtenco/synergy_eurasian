@@ -387,13 +387,17 @@ def validate_invariants(config: dict, solution: dict, tol: float = 1e-5) -> None
                 raise ValueError(f"Cumulative {sector} milestone target is not met")
 
     global_caps = (
-        ("PrecisionAg", 60.0),
-        ("AgroRobotics", 15.0),
-        ("RuralAIClusters", 220.0),
+        ("PrecisionAg", PRECISION_AG_EFF, 60.0),
+        ("AgroRobotics", AGRO_ROBOTICS_EFF, 15.0),
+        ("RuralAIClusters", CLUSTER_EFF, 220.0),
     )
-    for sector, cap in global_caps:
-        if capex_by_sector[sector] > cap + tol:
-            raise ValueError(f"Global {sector} allocation cap is exceeded")
+    for sector, efficiency, cap in global_caps:
+        delivered = sum(
+            capex_by_sector_stage[(sector, stage)] * efficiency[stage]
+            for stage in stages
+        )
+        if delivered > cap + tol:
+            raise ValueError(f"Global {sector} effective-output cap is exceeded")
 
     floors = {
         "STEM": "minimum_stem_bn", "FoodProcessing": "minimum_food_processing_bn",
