@@ -6,6 +6,10 @@ import sqlite3
 import pytest
 
 from synergy_sues.event_transport import DurableEventStore
+from synergy_sues.federation_identity import (
+    ALGORITHM, FederationIdentity, TrustedKeyRegistry, TrustedSigningKey,
+    generate_ed25519_keypair, sign_event,
+)
 from synergy_sues.v7_adapter import adapt_v7_event_store
 
 
@@ -316,3 +320,45 @@ def test_inbox_requires_authentication_and_rejects_false_or_mutating_authenticat
         )
     assert not receiver.inbox_contains("consumer", claimed.message_id)
     assert receiver.verify()
+
+
+
+def test_inbox_authenticates_signed_publisher_with_trusted_key_registry(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "sender-signed.db"))
+    receiver = DurableEventStore(str(tmp_path / "receiver-signed.db"))
+    stored = sender.append(event(), now=utc())
+    claimed = sender.claim_outbox(now=utc())[0]
+    private_key, public_key = generate_ed25519_keypair()
+    registry = TrustedKeyRegistry()
+    registry.register_identity(FederationIdentity(
+        "org:publisher", "tenant:publisher", "ORGANIZATION"
+    ))
+    registry.register_key(TrustedSigningKey(
+        "org:publisher", "tenant:publisher", "publisher-key",
+        ALGORITHM, public_key, "2026-01-01T00:00:00+00:00",
+    ))
+    signed = sign_event(
+        stored, "org:publisher", "tenant:publisher", "publisher-key",
+        private_key, "2026-11-06T09:01:00+00:00",
+    )
+    message = {
+        "message_id": claimed.message_id,
+        "event_id": claimed.event_id,
+        "event_hash": claimed.event_hash,
+        "payload_json": claimed.payload_json,
+        "signed_envelope": signed.as_dict(),
+    }
+
+    def verify_publisher(incoming):
+        identity = registry.verify(
+            incoming["signed_envelope"], received_at="2026-11-06T09:02:00+00:00"
+        )
+        return identity.identity_id == "org:publisher"
+
+    applied = []
+    assert receiver.consume_inbox(
+        "signed-consumer", message,
+        lambda db, incoming: applied.append(incoming["event_id"]),
+        received_at=utc(9, 2), authenticator=verify_publisher,
+    )
+    assert applied == [stored.event_id]
