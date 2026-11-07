@@ -470,3 +470,19 @@ def test_cross_default_resolves_all_open_payables_of_failed_buyer():
     assert snap["trade_receivable_by_cell"]["WEST-AG1"] == pytest.approx(0.0)
     assert snap["trade_receivable_by_cell"]["WEST-AG2"] == pytest.approx(0.0)
     assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_external_supplier_default_is_not_paid_from_local_member_guarantee_reserve():
+    ledger = CreditLedger(
+        initial_cash_per_cell=10.0,
+        trade_credit_limit_per_cell=50.0,
+        regional_pool_reserve_per_region=20.0,
+        grace_days=0,
+    )
+    ledger.authorize_purchase("WEST-PR1", None, 20.0, 0, 0, "EXTERNAL-DEFAULT")
+    ledger.process_day(0)
+    snap = ledger.snapshot()
+    assert ledger.payables["EXTERNAL-DEFAULT"].guarantee_paid == pytest.approx(0.0)
+    assert snap["external_supplier_bad_debt"] == pytest.approx(12.0)
+    assert snap["regional_pool_reserve_by_region"]["WEST"] == pytest.approx(20.0)
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
