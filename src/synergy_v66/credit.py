@@ -13,6 +13,15 @@ from .network import CELLS
 
 EPS = 1e-9
 
+# Synthetic commercial parameters; not observed EAEU prices or cost benchmarks.
+TRANSFER_PRICE = {"grain": 2.0, "oilseed": 2.5, "flour": 4.0, "oil": 5.0, "energy": 0.8}
+EXTERNAL_SALE_PRICE = {"bread": 10.0, "packed_food": 15.0}
+# Conversion overhead paid to external suppliers before production authorization.
+EXTERNAL_PRODUCTION_COST = {
+    "grain": 0.8, "oilseed": 0.9, "energy": 0.5, "flour": 2.0,
+    "oil": 2.5, "bread": 3.2, "packed_food": 4.0,
+}
+
 
 @dataclass
 class CellAccount:
@@ -167,6 +176,8 @@ class CreditLedger:
         self._day(day)
         if account.defaulted:
             return {"authorized": False, "reason": "buyer_defaulted"}
+        if seller is not None and self.accounts[seller].defaulted:
+            return {"authorized": False, "reason": "seller_defaulted"}
         if account.trade_payable + amount > account.trade_credit_limit + EPS:
             self.events.append({"day": day, "type": "purchase_rejected", "buyer": buyer, "amount": amount, "reason": "trade_credit_limit"})
             return {"authorized": False, "reason": "trade_credit_limit"}
