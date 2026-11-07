@@ -388,6 +388,7 @@ class CreditLedger:
             "defaulted_cells": sorted(k for k, v in self.accounts.items() if v.defaulted),
             "production_rejection_count": sum(e["type"] == "production_rejected" for e in self.events),
             "purchase_rejection_count": sum(e["type"] == "purchase_rejected" for e in self.events),
+            "customer_invoice_rejection_count": sum(e["type"] == "customer_invoice_rejected" for e in self.events),
             "default_event_count": sum(e["type"] == "default" for e in self.events),
             "customer_default_count": sum(e["type"] == "customer_default" for e in self.events),
             "bank_line_utilization_by_cell": {
