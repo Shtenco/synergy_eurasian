@@ -8,7 +8,7 @@ from jsonschema import Draft202012Validator
 
 from synergy_sues.contracts import Money, Quantity
 from synergy_sues.inventory import InventoryLedger
-from synergy_sues.journal import Account, AccountType, Journal, NormalBalance
+from synergy_sues.journal import Account, AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide
 from synergy_sues.production import (
     BOMComponent, GRNIMatcher, GoodsReceipt, ProductionOrder,
     ProductionCompletionEvidence, ProductionCostEvent, ProductionCostType, PurchaseOrderLine, SupplierInvoiceLine, execute_production_order,
@@ -296,3 +296,34 @@ def test_production_execution_requires_completion_evidence_and_rejects_overprodu
         )
     assert inventory.summary()["pools"][0]["quantity"] == "10"
     assert journal.entries == ()
+
+
+def test_production_rolls_back_inventory_when_atomic_journal_batch_rejects():
+    journal = production_journal()
+    collision_event_id = "production-consumption:production:batch-atomic:issue:steel"
+    journal.post(JournalEntry(
+        "unrelated-seed", date(2026, 11, 6), NOW, "USD",
+        (
+            JournalLine("seed-dr", "raw", PostingSide.DEBIT, Money("1", "USD"), Money("1", "USD"), "co1", "seed:raw"),
+            JournalLine("seed-cr", "grni", PostingSide.CREDIT, Money("1", "USD"), Money("1", "USD"), "co1", "seed:grni"),
+        ),
+        collision_event_id, "unrelated-seed-idem", "Seed conflicting source event",
+    ))
+    inventory = InventoryLedger("USD")
+    inventory.receive("atomic-input", "atomic-lot", "steel", "factory",
+        Quantity("5", "kg"), Money("50", "USD"), date(2026, 11, 1), "receipt:atomic")
+    before_summary = inventory.summary()
+    before_movements = inventory.movements
+    order = ProductionOrder(
+        "batch-atomic", "co1", "part", Quantity("2", "unit"), "factory",
+        (BOMComponent("steel", Quantity("1", "kg")),),
+        date(2026, 11, 6), "production:atomic",
+    )
+    with pytest.raises(ValueError, match="Duplicate source_event_id"):
+        execute_production_order(
+            order, inventory, journal, "raw", "wip", "finished", NOW,
+            completion=completion("batch-atomic", "2"),
+        )
+    assert inventory.summary() == before_summary
+    assert inventory.movements == before_movements
+    assert len(journal.entries) == 1
