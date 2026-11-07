@@ -92,6 +92,7 @@ class CreditLedger:
         grace_days: int = 2,
         initial_cash_by_cell: dict[str, float] | None = None,
         minimum_post_contribution_cash: float = 0.0,
+        reserve_recovery_contribution_fraction: float = 0.10,
     ) -> None:
         limits = (initial_cash_per_cell, bank_limit_per_cell, trade_credit_limit_per_cell)
         if any(not math.isfinite(float(x)) or float(x) < 0 for x in limits):
@@ -125,6 +126,12 @@ class CreditLedger:
             or minimum_post_contribution_cash < 0
         ):
             raise ValueError("minimum_post_contribution_cash must be finite and >= 0")
+        if (
+            isinstance(reserve_recovery_contribution_fraction, bool)
+            or not math.isfinite(float(reserve_recovery_contribution_fraction))
+            or not 0.0 <= reserve_recovery_contribution_fraction <= 1.0
+        ):
+            raise ValueError("reserve_recovery_contribution_fraction must be between 0 and 1")
         if isinstance(federation_pool_reserve_total, bool) or not math.isfinite(float(federation_pool_reserve_total)) or federation_pool_reserve_total < 0:
             raise ValueError("federation_pool_reserve_total must be finite and >= 0")
         if federation_reserve_allocation_rule not in {"first_come_first_served", "batch_pro_rata"}:
@@ -247,6 +254,7 @@ class CreditLedger:
             if regional_member_credit_limit_per_cell is not None else None
         )
         self.minimum_post_contribution_cash = float(minimum_post_contribution_cash)
+        self.reserve_recovery_contribution_fraction = float(reserve_recovery_contribution_fraction)
         self.regional_reserve_contributions_by_cell = dict(reserve_contributions)
         self.federation_reserve_contributions_by_cell = dict(federation_contributions)
         self.federation_pool_reserve_initial = float(federation_pool_reserve_total)
@@ -877,6 +885,11 @@ class CreditLedger:
                 if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not math.isfinite(float(limit)) or limit < 0:
                     raise ValueError("contribution limits must be finite non-negative numbers")
                 limits[cell_id] = float(limit)
+                ledger_policy_limit = (
+                    self.initial_cash_by_cell[cell_id] * self.reserve_recovery_contribution_fraction
+                )
+                if limits[cell_id] > ledger_policy_limit + EPS:
+                    raise ValueError(f"contribution limit exceeds ledger policy cap for {cell_id}")
 
         total = sum(regional.values()) + sum(federation.values())
         if total <= EPS:
@@ -980,22 +993,27 @@ class CreditLedger:
         contributions_by_cell: dict[str, float],
         day: int,
         replenishment_id: str,
-        contribution_fraction_per_period: float = 0.10,
+        contribution_fraction_per_period: float | None = None,
     ) -> dict[str, Any]:
         """Compatibility wrapper using the ledger-defined 30-day contribution cap."""
+        fraction = (
+            self.reserve_recovery_contribution_fraction
+            if contribution_fraction_per_period is None
+            else contribution_fraction_per_period
+        )
         if (
-            isinstance(contribution_fraction_per_period, bool)
-            or not isinstance(contribution_fraction_per_period, (int, float))
-            or not math.isfinite(float(contribution_fraction_per_period))
-            or not 0.0 <= contribution_fraction_per_period <= 1.0
+            isinstance(fraction, bool)
+            or not isinstance(fraction, (int, float))
+            or not math.isfinite(float(fraction))
+            or not 0.0 <= fraction <= self.reserve_recovery_contribution_fraction
         ):
-            raise ValueError("contribution_fraction_per_period must be between 0 and 1")
+            raise ValueError("contribution_fraction_per_period cannot exceed the ledger policy cap")
         if not isinstance(day, int) or isinstance(day, bool) or day < self.current_day:
             raise ValueError("replenishment day must be an integer not earlier than current_day")
         period_id = f"day-window-{day // RECOVERY_PERIOD_DAYS}"
         regional_zero = {cell_id: 0.0 for cell_id in CELL_BY_ID}
         period_limits = {
-            cell_id: self.initial_cash_by_cell[cell_id] * float(contribution_fraction_per_period)
+            cell_id: self.initial_cash_by_cell[cell_id] * float(fraction)
             for cell_id in CELL_BY_ID
         }
         result = self.replenish_reserves(
@@ -1058,6 +1076,7 @@ class CreditLedger:
             "external_supplier_bad_debt": self.external_supplier_bad_debt,
             "initial_cash_by_cell": dict(self.initial_cash_by_cell),
             "minimum_post_contribution_cash": self.minimum_post_contribution_cash,
+            "reserve_recovery_contribution_fraction": self.reserve_recovery_contribution_fraction,
             "regional_reserve_contributions_by_cell": dict(self.regional_reserve_contributions_by_cell),
             "federation_reserve_contributions_by_cell": dict(self.federation_reserve_contributions_by_cell),
             "federation_reserve_allocation_rule": self.federation_reserve_allocation_rule,
