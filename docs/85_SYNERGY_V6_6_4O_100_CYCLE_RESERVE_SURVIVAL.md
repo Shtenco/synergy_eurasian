@@ -45,7 +45,7 @@ Therefore this is a reserve liquidity / recovery survival experiment, not a full
 - federation deficits use only the capacity remaining after regional allocations;
 - no external cash inflows and no bank draws.
 
-Initial reserve funding is already part of member opening cash: it is allocated from that same opening pool. It must never be double-counted as additional initial system money.
+Initial reserve funding is already part of member opening cash: it is allocated from that same opening pool. It must never be double-counted as additional initial system money. The ledger is advanced to day zero before any claim or recovery plan; negative simulation days are rejected.
 
 ## 4. Metrics
 
