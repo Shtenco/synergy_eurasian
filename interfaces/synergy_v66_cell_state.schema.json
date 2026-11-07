@@ -1,0 +1,586 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Shtenco/synergy_eurasian/blob/research/synergy-v6.6-federated-economy/interfaces/synergy_v66_cell_state.schema.json",
+  "title": "SYNERGY V6.6 Economic Cell State",
+  "description": "Versioned research contract for one independently governed economic cell. Values are state snapshots, not accounting certification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cell_id",
+    "effective_time",
+    "known_at",
+    "identity",
+    "physical",
+    "commercial",
+    "financial",
+    "human",
+    "risk",
+    "evidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "synergy.v6.6.cell_state.v1"
+    },
+    "cell_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "effective_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "known_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "region",
+        "sector",
+        "governance_class"
+      ],
+      "properties": {
+        "region": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sector": {
+          "type": "string",
+          "minLength": 1
+        },
+        "governance_class": {
+          "enum": [
+            "enterprise",
+            "cooperative",
+            "public_utility",
+            "research",
+            "logistics",
+            "warehouse",
+            "farm",
+            "service",
+            "other"
+          ]
+        }
+      }
+    },
+    "physical": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capacity",
+        "inventory_lots",
+        "work_in_progress"
+      ],
+      "properties": {
+        "capacity": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capacity"
+          }
+        },
+        "inventory_lots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/inventory"
+          }
+        },
+        "work_in_progress": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/work"
+          }
+        }
+      }
+    },
+    "commercial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "orders",
+        "supplier_links"
+      ],
+      "properties": {
+        "orders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/order"
+          }
+        },
+        "supplier_links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/link"
+          }
+        }
+      }
+    },
+    "financial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cash_accounts",
+        "receivables",
+        "payables",
+        "debt_facilities"
+      ],
+      "properties": {
+        "cash_accounts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cash"
+          }
+        },
+        "receivables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/obligation"
+          }
+        },
+        "payables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/obligation"
+          }
+        },
+        "debt_facilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/debt"
+          }
+        }
+      }
+    },
+    "human": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "skill_capacity_units"
+      ],
+      "properties": {
+        "skill_capacity_units": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "skill",
+              "available_units",
+              "unit"
+            ],
+            "properties": {
+              "skill": {
+                "type": "string"
+              },
+              "available_units": {
+                "type": "number",
+                "minimum": 0
+              },
+              "unit": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "concentration_flags"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "operating",
+            "constrained",
+            "suspended",
+            "exited"
+          ]
+        },
+        "concentration_flags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    }
+  },
+  "$defs": {
+    "quantity": {
+      "type": "number",
+      "minimum": 0
+    },
+    "capacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource",
+        "available_quantity",
+        "unit",
+        "valid_from",
+        "valid_to",
+        "evidence_refs"
+      ],
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "available_quantity": {
+          "$ref": "#/$defs/quantity"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "valid_from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_to": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lot_id",
+        "sku",
+        "quantity",
+        "unit",
+        "location",
+        "received_at",
+        "evidence_refs"
+      ],
+      "properties": {
+        "lot_id": {
+          "type": "string"
+        },
+        "sku": {
+          "type": "string"
+        },
+        "quantity": {
+          "$ref": "#/$defs/quantity"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "received_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "work": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "work_order_id",
+        "sku",
+        "planned_quantity",
+        "due_at"
+      ],
+      "properties": {
+        "work_order_id": {
+          "type": "string"
+        },
+        "sku": {
+          "type": "string"
+        },
+        "planned_quantity": {
+          "$ref": "#/$defs/quantity"
+        },
+        "due_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "order": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order_id",
+        "counterparty_cell_id",
+        "sku",
+        "quantity",
+        "unit",
+        "status",
+        "due_at",
+        "currency"
+      ],
+      "properties": {
+        "order_id": {
+          "type": "string"
+        },
+        "counterparty_cell_id": {
+          "type": "string"
+        },
+        "sku": {
+          "type": "string"
+        },
+        "quantity": {
+          "$ref": "#/$defs/quantity"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "proposed",
+            "quoted",
+            "accepted",
+            "in_production",
+            "dispatched",
+            "accepted_by_customer",
+            "disputed",
+            "cancelled"
+          ]
+        },
+        "due_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "counterparty_cell_id",
+        "relationship",
+        "status"
+      ],
+      "properties": {
+        "counterparty_cell_id": {
+          "type": "string"
+        },
+        "relationship": {
+          "enum": [
+            "supplier",
+            "customer",
+            "logistics",
+            "energy",
+            "shared_service",
+            "creditor",
+            "other"
+          ]
+        },
+        "status": {
+          "enum": [
+            "proposed",
+            "qualified",
+            "contracted",
+            "suspended",
+            "terminated"
+          ]
+        }
+      }
+    },
+    "cash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "account_id",
+        "currency",
+        "balance",
+        "as_of",
+        "evidence_refs"
+      ],
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "balance": {
+          "type": "number"
+        },
+        "as_of": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "obligation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_id",
+        "counterparty_cell_id",
+        "currency",
+        "amount",
+        "due_at",
+        "status"
+      ],
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "counterparty_cell_id": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "amount": {
+          "type": "number",
+          "minimum": 0
+        },
+        "due_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "issued",
+            "accepted",
+            "partially_settled",
+            "settled",
+            "disputed",
+            "reversed"
+          ]
+        }
+      }
+    },
+    "debt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "facility_id",
+        "lender_id",
+        "currency",
+        "principal_outstanding",
+        "limit",
+        "maturity_at",
+        "status"
+      ],
+      "properties": {
+        "facility_id": {
+          "type": "string"
+        },
+        "lender_id": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "principal_outstanding": {
+          "type": "number",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maturity_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "enum": [
+            "proposed",
+            "committed",
+            "drawn",
+            "in_default",
+            "closed"
+          ]
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "class",
+        "source_type",
+        "recorded_at"
+      ],
+      "properties": {
+        "evidence_id": {
+          "type": "string"
+        },
+        "class": {
+          "enum": [
+            "observed",
+            "contracted",
+            "planned",
+            "model_estimate",
+            "disputed",
+            "reversed"
+          ]
+        },
+        "source_type": {
+          "type": "string"
+        },
+        "recorded_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "issuer": {
+          "type": "string"
+        },
+        "signature_ref": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
