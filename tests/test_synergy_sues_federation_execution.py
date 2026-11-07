@@ -398,3 +398,35 @@ def test_handler_cannot_install_temp_trigger_on_receipt_table(tmp_path):
     with pytest.raises(sqlite3.DatabaseError):
         executor.execute(request, [approval], policy, registry, temp_trigger_handler, now())
     assert executor.receipts() == ()
+
+
+def test_executor_can_require_scope_guard_inside_the_same_transaction(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="required-scope-guard")
+    executor = AuthorizedActionExecutor(
+        str(tmp_path / "required-scope-guard.db"), require_scope_guard=True
+    )
+    with pytest.raises(ValueError, match="requires an atomic authority-scope guard"):
+        executor.execute(request, [approval], policy, registry, insert_effect, now())
+
+    calls = []
+    def scope_guard(db, signed_request, decision):
+        calls.append(signed_request.event["event_id"])
+        db.execute(
+            "INSERT INTO authority_scope_reservation_events "
+            "(event_id,request_id,event_type,scope_id,tenant_id,period_key,currency,amount,source_ref,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?)",
+            ("reserve:guarded", "req-1", "RESERVED", "scope:treasury",
+             "tenant:one", "2026-11", "USD", "10", signed_request.event["event_hash"], now()),
+        )
+
+    result = executor.execute(
+        request, [approval], policy, registry, insert_effect, now(), scope_guard=scope_guard
+    )
+    assert result.executed
+    assert calls == [request.event["event_id"]]
+    with sqlite3.connect(tmp_path / "required-scope-guard.db") as db:
+        assert db.execute(
+            "SELECT COUNT(*) FROM authority_scope_reservation_events WHERE event_type='RESERVED'"
+        ).fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM protected_effects").fetchone()[0] == 1
