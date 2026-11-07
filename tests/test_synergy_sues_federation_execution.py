@@ -306,3 +306,21 @@ def test_executor_rejects_policy_mutation_of_signed_authorization_snapshot(tmp_p
             lambda *_: called.append(True), now())
     assert called == []
     assert executor.receipts() == ()
+
+
+def test_executor_rejects_authorization_decision_reused_for_another_action(tmp_path):
+    registry, keys, policy = setup(tmp_path)
+    request, approval = make_pair(tmp_path, keys, suffix="decision-scope-reuse")
+
+    class ReusedScopePolicy:
+        def authorize(self, signed_request, approvals, trusted_registry, received_at):
+            decision = policy.authorize(signed_request, approvals, trusted_registry, received_at)
+            return replace(decision, action="TOKEN_MINT")
+
+    executor = AuthorizedActionExecutor(str(tmp_path / "decision-scope-reuse.db"))
+    called = []
+    with pytest.raises(ValueError, match="not bound to this signed event"):
+        executor.execute(request, [approval], ReusedScopePolicy(), registry,
+            lambda *_: called.append(True), now())
+    assert called == []
+    assert executor.receipts() == ()
