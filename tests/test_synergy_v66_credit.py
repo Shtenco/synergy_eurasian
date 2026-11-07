@@ -1026,3 +1026,46 @@ def test_federation_reserve_replenishment_rejects_incomplete_or_nonpositive_maps
     invalid["WEST-PR1"] = float("nan")
     with pytest.raises(ValueError):
         ledger.replenish_federation_reserve(invalid, day=0, replenishment_id="TOPUP-NAN")
+
+
+def test_federation_reserve_replenishment_supports_repeated_defaults_without_minting_cash():
+    from synergy_v66.network_topology import CELLS
+
+    initial_funding = {cell.cell_id: 0.0 for cell in CELLS}
+    initial_funding["WEST-LG"] = 2.5
+    initial_funding["EAST-LG"] = 2.5
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        trade_credit_limit_per_cell=50.0,
+        federation_pool_reserve_total=5.0,
+        federation_reserve_contributions_by_cell=initial_funding,
+        minimum_post_contribution_cash=10.0,
+        grace_days=0,
+    )
+    first = ledger.authorize_purchase("WEST-PR1", "EAST-AG1", 30.0, 0, 0, "ROUND-1")
+    assert first["authorized"]
+    ledger.process_day(0)
+    first_invoice = ledger.payables[first["invoice_id"]]
+    assert first_invoice.federation_guarantee_paid == pytest.approx(5.0)
+    assert first_invoice.written_off == pytest.approx(5.0)
+    assert ledger.snapshot()["federation_pool_reserve_balance"] == pytest.approx(0.0)
+
+    topup = {cell.cell_id: 0.0 for cell in CELLS}
+    topup["WEST-SV"] = 2.0
+    topup["EAST-SV"] = 2.0
+    ledger.replenish_federation_reserve(topup, day=0, replenishment_id="ROUND-TOPUP-1")
+    assert ledger.snapshot()["federation_pool_reserve_balance"] == pytest.approx(4.0)
+
+    second = ledger.authorize_purchase("EAST-PR1", "WEST-AG1", 30.0, 1, 1, "ROUND-2")
+    assert second["authorized"]
+    ledger.process_day(1)
+    second_invoice = ledger.payables[second["invoice_id"]]
+    snapshot = ledger.snapshot()
+    assert second_invoice.federation_guarantee_paid == pytest.approx(4.0)
+    assert second_invoice.written_off == pytest.approx(6.0)
+    assert snapshot["federation_pool_guarantee_paid"] == pytest.approx(9.0)
+    assert snapshot["federation_pool_reserve_replenished_total"] == pytest.approx(4.0)
+    assert snapshot["federation_pool_reserve_funded_total"] == pytest.approx(9.0)
+    assert snapshot["federation_pool_reserve_balance"] == pytest.approx(0.0)
+    assert min(snapshot["cash_by_cell"].values()) >= 10.0 - 1e-9
+    assert snapshot["cash_conservation_error"] == pytest.approx(0.0)
