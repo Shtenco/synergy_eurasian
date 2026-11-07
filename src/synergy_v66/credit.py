@@ -839,7 +839,7 @@ class CreditLedger:
         if not isinstance(contributions_by_cell, dict) or set(contributions_by_cell) != set(CELL_BY_ID):
             raise ValueError("replenishment map must contain every known cell exactly once")
 
-        normalized: dict[str, float] = {};
+        normalized: dict[str, float] = {}
         for cell_id, amount in contributions_by_cell.items():
             if (
                 isinstance(amount, bool)
