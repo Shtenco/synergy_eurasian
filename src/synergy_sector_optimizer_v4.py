@@ -46,6 +46,8 @@ def _validate(cfg: dict[str, Any], budget: float) -> None:
     try:
         budget = _number(budget, "investment budget")
     except ValueError as exc:
+        if "boolean or string" in str(exc):
+            raise
         raise ValueError("Investment budget must be finite and positive.") from exc
     if budget <= 0:
         raise ValueError("Investment budget must be finite and positive.")
@@ -57,6 +59,8 @@ def _validate(cfg: dict[str, Any], budget: float) -> None:
         try:
             value = _number(weights[key], f"objective_weights.{key}")
         except ValueError as exc:
+            if "boolean or string" in str(exc):
+                raise
             raise ValueError(f"Objective weight {key} must be finite and non-negative.") from exc
         if value < 0:
             raise ValueError(f"Objective weight {key} must be finite and non-negative.")
@@ -71,6 +75,8 @@ def _validate(cfg: dict[str, Any], budget: float) -> None:
         try:
             value = _number(norms[key], f"normalization.{key}")
         except ValueError as exc:
+            if "boolean or string" in str(exc):
+                raise
             raise ValueError(f"Normalization value {key} must be finite and strictly positive.") from exc
         if value <= 0:
             raise ValueError(f"Normalization value {key} must be finite and strictly positive.")
