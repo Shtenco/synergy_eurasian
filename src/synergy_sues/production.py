@@ -235,6 +235,23 @@ class ProductionCostEvent:
 
 
 @dataclass(frozen=True)
+class ProductionCompletionEvidence:
+    """Measured good output for one completed batch, tied to a source evidence record."""
+
+    order_id: str
+    output_quantity: Quantity
+    completed_at: datetime
+    evidence_ref: str
+
+    def __post_init__(self) -> None:
+        if not self.order_id or not self.evidence_ref:
+            raise ValueError("Production completion order and evidence reference are required")
+        if self.output_quantity.amount <= 0:
+            raise ValueError("Measured production output must be positive")
+        _aware(self.completed_at, "production completed_at")
+
+
+@dataclass(frozen=True)
 class ProductionExecution:
     order_id: str
     output_movement: InventoryMovement
@@ -243,6 +260,8 @@ class ProductionExecution:
     conversion_cost: Money
     capitalized_cost: Money
     output_quantity: Quantity
+    completion_evidence_ref: str
+    completed_at: datetime
     journal_entry_ids: tuple[str, ...]
 
     def __post_init__(self) -> None:
@@ -273,14 +292,27 @@ def execute_production_order(
     recorded_at: datetime,
     conversion_costs: Iterable[ProductionCostEvent] = (),
     conversion_cost_accounts: dict[ProductionCostType | str, str] | None = None,
+    completion: ProductionCompletionEvidence | None = None,
 ) -> ProductionExecution:
     """Consume a complete BOM batch and capitalize evidenced material/conversion costs.
 
-    Conversion events carry externally measured amounts and source evidence; this
-    function does not calculate payroll, machine rates, energy tariffs or overhead
-    allocation. The inventory subledger records raw issues and finished output.
+    Completion evidence supplies measured good output; BOM consumption is scaled to
+    that measured quantity, not the plan. Conversion events carry externally measured
+    amounts and source evidence. This function does not calculate payroll, tariffs or
+    overhead allocation. Inventory changes are rolled back if journal posting fails.
     """
     _aware(recorded_at, "recorded_at")
+    if completion is None:
+        raise ValueError("Independent production completion evidence is required")
+    if completion.order_id != order.order_id:
+        raise ValueError("Production completion evidence order mismatch")
+    if completion.output_quantity.unit != order.output_quantity.unit:
+        raise ValueError("Measured production output unit differs from the production order")
+    if completion.output_quantity.amount > order.output_quantity.amount:
+        raise ValueError("Measured production output exceeds the authorized order quantity")
+    if completion.completed_at > recorded_at:
+        raise ValueError("Production completion evidence cannot post-date its recording time")
+    completion_date = completion.completed_at.date()
     if journal.functional_currency != inventory.functional_currency:
         raise ValueError("Production inventory and journal currencies must match")
     _account_map(journal, inventory_account_id, AccountType.ASSET, NormalBalance.DEBIT, "Inventory account")
@@ -303,7 +335,7 @@ def execute_production_order(
     for event in cost_events:
         if event.order_id != order.order_id or event.entity_id != order.entity_id:
             raise ValueError("Production cost event order/entity mismatch")
-        if event.effective_date > order.planned_date:
+        if event.effective_date > completion_date:
             raise ValueError("Production cost event cannot post after batch completion date")
         if event.amount.currency != journal.functional_currency:
             raise ValueError("Production cost event currency must equal functional currency")
@@ -332,7 +364,7 @@ def execute_production_order(
     previewed_cost = Decimal("0")
     for component in order.components:
         quantity = Quantity(
-            component.quantity_per_output_unit.amount * order.output_quantity.amount,
+            component.quantity_per_output_unit.amount * completion.output_quantity.amount,
             component.quantity_per_output_unit.unit,
         )
         available = inventory.available(component.item_id, order.location_id, quantity.unit)
@@ -345,89 +377,96 @@ def execute_production_order(
         ).amount
         required.append((component, quantity))
     # Validate output pool units and zero-cost policy before consuming any input.
-    inventory.available(order.product_id, order.location_id, order.output_quantity.unit)
+    inventory.available(order.product_id, order.location_id, completion.output_quantity.unit)
     if previewed_cost <= 0:
         raise ValueError("Zero-cost production batch cannot be capitalized in the monetary journal")
 
-    input_movements = tuple(
-        inventory.issue(
-            f"production:{order.order_id}:issue:{component.item_id}",
-            component.item_id, order.location_id, quantity, order.planned_date,
-            f"production-order:{order.order_id}:component:{component.item_id}",
+    inventory_snapshot = inventory._snapshot()
+    try:
+        input_movements = tuple(
+            inventory.issue(
+                f"production:{order.order_id}:issue:{component.item_id}",
+                component.item_id, order.location_id, quantity, order.planned_date,
+                f"production-order:{order.order_id}:component:{component.item_id}",
+            )
+            for component, quantity in required
         )
-        for component, quantity in required
-    )
-    direct_material_cost = Money(
-        sum((movement.cost.amount for movement in input_movements), Decimal("0")),
-        inventory.functional_currency,
-    )
-    if direct_material_cost.amount != previewed_cost:
-        raise ValueError("FIFO issue cost changed between preflight and consumption")
-    conversion_cost = Money(
-        sum((event.amount.amount for event in cost_events), Decimal("0")),
-        inventory.functional_currency,
-    )
-    capitalized_cost = direct_material_cost + conversion_cost
+        direct_material_cost = Money(
+            sum((movement.cost.amount for movement in input_movements), Decimal("0")),
+            inventory.functional_currency,
+        )
+        if direct_material_cost.amount != previewed_cost:
+            raise ValueError("FIFO issue cost changed between preflight and consumption")
+        conversion_cost = Money(
+            sum((event.amount.amount for event in cost_events), Decimal("0")),
+            inventory.functional_currency,
+        )
+        capitalized_cost = direct_material_cost + conversion_cost
 
-    output_movement = inventory.receive(
-        f"production:{order.order_id}:output",
-        f"production:{order.order_id}:lot",
-        order.product_id,
-        order.location_id,
-        order.output_quantity,
-        capitalized_cost,
-        order.planned_date,
-        f"production-order:{order.order_id}:completed-output",
-    )
+        output_movement = inventory.receive(
+            f"production:{order.order_id}:output",
+            f"production:{order.order_id}:lot",
+            order.product_id,
+            order.location_id,
+            completion.output_quantity,
+            capitalized_cost,
+            completion_date,
+            f"production-order:{order.order_id}:completed-output",
+        )
 
-    entries: list[JournalEntry] = []
-    for movement in input_movements:
-        # InventoryLedger uses movement IDs as deterministic journal identities.
-        entry_id = f"inventory:{movement.movement_id}"
-        money = movement.cost
+        entries: list[JournalEntry] = []
+        for movement in input_movements:
+            # InventoryLedger uses movement IDs as deterministic journal identities.
+            entry_id = f"inventory:{movement.movement_id}"
+            money = movement.cost
+            entries.append(JournalEntry(
+                entry_id, movement.movement_date, recorded_at, journal.functional_currency,
+                (
+                    JournalLine(f"{entry_id}:dr", wip_account_id, PostingSide.DEBIT,
+                        money, money, order.entity_id, movement.source_ref),
+                    JournalLine(f"{entry_id}:cr", inventory_account_id, PostingSide.CREDIT,
+                        money, money, order.entity_id, movement.source_ref),
+                ),
+                f"production-consumption:{movement.movement_id}",
+                f"production-consumption:{movement.movement_id}",
+                f"Consume BOM component {movement.item_id} for {order.order_id}",
+            ))
+        for event in cost_events:
+            entry_id = f"production:{order.order_id}:cost:{event.event_id}"
+            amount = event.amount
+            entries.append(JournalEntry(
+                entry_id, event.effective_date, recorded_at, journal.functional_currency,
+                (
+                    JournalLine(f"{entry_id}:dr", wip_account_id, PostingSide.DEBIT,
+                        amount, amount, order.entity_id, event.source_ref, evidence_ids=(event.evidence_ref,)),
+                    JournalLine(f"{entry_id}:cr", account_map[event.cost_type], PostingSide.CREDIT,
+                        amount, amount, order.entity_id, event.source_ref, evidence_ids=(event.evidence_ref,)),
+                ),
+                f"production-cost:{event.event_id}", f"production-cost:{event.event_id}",
+                f"Capitalize {event.cost_type.value.lower()} cost for {order.order_id}",
+            ))
+        completion_id = f"production:{order.order_id}:capitalize"
         entries.append(JournalEntry(
-            entry_id, movement.movement_date, recorded_at, journal.functional_currency,
+            completion_id, order.planned_date, recorded_at, journal.functional_currency,
             (
-                JournalLine(f"{entry_id}:dr", wip_account_id, PostingSide.DEBIT,
-                    money, money, order.entity_id, movement.source_ref),
-                JournalLine(f"{entry_id}:cr", inventory_account_id, PostingSide.CREDIT,
-                    money, money, order.entity_id, movement.source_ref),
+                JournalLine(f"{completion_id}:dr", finished_goods_account_id, PostingSide.DEBIT,
+                    capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref),
+                JournalLine(f"{completion_id}:cr", wip_account_id, PostingSide.CREDIT,
+                    capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref),
             ),
-            f"production-consumption:{movement.movement_id}",
-            f"production-consumption:{movement.movement_id}",
-            f"Consume BOM component {movement.item_id} for {order.order_id}",
+            f"production-completion:{order.order_id}",
+            f"production-completion:{order.order_id}",
+            f"Capitalize finished output for {order.order_id}",
         ))
-    for event in cost_events:
-        entry_id = f"production:{order.order_id}:cost:{event.event_id}"
-        amount = event.amount
-        entries.append(JournalEntry(
-            entry_id, event.effective_date, recorded_at, journal.functional_currency,
-            (
-                JournalLine(f"{entry_id}:dr", wip_account_id, PostingSide.DEBIT,
-                    amount, amount, order.entity_id, event.source_ref, evidence_ids=(event.evidence_ref,)),
-                JournalLine(f"{entry_id}:cr", account_map[event.cost_type], PostingSide.CREDIT,
-                    amount, amount, order.entity_id, event.source_ref, evidence_ids=(event.evidence_ref,)),
-            ),
-            f"production-cost:{event.event_id}", f"production-cost:{event.event_id}",
-            f"Capitalize {event.cost_type.value.lower()} cost for {order.order_id}",
-        ))
-    completion_id = f"production:{order.order_id}:capitalize"
-    entries.append(JournalEntry(
-        completion_id, order.planned_date, recorded_at, journal.functional_currency,
-        (
-            JournalLine(f"{completion_id}:dr", finished_goods_account_id, PostingSide.DEBIT,
-                capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref),
-            JournalLine(f"{completion_id}:cr", wip_account_id, PostingSide.CREDIT,
-                capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref),
-        ),
-        f"production-completion:{order.order_id}",
-        f"production-completion:{order.order_id}",
-        f"Capitalize finished output for {order.order_id}",
-    ))
-    journal.post_many(entries)
+        journal.post_many(entries)
+        journal.post_many(entries)
+    except Exception:
+        inventory._restore(inventory_snapshot)
+        raise
     return ProductionExecution(
         order.order_id, output_movement, input_movements, direct_material_cost,
-        conversion_cost, capitalized_cost, order.output_quantity, tuple(x.entry_id for x in entries),
+        conversion_cost, capitalized_cost, completion.output_quantity,
+        completion.evidence_ref, completion.completed_at, tuple(x.entry_id for x in entries),
     )
 
 
