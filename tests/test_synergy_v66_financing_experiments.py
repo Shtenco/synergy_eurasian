@@ -66,3 +66,34 @@ def test_multi_regime_runner_covers_all_shock_regimes_with_paired_paths():
                 assert row["physical_balance_error"] < 1e-7
                 assert row["cash_conservation_error"] < 1e-6
                 assert row["regional_pool_net_position_error"] < 1e-7
+
+
+def test_regional_pool_sensitivity_grid_respects_caps_and_common_paths():
+    from synergy_v66.financing_experiments import compare_regional_pool_sensitivities
+
+    report = compare_regional_pool_sensitivities(
+        [42], days=12, shock_regime="severe",
+        pool_limits=[0.0, 100.0], member_limits=[0.0, 50.0],
+    )
+    assert report["model_id"] == "SYNERGY_V6.6.4B_REGIONAL_POOL_SENSITIVITY"
+    assert len(report["sensitivity_reports"]) == 4
+    for case in report["sensitivity_reports"]:
+        assert case["pool_limit_per_region"] in {0.0, 100.0}
+        assert case["member_debit_and_credit_limit_per_cell"] in {0.0, 50.0}
+        for pair in case["paired_environment_hashes"]:
+            assert len(set(pair["environment_hashes"].values())) == 1
+        for rows in case["observations"].values():
+            for row in rows:
+                assert row["physical_balance_error"] < 1e-7
+                assert row["cash_conservation_error"] < 1e-6
+                assert row["regional_pool_net_position_error"] < 1e-7
+                assert row["regional_pool_utilization_max"] <= 1.0 + 1e-9
+
+
+def test_regional_pool_sensitivity_rejects_empty_limit_grids():
+    from synergy_v66.financing_experiments import compare_regional_pool_sensitivities
+
+    with pytest.raises(ValueError):
+        compare_regional_pool_sensitivities([1], pool_limits=[])
+    with pytest.raises(ValueError):
+        compare_regional_pool_sensitivities([1], member_limits=[])
