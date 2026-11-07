@@ -6,7 +6,7 @@ from .consolidation import (IntercompanyRecord, IntercompanyRecordType,
 from .journal import Account, AccountType, Journal, JournalEntry, JournalLine, NormalBalance
 from .inventory import InventoryLedger, InventoryLotAllocation, InventoryMovement, InventoryMovementType
 from .physical import FlowBoundary, PhysicalFlow, summarize_physical_flows
-from .production import (BOMComponent, GRNIMatcher, GoodsReceipt, ProductionCompletionEvidence, ProductionCostEvent, ProductionCostType, ProductionExecution, ProductionOrder, PurchaseOrderLine, SupplierInvoiceLine, execute_production_order, post_grni_invoice, post_grni_receipt)
+from .production import (BOMComponent, GRNIMatcher, GoodsReceipt, ProductionCompletionEvidence, ProductionCostEvent, ProductionCostType, ProductionExecution, ProductionInputConsumption, ProductionOrder, PurchaseOrderLine, SupplierInvoiceLine, execute_production_order, post_grni_invoice, post_grni_receipt)
 from .v7_adapter import (SUESRealizationBridge, SUESRealizationLink, SUESSourceEvent, adapt_v7_event_store, adapt_v7_realization_chain)
 from .v7_projectors import (ProjectorRegistry, ProjectorSpec, SUESProjection, replay_event_projections)
 from .event_transport import DurableEvent, DurableEventStore, OutboxMessage
@@ -23,7 +23,7 @@ __all__ = [
     "Account", "AccountType", "BankAllocation", "BankStatement", "BankStatementLine", "BenefitAttribution", "BenefitAttributionRegistry",
     "BenefitEvent", "BOMComponent", "DurableEvent", "DurableEventStore", "EconomicPeriod", "EvidenceRecord", "EvidenceStatus", "GRNIMatcher", "GoodsReceipt",
     "FlowBoundary", "FXRate", "InventoryLedger", "InventoryLotAllocation", "InventoryMovement", "InventoryMovementType", "IntercompanyRecord", "IntercompanyRecordType", "Journal", "JournalEntry", "JournalLine",
-    "Money", "NormalBalance", "OutboxMessage", "PhysicalFlow", "ProjectorRegistry", "ProjectorSpec", "ProductionCompletionEvidence", "ProductionCostEvent", "ProductionCostType", "ProductionExecution", "ProductionOrder", "PurchaseOrderLine", "Quantity", "SUESProjection", "SUESRealizationBridge", "SUESRealizationLink", "SUESSourceEvent", "SupplierInvoiceLine", "TradeAccountMap", "TradeDocument",
+    "Money", "NormalBalance", "OutboxMessage", "PhysicalFlow", "ProjectorRegistry", "ProjectorSpec", "ProductionCompletionEvidence", "ProductionCostEvent", "ProductionCostType", "ProductionExecution", "ProductionInputConsumption", "ProductionOrder", "PurchaseOrderLine", "Quantity", "SUESProjection", "SUESRealizationBridge", "SUESRealizationLink", "SUESSourceEvent", "SupplierInvoiceLine", "TradeAccountMap", "TradeDocument",
     "AuthorizationDecision", "AuthorizationRule", "FederationAuthorizationPolicy", "AuthorizedActionExecutor", "ExecutionResult",
     "PolicyAuditPersistenceError", "PolicyChangeResult", "PolicySnapshot", "SQLiteAuthorizationPolicyStore",
     "AuthorityScope", "AuthorityScopeEngine", "ScopeEvaluation", "ScopeRoleRequirement",
