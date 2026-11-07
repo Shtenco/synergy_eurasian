@@ -37,6 +37,11 @@ class AuthorizationDecision:
     approval_event_refs: tuple[tuple[str, str], ...] = ()
     policy_version: int | None = None
     policy_hash: str | None = None
+    request_event_id: str = ""
+    request_event_hash: str = ""
+    action: str = ""
+    resource_type: str = ""
+    resource_id: str = ""
 
 
 class FederationAuthorizationPolicy:
@@ -97,6 +102,18 @@ class FederationAuthorizationPolicy:
             ("request_id", "action", "resource_type", "resource_id"))
         request_id = payload["request_id"]
         action, resource_type, resource_id = payload["action"], payload["resource_type"], payload["resource_id"]
+        def make_decision(
+            allowed: bool, reason: str, matched_rule_ids: tuple[str, ...] = (),
+            approval_identity_ids: tuple[str, ...] = (),
+            approval_event_refs: tuple[tuple[str, str], ...] = (),
+        ) -> AuthorizationDecision:
+            return AuthorizationDecision(
+                allowed, reason, request_id, requester.identity_id,
+                matched_rule_ids, approval_identity_ids, approval_event_refs,
+                request_event_id=request.event["event_id"],
+                request_event_hash=request.event["event_hash"],
+                action=action, resource_type=resource_type, resource_id=resource_id,
+            )
         if any(not isinstance(x, str) or not x.strip() for x in (request_id, action, resource_type, resource_id)):
             raise ValueError("authorization request scope fields must be non-empty strings")
         requested_at = _utc(request.signed_at, "signed_at")
@@ -124,12 +141,10 @@ class FederationAuthorizationPolicy:
 
         denies = tuple(sorted(rule.rule_id for rule in matching if rule.effect == "DENY"))
         if denies:
-            return AuthorizationDecision(False, "explicit_deny_rule", request_id,
-                requester.identity_id, denies)
+            return make_decision(False, "explicit_deny_rule", denies)
         allows = [rule for rule in matching if rule.effect == "ALLOW"]
         if not allows:
-            return AuthorizationDecision(False, "no_matching_allow_rule", request_id,
-                requester.identity_id)
+            return make_decision(False, "no_matching_allow_rule")
 
         verified_approvals: dict[str, tuple[str, str]] = {}
         vetoes: list[tuple[str, str, str]] = []
@@ -168,8 +183,8 @@ class FederationAuthorizationPolicy:
                     approval.event["event_id"], approval.event["event_hash"])
 
         if vetoes:
-            return AuthorizationDecision(False, "approval_veto", request_id,
-                requester.identity_id, tuple(sorted(rule.rule_id for rule in allows)),
+            return make_decision(False, "approval_veto",
+                tuple(sorted(rule.rule_id for rule in allows)),
                 tuple(sorted({item[0] for item in vetoes})),
                 tuple(sorted({(item[1], item[2]) for item in vetoes})))
 
@@ -185,13 +200,13 @@ class FederationAuthorizationPolicy:
             if len(approvals_for_rule) >= rule.min_approvals:
                 eligible.append((rule, approvals_for_rule))
         if not eligible:
-            return AuthorizationDecision(False, "insufficient_approvals", request_id,
-                requester.identity_id, tuple(sorted(rule.rule_id for rule in allows)),
+            return make_decision(False, "insufficient_approvals",
+                tuple(sorted(rule.rule_id for rule in allows)),
                 tuple(sorted(verified_approvals)),
                 tuple(sorted(set(verified_approvals.values()))))
         # Prefer the narrowest resource scope; rule IDs provide deterministic tie-break.
         eligible.sort(key=lambda item: (item[0].resource_id is None, item[0].rule_id))
         selected, selected_approvals = eligible[0]
         approval_refs = tuple(sorted(verified_approvals[identity_id] for identity_id in selected_approvals))
-        return AuthorizationDecision(True, "authorized_by_policy", request_id,
-            requester.identity_id, (selected.rule_id,), selected_approvals, approval_refs)
+        return make_decision(True, "authorized_by_policy",
+            (selected.rule_id,), selected_approvals, approval_refs)
