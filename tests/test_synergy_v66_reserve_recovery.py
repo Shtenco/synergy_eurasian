@@ -179,3 +179,44 @@ def test_modified_recovery_plan_is_rejected_before_settlement():
     assert after["cash_by_cell"] == before["cash_by_cell"]
     assert after["regional_pool_reserve_by_region"] == before["regional_pool_reserve_by_region"]
     assert after["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_recovery_period_is_derived_from_ledger_day_not_caller_label():
+    ledger = CreditLedger(initial_cash_per_cell=100.0)
+    ledger.process_day(0)
+    with pytest.raises(ValueError, match="ledger-defined day-window-0"):
+        plan_reserve_recovery(
+            ledger,
+            target_regional_by_region={"WEST": 5.0, "EAST": 5.0},
+            target_federation=0.0,
+            recovery_period_id="caller-chosen-reset",
+        )
+
+
+def test_ledger_rejects_multi_level_replenishment_without_canonical_period_and_cap():
+    ledger = CreditLedger(initial_cash_per_cell=100.0)
+    ledger.process_day(0)
+    zeros = _zero_map()
+    regional = dict(zeros)
+    regional["WEST-PR1"] = 1.0
+    with pytest.raises(ValueError, match="ledger-defined"):
+        ledger.replenish_reserves(
+            regional,
+            zeros,
+            day=0,
+            replenishment_id="BYPASS-PERIOD",
+            recovery_period_id="arbitrary-period",
+            contribution_limit_by_cell={cell.cell_id: 10.0 for cell in CELLS},
+        )
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match="contribution_limit_by_cell is required"):
+        ledger.replenish_reserves(
+            regional,
+            zeros,
+            day=0,
+            replenishment_id="MISSING-CAP",
+            recovery_period_id="day-window-0",
+        )
+    after = ledger.snapshot()
+    assert after["cash_by_cell"] == before["cash_by_cell"]
+    assert after["regional_pool_reserve_by_region"] == before["regional_pool_reserve_by_region"]
