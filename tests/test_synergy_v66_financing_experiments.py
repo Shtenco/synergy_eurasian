@@ -373,3 +373,82 @@ def test_reserve_allocation_experiment_accepts_heterogeneous_member_cash_and_rec
         for mode in ("mutual_credit", "hybrid"):
             row = comparison["observations"][mode][0]
             assert row["cash_conservation_error"] < 1e-6
+
+
+def test_federation_reserve_allocator_respects_combined_regional_and_federal_member_cap():
+    from synergy_v66.financing_experiments import (
+        build_liquidity_capped_federation_contributions,
+        build_liquidity_capped_reserve_contributions,
+    )
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 100.0 + 3.0 * index for index, cell in enumerate(CELLS)}
+    regional = build_liquidity_capped_reserve_contributions(
+        "equal_all_members", 5.0, cash, max_contribution_fraction=0.10,
+    )
+    federal = build_liquidity_capped_federation_contributions(
+        10.0, cash, max_combined_contribution_fraction=0.10,
+        scheme="production_capacity_weighted",
+        regional_contributions_by_cell=regional,
+    )
+    for cell in CELLS:
+        assert regional[cell.cell_id] + federal[cell.cell_id] <= cash[cell.cell_id] * 0.10 + 1e-9
+    assert sum(federal.values()) == pytest.approx(10.0)
+
+
+def test_federation_reserve_allocator_rejects_insufficient_remaining_cap_and_bad_maps():
+    from synergy_v66.financing_experiments import build_liquidity_capped_federation_contributions
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 10.0 for cell in CELLS}
+    with pytest.raises(ValueError):
+        build_liquidity_capped_federation_contributions(
+            2.0, cash, max_combined_contribution_fraction=0.01,
+        )
+    regional = {cell.cell_id: 0.0 for cell in CELLS}
+    regional[CELLS[0].cell_id] = 2.0
+    with pytest.raises(ValueError):
+        build_liquidity_capped_federation_contributions(
+            1.0, cash, max_combined_contribution_fraction=0.10,
+            regional_contributions_by_cell=regional,
+        )
+    regional.pop(CELLS[0].cell_id)
+    with pytest.raises(ValueError):
+        build_liquidity_capped_federation_contributions(
+            1.0, cash, regional_contributions_by_cell=regional,
+        )
+
+
+def test_liquidity_capped_federation_experiment_uses_paired_paths_and_cash_conservation():
+    from synergy_v66.financing_experiments import (
+        compare_liquidity_capped_federation_contributions,
+        make_synthetic_heterogeneous_cash_fixture,
+    )
+
+    cash = make_synthetic_heterogeneous_cash_fixture()
+    report = compare_liquidity_capped_federation_contributions(
+        [91], cash, reserve_total=8.0, max_combined_contribution_fraction=0.10,
+        scheme="production_capacity_weighted", days=7,
+    )
+    assert report["model_id"] == "SYNERGY_V6.6.4I_LIQUIDITY_CAPPED_FEDERATION_RESERVE"
+    assert sum(report["federation_contributions_by_cell"].values()) == pytest.approx(8.0)
+    for cell_id, federal in report["federation_contributions_by_cell"].items():
+        regional = report["regional_contributions_by_cell"][cell_id]
+        assert federal + regional <= cash[cell_id] * 0.10 + 1e-9
+    for pair in report["comparison"]["paired_environment_hashes"]:
+        assert len(set(pair["environment_hashes"].values())) == 1
+    for mode in ("mutual_credit", "hybrid"):
+        for row in report["comparison"]["observations"][mode]:
+            assert row["cash_conservation_error"] < 1e-6
+            assert row["federation_pool_reserve_balance"] <= 8.0 + 1e-9
+
+
+def test_federation_liquidity_capped_allocator_rejects_invalid_scheme_and_nonfinite_caps():
+    from synergy_v66.financing_experiments import build_liquidity_capped_federation_contributions
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 100.0 for cell in CELLS}
+    with pytest.raises(ValueError):
+        build_liquidity_capped_federation_contributions(1.0, cash, scheme="risk-based")
+    with pytest.raises(ValueError):
+        build_liquidity_capped_federation_contributions(1.0, cash, max_combined_contribution_fraction=float("nan"))
