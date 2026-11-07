@@ -423,7 +423,15 @@ def execute_production_order(
         quantity = input_evidence.quantity
         if quantity.unit != component.quantity_per_output_unit.unit:
             raise ValueError(f"Measured input unit differs from BOM for component {component.item_id}")
-        available = inventory.available(component.item_id, order.location_id, quantity.unit)
+        standard_input = component.quantity_per_output_unit.amount * completion.output_quantity.amount
+        if quantity.amount > standard_input:
+            raise ValueError(
+                f"Actual input for {component.item_id} exceeds BOM standard; "
+                "record an approved yield/scrap variance before capitalizing the excess"
+            )
+        available = inventory.available(
+            component.item_id, order.location_id, quantity.unit, completion_date
+        )
         if available.amount < quantity.amount:
             raise ValueError(
                 f"Insufficient component {component.item_id}: required {quantity.amount}, available {available.amount}"
