@@ -892,8 +892,9 @@ def compare_regional_reserve_size_sensitivities(
     contribution_scheme: str = "equal_all_members",
     max_contribution_fraction: float | None = None,
     base_config: dict[str, Any] | None = None,
+    minimum_post_contribution_cash: float = 0.0,
 ) -> dict[str, Any]:
-    """Measure reserve coverage against the member-liquidity opportunity cost on paired paths."""
+    """Measure reserve coverage against member-liquidity cost under an optional cash floor."""
     seed_list = list(seeds)
     levels = list(reserve_levels_per_region)
     if not seed_list or not levels:
@@ -976,6 +977,7 @@ def compare_regional_reserve_size_sensitivities(
         "seeds": seed_list,
         "contribution_scheme": contribution_scheme,
         "max_contribution_fraction": max_contribution_fraction,
+        "minimum_post_contribution_cash": float(minimum_post_contribution_cash),
         "sensitivity_reports": reports,
         "interpretation_guard": (
             "Synthetic reserve sizing sensitivity. Larger reserves improve nominal claim capacity "
