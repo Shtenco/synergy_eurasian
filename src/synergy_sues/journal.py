@@ -12,7 +12,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Iterable
 
-from .contracts import FXRate, Money, _aware
+from .contracts import FXRate, Money, _aware, _calendar_date
 
 
 class AccountType(str, Enum):
@@ -94,8 +94,7 @@ class JournalEntry:
     def __post_init__(self) -> None:
         if not all((self.entry_id, self.source_event_id, self.idempotency_key, self.description)):
             raise ValueError("Journal entry identity, source, idempotency key and description are required")
-        if not isinstance(self.effective_date, date):
-            raise ValueError("effective_date must be a date")
+        _calendar_date(self.effective_date, "journal effective_date")
         _aware(self.recorded_at, "recorded_at")
         if not isinstance(self.lines, tuple):
             object.__setattr__(self, "lines", tuple(self.lines))
