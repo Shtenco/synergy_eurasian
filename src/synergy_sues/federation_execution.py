@@ -195,6 +195,8 @@ class AuthorizedActionExecutor:
                 or tuple(_canonical(item.as_dict()) for item in approval_snapshots) != approval_snapshot_json):
             raise ValueError("authorization mutated signed request or approval evidence")
         verified_requester = registry.verify(receipt_request, received_stamp)
+        if _canonical(receipt_request.as_dict()) != request_snapshot_json:
+            raise ValueError("identity verification mutated signed request evidence")
         if (verified_requester.identity_id != decision.requester_identity_id
                 or verified_requester.tenant_id != receipt_request.tenant_id):
             raise ValueError("authorization decision requester does not match signed request identity")
@@ -248,12 +250,12 @@ class AuthorizedActionExecutor:
                     current_policy = db.execute(
                         "SELECT version,policy_hash FROM authorization_policy_changes "
                         "WHERE tenant_id=? ORDER BY version DESC LIMIT 1",
-                        (request.tenant_id,),
+                        (receipt_request.tenant_id,),
                     ).fetchone()
                     if current_policy is None:
                         current_version = 0
                         current_hash = sha256(_canonical({
-                            "tenant_id": request.tenant_id,
+                            "tenant_id": receipt_request.tenant_id,
                             "version": 0,
                             "rules": [],
                         })).hexdigest()
@@ -283,6 +285,12 @@ class AuthorizedActionExecutor:
                 ).fetchone()
                 sequence = 1 if prior is None else int(prior["sequence"]) + 1
                 previous_hash = "" if prior is None else str(prior["receipt_hash"])
+                approved_refs = set(decision.approval_event_refs)
+                approved_envelopes = {
+                    (approval.event["event_id"], approval.event["event_hash"]): approval.as_dict()
+                    for approval in approval_snapshots
+                    if (approval.event["event_id"], approval.event["event_hash"]) in approved_refs
+                }
                 row = {
                     "sequence": sequence,
                     "request_id": request_id,
@@ -298,12 +306,7 @@ class AuthorizedActionExecutor:
                     "receipt_version": 2,
                     "request_envelope_json": request_snapshot_json.decode("utf-8"),
                     "approval_envelopes_json": _canonical([
-                        item.as_dict() for item in sorted(
-                            (approval for approval in approval_snapshots
-                             if (approval.event["event_id"], approval.event["event_hash"])
-                             in set(decision.approval_event_refs)),
-                            key=lambda approval: (approval.event["event_id"], approval.event["event_hash"]),
-                        )
+                        approved_envelopes[key] for key in sorted(approved_envelopes)
                     ]).decode("utf-8"),
                     "previous_hash": previous_hash,
                 }
@@ -313,7 +316,7 @@ class AuthorizedActionExecutor:
                      resource_type,resource_id,requester_identity_id,executed_at,
                      result_json,decision_json,receipt_version,request_envelope_json,
                      approval_envelopes_json,previous_hash,receipt_hash)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (sequence, request_id, request_event_id, request_event_hash, action,
                      resource_type, resource_id, requester, executed_at, result_json,
                      decision_json, 2, row["request_envelope_json"], row["approval_envelopes_json"],
