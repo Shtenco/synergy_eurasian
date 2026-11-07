@@ -1035,7 +1035,8 @@ def compare_regional_reserve_size_sensitivities(
             contributions = build_regional_reserve_contributions(contribution_scheme, float(level))
         else:
             contributions = build_liquidity_capped_reserve_contributions(
-                contribution_scheme, float(level), initial_cash, float(max_contribution_fraction)
+                contribution_scheme, float(level), initial_cash,
+                float(max_contribution_fraction), float(minimum_post_contribution_cash),
             )
         config = dict(config_base)
         config["regional_pool_reserve_per_region"] = float(level)
