@@ -137,3 +137,12 @@ def test_invalid_credit_command_does_not_advance_ledger_day():
         ledger.authorize_purchase("WEST-PR1", "WEST-AG1", float("nan"), 9, 8, "PO-BAD")
     assert ledger.current_day == -1
     assert ledger.events == []
+
+
+def test_defaulted_supplier_cannot_receive_new_purchase_orders():
+    ledger = CreditLedger(initial_cash_per_cell=0.0, trade_credit_limit_per_cell=100.0, grace_days=0)
+    ledger.authorize_purchase("WEST-AG1", None, 10.0, 0, 0, "SUPPLIER-DEFAULT")
+    ledger.process_day(0)
+    assert ledger.accounts["WEST-AG1"].defaulted is True
+    result = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 1.0, 1, 0, "PO-FROM-DEFAULT")
+    assert result == {"authorized": False, "reason": "seller_defaulted"}
