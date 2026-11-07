@@ -207,6 +207,7 @@ def main() -> int:
             for mode, metrics in item["diagnostics"].items():
                 print(json.dumps({
                     "reserve_per_region": item["reserve_per_region"],
+                    "minimum_post_contribution_cash": sizing["minimum_post_contribution_cash"],
                     "mode": mode,
                     "reserve_paid_mean": metrics["reserve_paid_mean"],
                     "reserve_remaining_mean": metrics["reserve_remaining_mean"],
