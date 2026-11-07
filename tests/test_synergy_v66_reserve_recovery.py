@@ -362,6 +362,7 @@ def test_paired_100_cycle_experiment_preserves_cash_and_enforces_member_caps():
             assert row["max_period_cap_excess"] <= 1e-8
             assert row["bank_draws"] == pytest.approx(0.0)
             assert row["external_inflows"] == pytest.approx(0.0)
+            assert row["external_outflows"] == pytest.approx(0.0)
     for seed_index in range(2):
         baseline_paid = result["observations"]["no_replenishment"][seed_index]["total_claim_paid"]
         assert any(
