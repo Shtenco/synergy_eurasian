@@ -208,6 +208,14 @@ def portfolio_accounting(cfg: dict[str, Any]) -> dict[str, Any]:
     public_gross_cf = gross_cf * public_share
     public_replacement = replacement * public_share
     public_net = public_gross_cf - public_replacement
+    for name, values in (
+        ("gross cashflow", gross_cf), ("replacement capex", replacement),
+        ("net after replacement", net_after_replacement),
+        ("public capital", public_capital), ("public gross cashflow", public_gross_cf),
+        ("public replacement capex", public_replacement), ("public net", public_net),
+    ):
+        if not np.isfinite(values).all():
+            raise ValueError(f"Derived {name} must remain finite")
     if public_capital.sum() <= 0:
         raise ValueError("public ownership share must allocate positive capital for public portfolio metrics")
     return {
@@ -417,6 +425,8 @@ def simulate_portfolio(
         raise ValueError("Surplus allocation shares must be finite, between 0 and 1, and sum to 1.")
 
     events = cfg["crisis_events"] if include_crises else {}
+    if not isinstance(events, dict) or any(not isinstance(value, dict) for value in events.values()):
+        raise ValueError("crisis_events must be an object of yearly event objects")
     cumulative_dividends = 0.0
     cumulative_reserve_contributions = 0.0
     cumulative_reserve_draws = 0.0
@@ -441,9 +451,15 @@ def simulate_portfolio(
             k += repair
             cumulative_reserve_draws += repair
 
-        gross_cashflow = k * gross_yield * cash_multiplier
-        replacement_capex = k * replacement_rate
-        surplus = gross_cashflow - replacement_capex
+        gross_cashflow = _number(
+            k * gross_yield * cash_multiplier, f"year {year} gross_cashflow_usd", 0.0
+        )
+        replacement_capex = _number(
+            k * replacement_rate, f"year {year} replacement_capex_usd", 0.0
+        )
+        surplus = _number(
+            gross_cashflow - replacement_capex, f"year {year} surplus"
+        )
 
         unfunded_renewal_gap = 0.0
         if surplus < 0:
@@ -460,13 +476,18 @@ def simulate_portfolio(
             cumulative_unfunded_renewal_gap += unfunded_renewal_gap
             surplus = 0.0
 
-        growth_investment = shares[0] * surplus
-        reserve_contribution = shares[1] * surplus
-        dividend = shares[2] * surplus
-        k += growth_investment
-        reserve += reserve_contribution
-        cumulative_reserve_contributions += reserve_contribution
-        cumulative_dividends += dividend
+        growth_investment = _number(shares[0] * surplus, f"year {year} growth investment", 0.0)
+        reserve_contribution = _number(shares[1] * surplus, f"year {year} reserve contribution", 0.0)
+        dividend = _number(shares[2] * surplus, f"year {year} dividends", 0.0)
+        k = _number(k + growth_investment, f"year {year} productive capital", 0.0)
+        reserve = _number(reserve + reserve_contribution, f"year {year} reserve", 0.0)
+        cumulative_reserve_contributions = _number(
+            cumulative_reserve_contributions + reserve_contribution,
+            "cumulative reserve contributions", 0.0,
+        )
+        cumulative_dividends = _number(
+            cumulative_dividends + dividend, "cumulative dividends", 0.0
+        )
 
         rows.append({
             "year": year,
