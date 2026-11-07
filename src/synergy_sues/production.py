@@ -500,6 +500,10 @@ def execute_production_order(
             f"Capitalize finished output for {order.order_id}",
         ))
         journal.post_many(entries)
+        inventory._journal_posted_movements.update(
+            [movement.movement_id for movement in input_movements]
+            + [output_movement.movement_id]
+        )
     except Exception:
         inventory._restore(inventory_snapshot)
         raise
