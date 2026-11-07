@@ -10,6 +10,7 @@
     { "$ref": "#/$defs/bom_component" },
     { "$ref": "#/$defs/production_order" },
     { "$ref": "#/$defs/production_cost_event" },
+    { "$ref": "#/$defs/production_completion_evidence" },
     { "$ref": "#/$defs/production_execution" }
   ],
   "$defs": {
@@ -141,16 +142,29 @@
         "evidence_ref": { "type": "string", "minLength": 1 }
       }
     },
+    "production_completion_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order_id", "output_quantity", "completed_at", "evidence_ref"],
+      "properties": {
+        "order_id": { "type": "string", "minLength": 1 },
+        "output_quantity": { "$ref": "#/$defs/quantity" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "evidence_ref": { "type": "string", "minLength": 1 }
+      }
+    },
     "production_execution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["order_id", "direct_material_cost", "conversion_cost", "capitalized_cost", "output_quantity", "journal_entry_ids"],
+      "required": ["order_id", "direct_material_cost", "conversion_cost", "capitalized_cost", "output_quantity", "completion_evidence_ref", "completed_at", "journal_entry_ids"],
       "properties": {
         "order_id": { "type": "string", "minLength": 1 },
         "direct_material_cost": { "$ref": "#/$defs/positive_money" },
         "conversion_cost": { "$ref": "#/$defs/money" },
         "capitalized_cost": { "$ref": "#/$defs/positive_money" },
         "output_quantity": { "$ref": "#/$defs/quantity" },
+        "completion_evidence_ref": { "type": "string", "minLength": 1 },
+        "completed_at": { "type": "string", "format": "date-time" },
         "journal_entry_ids": { "type": "array", "items": { "type": "string", "minLength": 1 } }
       }
     }
