@@ -92,3 +92,46 @@ def test_replicated_technology_requires_replication_evidence_and_economic_curren
     sample["evidence"] = {"independent_replications": 1, "references": ["study:1"]}
     sample["economics"]["currency"] = "USD"
     assert not list(validator.iter_errors(sample))
+
+
+def test_new_canonical_financial_schemas_accept_valid_records_and_reject_zero_amounts():
+    samples = {
+        "interfaces/capital_authorization.schema.json": {
+            "authorization_id": "auth-001", "proposal_id": "proposal-001",
+            "entity_id": "entity-001", "amount": "100.00", "currency": "USD",
+            "approved_by": "identity:finance", "approved_at": "2026-11-06T10:00:00Z",
+            "approval_event_id": "event-001", "approval_event_hash": "a" * 64,
+            "evidence_package_id": "evidence-001", "status": "ACTIVE",
+        },
+        "interfaces/payment_intent.schema.json": {
+            "payment_intent_id": "payment-001", "entity_id": "entity-001",
+            "beneficiary_id": "supplier-001", "amount": "100.00", "currency": "USD",
+            "purpose": "invoice settlement", "authorization_id": "auth-001",
+            "source_event_id": "event-002", "created_at": "2026-11-06T10:00:00Z",
+            "expires_at": "2026-11-07T10:00:00Z", "idempotency_key": "idem-key-001",
+            "status": "APPROVED", "evidence_ids": ["invoice:001"],
+        },
+        "interfaces/settlement_receipt.schema.json": {
+            "settlement_receipt_id": "settlement-001", "payment_intent_id": "payment-001",
+            "provider": "bank", "provider_reference": "bank-ref-001",
+            "payer_entity_id": "entity-001", "payee_id": "supplier-001",
+            "amount": "100.00", "currency": "USD", "settled_at": "2026-11-06T11:00:00Z",
+            "external_transaction_id": "bank-tx-001", "evidence_package_id": "evidence-002",
+            "source_event_id": "event-003", "status": "CONFIRMED",
+        },
+        "interfaces/accounting_snapshot.schema.json": {
+            "snapshot_id": "snapshot-001", "entity_id": "entity-001", "period_id": "2026-Q4",
+            "as_of": "2026-11-06T23:59:00Z", "known_at": "2026-11-07T00:00:00Z",
+            "functional_currency": "USD", "cash_balance": "100.00", "total_assets": "200.00",
+            "total_liabilities": "50.00", "equity": "150.00", "period_revenue": "80.00",
+            "period_expenses": "30.00", "journal_hash": "b" * 64,
+            "reconciliation_status": "VERIFIED", "evidence_ids": ["bank-statement:001"],
+        },
+    }
+    for schema_path, sample in samples.items():
+        validator = Draft202012Validator(load(schema_path), format_checker=FormatChecker())
+        assert not list(validator.iter_errors(sample)), schema_path
+        if "amount" in sample:
+            invalid = dict(sample)
+            invalid["amount"] = "0.00"
+            assert list(validator.iter_errors(invalid)), schema_path
