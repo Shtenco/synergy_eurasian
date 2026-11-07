@@ -758,3 +758,28 @@ def test_bank_reconciliation_excludes_backdated_entries_recorded_after_period_cl
     assert result["bank_closing_balance"] == "150"
     assert not result["fully_reconciled"]
     assert result["late_recorded_journal_lines"][0]["journal_line_ref"] == "late-backdated-cash:late-cash"
+
+
+def test_inventory_movement_cannot_be_posted_to_another_entity_or_second_journal():
+    ledger = InventoryLedger("USD", entity_id="co1")
+    receipt = ledger.receive("entity-receipt", "entity-lot", "steel", "factory",
+        Quantity("2", "kg"), Money("20", "USD"), date(2026, 11, 1), "receipt:entity")
+    wrong = Journal("USD", entity_id="co2")
+    wrong.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    wrong.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    with pytest.raises(ValueError, match="ownership mismatch"):
+        ledger.post_to_journal(receipt.movement_id, wrong, "inventory", "grni", "co2",
+            datetime(2026, 11, 2, tzinfo=timezone.utc))
+    assert wrong.entries == ()
+
+    right = Journal("USD", entity_id="co1")
+    right.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    right.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    ledger.post_to_journal(receipt.movement_id, right, "inventory", "grni", "co1",
+        datetime(2026, 11, 2, tzinfo=timezone.utc))
+    second = Journal("USD", entity_id="co1")
+    second.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    second.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    with pytest.raises(ValueError, match="already journalized"):
+        ledger.post_to_journal(receipt.movement_id, second, "inventory", "grni", "co1",
+            datetime(2026, 11, 2, tzinfo=timezone.utc))
