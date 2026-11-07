@@ -84,6 +84,7 @@ def test_cash_constrained_mode_blocks_production_without_liquidity():
     assert constrained["model_id"] == "SYNERGY_V6.6.3B_CASH_CONSTRAINED_NETWORK"
     assert sum(constrained["produced_by_sku"].values()) == pytest.approx(0.0)
     assert sum(constrained["sold_by_sku"].values()) == pytest.approx(0.0)
+    assert constrained["shipment_dispatch_audit"] == []
     assert sum(constrained["unmet_demand_by_sku"].values()) > sum(baseline["unmet_demand_by_sku"].values())
     assert abs(constrained["physical_balance_error"]) < 1e-7
     credit = constrained["credit_ledger"]
@@ -101,6 +102,8 @@ def test_funded_credit_mode_preserves_physical_path_and_reconciles_cash():
     })
     assert funded["produced_by_sku"] == pytest.approx(baseline["produced_by_sku"])
     assert funded["sold_by_sku"] == pytest.approx(baseline["sold_by_sku"])
+    assert funded["delivered_by_sku"] == pytest.approx(baseline["delivered_by_sku"])
+    assert funded["shipment_dispatch_audit"] == baseline["shipment_dispatch_audit"]
     assert abs(funded["physical_balance_error"]) < 1e-7
     credit = funded["credit_ledger"]
     assert abs(credit["cash_conservation_error"]) < 1e-6
