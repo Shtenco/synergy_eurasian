@@ -666,6 +666,150 @@ def build_liquidity_capped_reserve_contributions(
     return result
 
 
+def build_liquidity_capped_federation_contributions(
+    reserve_total: float,
+    initial_cash_by_cell: dict[str, float],
+    max_combined_contribution_fraction: float = 0.10,
+    scheme: str = "equal_all_members",
+    regional_contributions_by_cell: dict[str, float] | None = None,
+) -> dict[str, float]:
+    """Allocate a federation reserve globally within each member's remaining combined cap."""
+    cell_ids = {cell.cell_id for cell in CELLS}
+    if set(initial_cash_by_cell) != cell_ids:
+        raise ValueError("initial cash map must contain every known cell exactly once")
+    if scheme not in {"equal_all_members", "production_capacity_weighted"}:
+        raise ValueError("unsupported federation contribution scheme")
+    if (
+        isinstance(reserve_total, bool) or not isinstance(reserve_total, (int, float))
+        or not math.isfinite(float(reserve_total)) or reserve_total < 0
+    ):
+        raise ValueError("federation reserve total must be finite and non-negative")
+    if (
+        isinstance(max_combined_contribution_fraction, bool)
+        or not isinstance(max_combined_contribution_fraction, (int, float))
+        or not math.isfinite(float(max_combined_contribution_fraction))
+        or not 0.0 <= max_combined_contribution_fraction <= 1.0
+    ):
+        raise ValueError("combined contribution cap fraction must be finite and in [0, 1]")
+
+    cash: dict[str, float] = {}
+    for cell_id, amount in initial_cash_by_cell.items():
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(float(amount)) or amount < 0:
+            raise ValueError("member opening cash must be finite and non-negative")
+        cash[cell_id] = float(amount)
+
+    regional = {cell_id: 0.0 for cell_id in cell_ids}
+    if regional_contributions_by_cell is not None:
+        if set(regional_contributions_by_cell) != cell_ids:
+            raise ValueError("regional contribution map must contain every known cell exactly once")
+        for cell_id, amount in regional_contributions_by_cell.items():
+            if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(float(amount)) or amount < 0:
+                raise ValueError("regional contributions must be finite and non-negative")
+            regional[cell_id] = float(amount)
+
+    caps = {
+        cell_id: max(0.0, cash[cell_id] * float(max_combined_contribution_fraction) - regional[cell_id])
+        for cell_id in cell_ids
+    }
+    if any(regional[cell_id] > cash[cell_id] * max_combined_contribution_fraction + 1e-9 for cell_id in cell_ids):
+        raise ValueError("regional contributions already exceed the declared combined member cap")
+    if sum(caps.values()) + 1e-9 < float(reserve_total):
+        raise ValueError("remaining member liquidity caps cannot fund the federation reserve")
+
+    weights = {}
+    for cell in CELLS:
+        if scheme == "equal_all_members":
+            weights[cell.cell_id] = 1.0
+        else:
+            weights[cell.cell_id] = (
+                cell.capacity if cell.sector in {"primary", "processing", "manufacturing"} else 0.0
+            )
+    allocations = {cell_id: 0.0 for cell_id in cell_ids}
+    active = {cell_id for cell_id in cell_ids if weights[cell_id] > 0 and caps[cell_id] > 0}
+    remaining = float(reserve_total)
+    while remaining > 1e-10:
+        total_weight = sum(weights[cell_id] for cell_id in active)
+        if total_weight <= 0:
+            raise ValueError("no eligible weighted federation contributors remain")
+        saturated = []
+        for cell_id in sorted(active):
+            proposed = remaining * weights[cell_id] / total_weight
+            room = caps[cell_id] - allocations[cell_id]
+            if proposed >= room - 1e-12:
+                saturated.append(cell_id)
+        if not saturated:
+            for cell_id in active:
+                allocations[cell_id] += remaining * weights[cell_id] / total_weight
+            remaining = 0.0
+        else:
+            for cell_id in saturated:
+                room = max(0.0, caps[cell_id] - allocations[cell_id])
+                allocations[cell_id] += room
+                remaining -= room
+                active.remove(cell_id)
+
+    residual = float(reserve_total) - sum(allocations.values())
+    if abs(residual) > 1e-10:
+        candidates = [
+            cell_id for cell_id in cell_ids
+            if caps[cell_id] - allocations[cell_id] >= residual - 1e-12
+        ] if residual > 0 else [
+            cell_id for cell_id in cell_ids if allocations[cell_id] >= -residual - 1e-12
+        ]
+        if not candidates:
+            raise ArithmeticError("cannot reconcile federation reserve contribution allocation")
+        allocations[sorted(candidates)[-1]] += residual
+    return allocations
+
+
+def compare_liquidity_capped_federation_contributions(
+    seeds: Iterable[int],
+    initial_cash_by_cell: dict[str, float],
+    reserve_total: float = 20.0,
+    max_combined_contribution_fraction: float = 0.10,
+    scheme: str = "equal_all_members",
+    days: int = 45,
+    shock_regime: str = "severe",
+    base_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Paired federation reserve experiment under combined local/federal member caps."""
+    seed_list = list(seeds)
+    if not seed_list:
+        raise ValueError("at least one seed is required")
+    config = dict(base_config or {})
+    regional_map = config.get("regional_reserve_contributions_by_cell")
+    federal_map = build_liquidity_capped_federation_contributions(
+        reserve_total,
+        initial_cash_by_cell,
+        max_combined_contribution_fraction,
+        scheme,
+        regional_map,
+    )
+    config.update({
+        "initial_cash_by_cell": dict(initial_cash_by_cell),
+        "federation_pool_reserve_total": float(reserve_total),
+        "federation_reserve_contributions_by_cell": federal_map,
+    })
+    report = compare_financing_modes(seed_list, days, shock_regime, config)
+    return {
+        "model_id": "SYNERGY_V6.6.4I_LIQUIDITY_CAPPED_FEDERATION_RESERVE",
+        "days": days,
+        "shock_regime": shock_regime,
+        "seeds": seed_list,
+        "reserve_total": float(reserve_total),
+        "max_combined_contribution_fraction": float(max_combined_contribution_fraction),
+        "scheme": scheme,
+        "initial_cash_by_cell": dict(initial_cash_by_cell),
+        "regional_contributions_by_cell": regional_map or {cell.cell_id: 0.0 for cell in CELLS},
+        "federation_contributions_by_cell": federal_map,
+        "comparison": report,
+        "interpretation_guard": (
+            "Synthetic federation funding experiment. The combined cap limits reserve contributions "
+            "as a share of opening cash; it does not establish fairness, benefit or legal authority."
+        ),
+    }
+
+
 def compare_liquidity_capped_reserve_contributions(
     seeds: Iterable[int],
     initial_cash_by_cell: dict[str, float],
