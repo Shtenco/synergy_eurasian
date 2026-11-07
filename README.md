@@ -444,3 +444,7 @@ The loss-waterfall runner also executes deterministic targeted local and cross-r
 - [V6.6.4-F liquidity-capped reserve contributions](docs/76_SYNERGY_V6_6_4F_LIQUIDITY_CAPPED_RESERVE.md)
 
 The credit ledger supports heterogeneous opening cash by cell. A deterministic weighted water-filling allocator funds regional reserves without exceeding each member's configured fraction of opening cash; it rejects reserve targets that cannot be funded within those caps.
+
+- [V6.6.4-G regional reserve adequacy and sizing sensitivity](docs/77_SYNERGY_V6_6_4G_REGIONAL_RESERVE_ADEQUACY.md)
+
+A paired reserve-size grid now reports guarantee utilization, exhaustion, remaining reserve, seller losses, service level and defaults against the opening-liquidity cost of funding the reserve. CI sweeps five synthetic reserve sizes per region under a 10% member contribution cap.
