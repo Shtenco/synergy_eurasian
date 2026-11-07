@@ -416,3 +416,51 @@ def test_inbox_retains_publisher_envelope_for_later_signature_reverification(tmp
         )
     assert receiver.verify()  # Event content hash is intact; this alone cannot authenticate a publisher.
     assert not receiver.verify_inbox(verify_publisher)
+
+
+
+def test_retained_inbox_envelope_is_reverified_against_stored_identity(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "sender-retained.db"))
+    receiver = DurableEventStore(str(tmp_path / "receiver-retained.db"))
+    stored = sender.append(event(), now=utc())
+    claimed = sender.claim_outbox(now=utc())[0]
+    private_key, public_key = generate_ed25519_keypair()
+    registry = TrustedKeyRegistry()
+    registry.register_identity(FederationIdentity(
+        "org:retained", "tenant:retained", "ORGANIZATION"
+    ))
+    registry.register_key(TrustedSigningKey(
+        "org:retained", "tenant:retained", "key-1", ALGORITHM,
+        public_key, "2026-01-01T00:00:00+00:00",
+    ))
+    signed = sign_event(
+        stored, "org:retained", "tenant:retained", "key-1",
+        private_key, "2026-11-06T09:01:00+00:00",
+    )
+    message = {
+        "message_id": claimed.message_id,
+        "event_id": claimed.event_id,
+        "event_hash": claimed.event_hash,
+        "payload_json": claimed.payload_json,
+        "signed_envelope": signed.as_dict(),
+    }
+    authenticator = signed_event_authenticator(
+        registry, received_at="2026-11-06T09:02:00+00:00"
+    )
+    assert receiver.consume_inbox(
+        "consumer", message, lambda *_: None,
+        received_at=utc(9, 2), authenticator=authenticator,
+    )
+    assert receiver.verify_inbox(authenticator)
+    with sqlite3.connect(receiver.database_path) as db:
+        db.execute("DROP TRIGGER inbox_no_update")
+        row = db.execute(
+            "SELECT message_json FROM inbox WHERE consumer='consumer'"
+        ).fetchone()
+        tampered = json.loads(row[0])
+        tampered["event_id"] = "forged-event-id"
+        db.execute(
+            "UPDATE inbox SET message_json=? WHERE consumer='consumer'",
+            (json.dumps(tampered, sort_keys=True, separators=(",", ":")),),
+        )
+    assert not receiver.verify_inbox(authenticator)
