@@ -328,6 +328,8 @@ def execute_production_order(
         raise ValueError("Production completion evidence cannot post-date its recording time")
     completion_date = completion_instant.date()
 
+    if inventory.entity_id != order.entity_id or journal.entity_id != order.entity_id:
+        raise ValueError("Production inventory, journal and order must share one bound legal entity")
     if journal.functional_currency != inventory.functional_currency:
         raise ValueError("Production inventory and journal currencies must match")
     _account_map(journal, inventory_account_id, AccountType.ASSET, NormalBalance.DEBIT, "Inventory account")
@@ -528,7 +530,7 @@ def post_grni_receipt(
     po = matcher._orders.get(receipt.po_line_id)
     if po is None or matcher._receipts.get(receipt.receipt_id) != receipt:
         raise ValueError("Receipt must first be accepted by this GRNI matcher")
-    if po.entity_id != entity_id or journal.entity_id not in (None, entity_id):
+    if po.entity_id != entity_id or journal.entity_id != entity_id:
         raise ValueError("GRNI receipt entity mismatch")
     if po.unit_price.currency != journal.functional_currency:
         raise ValueError("GRNI reference posting requires PO currency equal to journal functional currency")
@@ -567,7 +569,7 @@ def post_grni_invoice(
     po = matcher._orders.get(invoice.po_line_id)
     if po is None or matcher._invoices.get(invoice.invoice_line_id) != invoice:
         raise ValueError("Invoice must first be accepted by this GRNI matcher")
-    if po.entity_id != entity_id or journal.entity_id not in (None, entity_id):
+    if po.entity_id != entity_id or journal.entity_id != entity_id:
         raise ValueError("GRNI invoice entity mismatch")
     if invoice.amount.currency != journal.functional_currency:
         raise ValueError("GRNI reference posting requires invoice currency equal to journal functional currency")
