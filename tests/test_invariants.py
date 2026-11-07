@@ -63,7 +63,7 @@ def test_eiiom_invariant_validation_rejects_tampered_solution_without_asserts():
 
     bad_allocation = copy.deepcopy(solution)
     bad_allocation["allocation"][0]["capex_bn_usd"] += 1.0
-    with pytest.raises(ValueError, match="stage .* budget"):
+    with pytest.raises(ValueError, match="Stage .* budget"):
         validate_invariants(config, bad_allocation)
 
     bad_escrow = copy.deepcopy(config)
