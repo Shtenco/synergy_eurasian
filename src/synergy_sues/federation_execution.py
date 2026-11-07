@@ -72,6 +72,10 @@ class _HandlerConnection:
     def total_changes(self) -> int:
         return self.__connection.total_changes
 
+    @property
+    def in_transaction(self) -> bool:
+        return self.__connection.in_transaction
+
 
 @dataclass(frozen=True)
 class ExecutionResult:
