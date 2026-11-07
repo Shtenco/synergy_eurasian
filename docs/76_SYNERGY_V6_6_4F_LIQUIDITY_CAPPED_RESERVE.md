@@ -36,3 +36,10 @@ The CLI option `--liquidity-capped-reserve` runs a deterministic synthetic cash 
 ## 4. Limits
 
 The heterogeneous cash fixture is synthetic and deterministic, not empirical data about firms or regions. A percentage of opening cash is only a transparent liquidity constraint; it is not a complete measure of ability to pay, risk, benefit received, wealth, or fairness. The allocator does not yet account for cash-flow volatility, essential operating reserves, debt seniority, or future liquidity needs. No legal contribution obligation is implied.
+
+
+## 5. CI smoke-sample observation
+
+CI ran three seeds for 20 days in the severe synthetic regime with 10 units of reserve per region and a 10% maximum contribution of each member's opening cash. The two-region total contribution was 20 units. In the mutual-credit mode, mean service level was 69.731%, mean defaults were 1.333 per run, mean guarantee payments were 6.725 units, and the maximum cash-conservation residual was zero. In hybrid mode, mean service level was 69.647%, mean defaults were 1.333, mean guarantee payments were 8.675, and the maximum cash-conservation residual was approximately 1.36×10⁻¹².
+
+These are smoke-test observations from a small synthetic sample, not estimates of real-world performance and not a comparison against an otherwise identical uncapped allocation. The key verified properties are that the requested reserve was funded, no member exceeded the 10% contribution cap, and cash remained conserved.
