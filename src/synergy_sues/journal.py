@@ -212,6 +212,8 @@ class Journal:
                 if entry.reversal_of in self._reversed or entry.reversal_of in pending_reversed:
                     raise ValueError("Journal entry has already been reversed")
                 original = self._entries[entry.reversal_of]
+                if entry.effective_date < original.effective_date:
+                    raise ValueError("Reversal effective_date cannot precede the original journal entry")
 
                 def reversal_signature(line: JournalLine):
                     return (
