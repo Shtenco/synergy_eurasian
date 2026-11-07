@@ -1028,3 +1028,17 @@ def test_journal_reversal_cannot_be_effective_before_original_entry():
             "dated-reversal-event", "dated-reversal-idem", "Backdated reversal",
         )
     assert len(journal.entries) == 1
+
+
+
+def test_journal_rejects_future_effective_entry_at_construction():
+    now = datetime(2026, 11, 6, 23, 30, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="cannot be later than recorded_at"):
+        JournalEntry(
+            "future-entry", date(2026, 11, 7), now, "USD",
+            (
+                JournalLine("future-dr", "cash", "DEBIT", Money("1", "USD"), Money("1", "USD"), "co1", "bank:future"),
+                JournalLine("future-cr", "revenue", "CREDIT", Money("1", "USD"), Money("1", "USD"), "co1", "sale:future"),
+            ),
+            "future-event", "future-idem", "Future effective entry",
+        )
