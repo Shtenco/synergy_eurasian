@@ -39,7 +39,7 @@ for case in report["sensitivity_reports"]:
 - Buyer and seller credit-limit rejection frequency.
 - Service level and unmet demand.
 - Defaulted cells and outstanding trade payables.
-- Bank debt and customer bad debt.
+- Bank debt, customer bad debt, regional guarantee reserve coverage and seller-side trade bad debt.
 - Physical and cash conservation residuals.
 
 A pool limit that never binds is not evidence that the pool is safe; it may simply be too generous for the tested horizon and scale. A limit that binds frequently may preserve solvency while causing excessive lost production. Both sides of the trade-off must be reported.
