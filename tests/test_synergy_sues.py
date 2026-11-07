@@ -669,7 +669,7 @@ def test_fifo_inventory_rejects_insufficient_stock_without_mutation_and_mixed_un
 
 
 def test_fifo_inventory_movements_post_to_balanced_journal():
-    ledger = InventoryLedger("USD")
+    ledger = InventoryLedger("USD", entity_id="co1")
     receipt = ledger.receive("r1", "lot-1", "components", "factory",
         Quantity("10", "unit"), Money("100", "USD"), date(2026, 11, 1), "receipt:components")
     issue = ledger.issue("i1", "components", "factory", Quantity("4", "unit"),
