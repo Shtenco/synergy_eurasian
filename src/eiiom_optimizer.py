@@ -410,6 +410,26 @@ def validate_invariants(config: dict, solution: dict, tol: float = 1e-5) -> None
         if capex_by_sector[sector] < float(config["policy_constraints"][key]) - tol:
             raise ValueError(f"Sector {sector} is below its configured minimum allocation")
 
+    recomputed_maps = {
+        "capex_by_stage": capex_by_stage,
+        "capex_by_country": capex_by_country,
+        "capex_by_sector": capex_by_sector,
+        "compute_mw_by_country": compute_by_country,
+        "dc_mw_by_country": dc_by_country,
+    }
+    for map_name, expected_map in recomputed_maps.items():
+        actual_map = solution.get(map_name)
+        if not isinstance(actual_map, dict):
+            raise ValueError(f"Solution metric {map_name} must be an object")
+        keys = set(actual_map) | set(expected_map)
+        for key in keys:
+            actual_value = actual_map.get(key, 0.0)
+            expected_value = expected_map.get(key, 0.0)
+            if (isinstance(actual_value, bool) or not isinstance(actual_value, (int, float))
+                    or not np.isfinite(actual_value)
+                    or abs(float(actual_value) - float(expected_value)) > tol):
+                raise ValueError(f"Solution map {map_name} does not reconcile for {key}")
+
     expected_metrics = {
         "total_capex_bn_usd": expected_total,
         "compute_it_mw": total_compute,
