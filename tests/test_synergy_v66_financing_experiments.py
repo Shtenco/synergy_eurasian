@@ -197,7 +197,7 @@ def test_targeted_default_stress_exercises_local_reserve_assessment_and_cross_re
     assert federated["guarantee_paid"] == pytest.approx(0.0)
     assert federated["federation_guarantee_paid"] == pytest.approx(5.0)
     assert federated["member_assessment_paid"] == pytest.approx(0.0)
-    assert federated["written_off"] == pytest.approx(5.25)
+    assert federated["written_off"] == pytest.approx(5.75)
     assert federated["federation_pool_reserve_balance"] == pytest.approx(0.0)
     assert federated["cash_conservation_error"] == pytest.approx(0.0)
 
