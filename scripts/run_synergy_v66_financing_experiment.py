@@ -270,6 +270,7 @@ def main() -> int:
                 "federation_reserve_total": federal_report["reserve_total"],
                 "federation_contribution_total": sum(federal_report["federation_contributions_by_cell"].values()),
                 "combined_contribution_cap_fraction": federal_report["max_combined_contribution_fraction"],
+                "minimum_post_contribution_cash": federal_report["minimum_post_contribution_cash"],
                 "service_level_mean": metrics["service_level"]["mean"],
                 "federation_guarantee_paid_mean": metrics["federation_pool_guarantee_paid"]["mean"],
                 "federation_reserve_remaining_mean": metrics["federation_pool_reserve_balance"]["mean"],
