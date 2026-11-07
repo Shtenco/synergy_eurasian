@@ -68,3 +68,6 @@ In this small fixture, the hybrid path exhausted the federation reserve while th
 The federation allocator accepts `minimum_post_contribution_cash`. It computes the combined member cap as the minimum of the declared fraction of opening cash and the amount above the absolute floor, then subtracts the member's already-funded regional contribution. A regional contribution that already breaches the combined floor causes rejection; it is not concealed by assigning zero federation contribution.
 
 The CI fixture uses a 75-unit synthetic minimum post-contribution cash floor. This is a mechanical test threshold, not a real-world liquidity recommendation or an estimate of working-capital requirements.
+
+
+The ledger also checks the absolute floor after combining both contribution maps. This independent guard prevents a manually constructed regional-plus-federation funding map from bypassing the allocator's feasibility checks; the configured floor is included in snapshots.
