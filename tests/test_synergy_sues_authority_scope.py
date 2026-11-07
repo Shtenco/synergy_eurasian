@@ -312,6 +312,11 @@ def test_scope_reservation_release_is_append_only_and_reuses_only_settled_headro
             scoped_engine.release_in_transaction(
                 db, "req:release-1", "bank:settlement-1"
             )
+        with pytest.raises(ValueError, match="does not match"):
+            scoped_engine.release_in_transaction(
+                db, "req:release-1", "bank:settlement-1",
+                settlement_verifier=lambda *_: False,
+            )
         scoped_engine.release_in_transaction(
             db, "req:release-1", "bank:settlement-1",
             settlement_verifier=verify_settlement,
