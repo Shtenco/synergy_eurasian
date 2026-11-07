@@ -148,9 +148,36 @@ class AuthorizedActionExecutor:
         handler: Callable[[sqlite3.Connection, SignedEventEnvelope, AuthorizationDecision], Any],
         received_at: datetime | str | None = None,
     ) -> ExecutionResult:
+        if isinstance(policy, FederationAuthorizationPolicy):
+            # Hold the same lock used by register_rule across authorization,
+            # handler effects and receipt commit. A concurrent in-memory policy
+            # mutation cannot invalidate the decision between check and commit.
+            with policy.execution_lock:
+                return self._execute_locked(
+                    request, approvals, policy, registry, handler, received_at
+                )
+        if not getattr(policy, "database_path", None):
+            raise ValueError("execution requires a lockable in-memory policy or versioned persistent policy store")
+        return self._execute_locked(
+            request, approvals, policy, registry, handler, received_at
+        )
+
+    def _execute_locked(
+        self,
+        request: SignedEventEnvelope,
+        approvals: Any,
+        policy: FederationAuthorizationPolicy,
+        registry: TrustedKeyRegistry,
+        handler: Callable[[sqlite3.Connection, SignedEventEnvelope, AuthorizationDecision], Any],
+        received_at: datetime | str | None = None,
+    ) -> ExecutionResult:
         if not callable(handler):
             raise ValueError("handler must be callable")
         decision = policy.authorize(request, approvals, registry, received_at)
+        if not isinstance(policy, FederationAuthorizationPolicy) and (
+            decision.policy_version is None or not decision.policy_hash
+        ):
+            raise ValueError("persistent execution policy must return versioned decision evidence")
         if not decision.allowed:
             return ExecutionResult(False, "DENIED", decision)
 
