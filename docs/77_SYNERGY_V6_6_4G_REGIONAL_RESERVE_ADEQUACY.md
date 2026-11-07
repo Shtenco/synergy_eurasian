@@ -15,7 +15,7 @@ The experiment reports:
 - service level and default counts;
 - maximum cash-conservation residual.
 
-The contribution scheme can be equal-member or production-capacity-weighted. An optional per-member opening-cash fraction cap uses the liquidity-capped allocator from V6.6.4-F. The experiment rejects a reserve level that cannot be funded within the declared contribution caps.
+The contribution scheme can be equal-member or production-capacity-weighted. A per-member opening-cash fraction cap and an absolute minimum post-contribution cash floor can be applied together. The effective cap is the lower of the percentage allowance and the amount above the floor. The `CreditLedger` independently checks combined local and federation contributions against the same floor; reserve sizing cannot rely on allocator-side validation alone. The experiment rejects a reserve level that cannot be funded within the declared contribution constraints.
 
 ## 2. Economic interpretation
 
@@ -59,3 +59,8 @@ These are three-seed synthetic observations, not statistically stable estimates,
 ## 4. Absolute member cash floor
 
 The reserve-size sensitivity accepts `minimum_post_contribution_cash` in addition to the optional fractional cap. Each tested reserve level must be funded without pushing any contributing cell below that nominal opening-cash floor. The CI fixture applies a 75-unit floor alongside the 10% contribution cap. This is a mechanical guardrail, not an estimate of operating liquidity or a recommended reserve level.
+
+
+## 6. Ledger-level floor enforcement
+
+The minimum post-contribution cash floor is passed through the reserve-sizing replay into the credit ledger. The ledger checks every member after subtracting both regional and federation contributions, then initializes the remaining member cash. This second-line validation protects direct ledger callers and future experiment code that may bypass the allocator. A failed floor check rejects initialization rather than silently reducing reserve funding or drawing a bank line.
