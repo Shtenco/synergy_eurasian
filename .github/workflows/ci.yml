@@ -118,3 +118,7 @@ jobs:
       - name: Run paired SYNERGY V6.6.3 financing stress experiment
         run: |
           python scripts/run_synergy_v66_financing_experiment.py --seed-start 2026 --seed-count 3 --days 20 --output outputs/synergy_v66_financing_experiment_ci.json --sensitivity --reserve-allocation --loss-waterfall --liquidity-capped-reserve --reserve-sizing --federation-liquidity-cap
+
+      - name: Run paired 100-cycle SYNERGY V6.6.4-O reserve survival experiment
+        run: |
+          python scripts/run_synergy_v664o_reserve_survival.py --seed-start 11 --seed-count 3 --cycles 100 --shock-regime severe --output outputs/synergy_v664o_reserve_survival_ci.json
