@@ -172,6 +172,7 @@ def main() -> int:
         for rule, allocation in reserve_allocation["reports_by_rule"].items():
             print(json.dumps({
                 "federation_reserve_allocation_rule": rule,
+                "priority_order": allocation["priority_order"],
                 "reserve_available": allocation["reserve_opening"],
                 "eligible_claim_total": allocation["eligible_claim_total"],
                 "allocated_total": allocation["allocated_total"],
