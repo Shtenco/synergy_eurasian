@@ -60,7 +60,10 @@ def test_grni_three_way_match_and_journal_clearance():
         SupplierInvoiceLine("inv-1", "po-1", Quantity("4", "kg"),
             Money("20", "USD"), date(2026, 11, 5), "supplier-invoice:1")
     )
-    post_grni_receipt(receipt, matcher, journal, "raw", "grni", "co1", NOW)
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("gr-1", "gr-1-lot", "steel", "warehouse",
+        Quantity("6", "kg"), Money("30", "USD"), date(2026, 11, 3), "warehouse:gr-1")
+    post_grni_receipt(receipt, matcher, inventory, journal, "raw", "grni", "co1", NOW)
     post_grni_invoice(invoice, matcher, journal, "grni", "ap", "co1", NOW)
 
     report = matcher.report("po-1")
@@ -386,3 +389,37 @@ def test_maintenance_depreciation_and_overhead_are_not_capitalized_without_polic
             )
         assert inventory.summary()["pools"][0]["quantity"] == "2"
         assert journal.entries == ()
+
+
+def test_grni_receipt_cannot_create_gl_inventory_without_matching_stock_movement():
+    journal = production_journal()
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-stock", "co1", "supplier", "steel",
+            Quantity("5", "kg"), Money("2", "USD"), date(2026, 11, 1), "po:stock")
+    ])
+    receipt = matcher.record_receipt(
+        GoodsReceipt("gr-stock", "po-stock", Quantity("2", "kg"),
+            date(2026, 11, 3), "warehouse:gr-stock")
+    )
+    inventory = InventoryLedger("USD", entity_id="co1")
+    with pytest.raises(ValueError, match="matching physical inventory movement"):
+        post_grni_receipt(receipt, matcher, inventory, journal, "raw", "grni", "co1", NOW)
+    assert journal.entries == ()
+
+
+def test_grni_receipt_cannot_be_posted_twice_through_inventory_bridge():
+    journal = production_journal()
+    matcher = GRNIMatcher([
+        PurchaseOrderLine("po-dup", "co1", "supplier", "steel",
+            Quantity("5", "kg"), Money("2", "USD"), date(2026, 11, 1), "po:dup")
+    ])
+    receipt = matcher.record_receipt(
+        GoodsReceipt("gr-dup", "po-dup", Quantity("2", "kg"),
+            date(2026, 11, 3), "warehouse:gr-dup")
+    )
+    inventory = InventoryLedger("USD", entity_id="co1")
+    inventory.receive("gr-dup", "gr-dup-lot", "steel", "warehouse",
+        Quantity("2", "kg"), Money("4", "USD"), date(2026, 11, 3), "warehouse:gr-dup")
+    post_grni_receipt(receipt, matcher, inventory, journal, "raw", "grni", "co1", NOW)
+    with pytest.raises(ValueError, match="already journalized"):
+        post_grni_receipt(receipt, matcher, inventory, journal, "raw", "grni", "co1", NOW)
