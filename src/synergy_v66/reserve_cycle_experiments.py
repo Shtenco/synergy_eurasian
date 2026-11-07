@@ -114,6 +114,16 @@ def _run_one_path(
             day_paid += float(claim["paid"])
             day_uncovered += float(claim["uncovered"])
 
+        post_claim_snapshot = ledger.snapshot()
+        reserves_after_claim = (
+            float(post_claim_snapshot["regional_pool_reserve_by_region"]["WEST"]),
+            float(post_claim_snapshot["regional_pool_reserve_by_region"]["EAST"]),
+            float(post_claim_snapshot["federation_pool_reserve_balance"]),
+        )
+        max_cash_conservation_error = max(
+            max_cash_conservation_error,
+            abs(float(post_claim_snapshot["cash_conservation_error"])),
+        )
         day_replenished = 0.0
         day_recovery_requested = 0.0
         day_recovery_unfunded = 0.0
@@ -166,11 +176,6 @@ def _run_one_path(
         max_period_cap_excess = max(
             max_period_cap_excess,
             max((period_used[key] - period_caps[key] for key in opening_cash), default=0.0),
-        )
-        reserves_after_claim = (
-            float(snapshot["regional_pool_reserve_by_region"]["WEST"]),
-            float(snapshot["regional_pool_reserve_by_region"]["EAST"]),
-            float(snapshot["federation_pool_reserve_balance"]),
         )
         if any(value <= EPS for value in reserves_after_claim):
             reserve_exhaustion_cycles += 1
