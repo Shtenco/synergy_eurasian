@@ -248,3 +248,31 @@ def test_conflicting_duplicate_approval_event_id_is_rejected(tmp_path):
     with pytest.raises(ValueError, match="different event hash"):
         policy().authorize(request, [approval, conflicting], registry,
             "2026-11-06T10:02:00+00:00")
+
+
+
+def test_authorization_uses_the_verified_request_snapshot(tmp_path):
+    registry, keys = setup_registry()
+    request = signed_event(
+        tmp_path, "org:requester", "tenant:one", "key-1",
+        keys["org:requester"], "AUTHORIZATION_REQUEST", request_payload(), "snapshot-request",
+    )
+    approval = signed_event(
+        tmp_path, "org:approver", "tenant:one", "key-1",
+        keys["org:approver"], "AUTHORIZATION_APPROVAL", approval_payload(request),
+        "snapshot-approval", "2026-11-06T10:01:00+00:00",
+    )
+    real_verify = registry.verify
+
+    def mutate_caller_owned_request_after_verification(envelope, received_at=None):
+        identity = real_verify(envelope, received_at)
+        request.event["payload"]["action"] = "DELETE_ALL"
+        return identity
+
+    registry.verify = mutate_caller_owned_request_after_verification
+    decision = policy().authorize(
+        request, [approval], registry, "2026-11-06T10:02:00+00:00",
+    )
+    assert decision.allowed is True
+    assert decision.action == "JOURNAL_POST"
+    assert request.event["payload"]["action"] == "DELETE_ALL"
