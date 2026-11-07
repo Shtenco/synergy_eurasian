@@ -97,11 +97,91 @@ TARGETS = {
 }
 
 
+def _finite_scalar(value: object, field: str, minimum: float | None = None,
+                   maximum: float | None = None) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field} must be a numeric JSON value")
+    result = float(value)
+    if not np.isfinite(result):
+        raise ValueError(f"{field} must be finite")
+    if minimum is not None and result < minimum:
+        raise ValueError(f"{field} must be >= {minimum}")
+    if maximum is not None and result > maximum:
+        raise ValueError(f"{field} must be <= {maximum}")
+    return result
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"Non-standard JSON numeric constant is forbidden: {value}")
+
+
 def load_config(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(
+        path.read_text(encoding="utf-8"), parse_constant=_reject_json_constant
+    )
+
+
+def _validate_config(config: dict) -> None:
+    if not isinstance(config, dict):
+        raise ValueError("EIIOM config must be an object")
+    stages = config.get("stages")
+    if not isinstance(stages, dict) or tuple(stages) != tuple(TARGETS):
+        raise ValueError("EIIOM stages must be exactly the ordered 2026-30, 2031-40, 2041-45 milestones")
+    for stage, row in stages.items():
+        if not isinstance(row, dict):
+            raise ValueError(f"Stage {stage} must be an object")
+        _finite_scalar(row.get("budget_bn_usd"), f"stages.{stage}.budget_bn_usd", 0.0)
+        if _finite_scalar(row.get("budget_bn_usd"), f"stages.{stage}.budget_bn_usd") <= 0:
+            raise ValueError(f"Stage {stage} budget must be positive")
+        _finite_scalar(row.get("time_weight"), f"stages.{stage}.time_weight", 0.0)
+
+    yields = config.get("annual_gva_equivalent_yield")
+    if not isinstance(yields, dict) or set(yields) != set(SECTORS):
+        raise ValueError("annual_gva_equivalent_yield must define every modeled sector exactly")
+    for sector, value in yields.items():
+        _finite_scalar(value, f"annual_gva_equivalent_yield.{sector}", 0.0)
+
+    tech = config.get("technology_curves")
+    required_curves = ("compute_it_mw_per_bn", "dc_shell_mw_per_bn", "power_mw_per_bn", "grid_mw_per_bn")
+    if not isinstance(tech, dict):
+        raise ValueError("technology_curves must be an object")
+    for curve in required_curves:
+        values = tech.get(curve)
+        if not isinstance(values, dict) or set(values) != set(stages):
+            raise ValueError(f"technology_curves.{curve} must define every stage exactly")
+        for stage, value in values.items():
+            _finite_scalar(value, f"technology_curves.{curve}.{stage}", 0.0)
+    _finite_scalar(tech.get("power_overhead_multiplier"), "power_overhead_multiplier", 0.0)
+
+    headroom = config.get("existing_headroom_mw")
+    if not isinstance(headroom, dict):
+        raise ValueError("existing_headroom_mw must be an object")
+    for resource in ("power", "grid"):
+        values = headroom.get(resource)
+        if not isinstance(values, dict) or set(values) != set(COUNTRIES):
+            raise ValueError(f"existing_headroom_mw.{resource} must define every country exactly")
+        for country, value in values.items():
+            _finite_scalar(value, f"existing_headroom_mw.{resource}.{country}", 0.0)
+
+    policy = config.get("policy_constraints")
+    if not isinstance(policy, dict):
+        raise ValueError("policy_constraints must be an object")
+    for key in ("max_country_compute_share", "max_country_dc_share"):
+        _finite_scalar(policy.get(key), f"policy_constraints.{key}", 0.0, 1.0)
+    for key in (
+        "minimum_stem_bn", "minimum_food_processing_bn", "minimum_water_irrigation_bn",
+        "minimum_logistics_bn", "minimum_advanced_materials_bn", "minimum_mineral_refining_bn",
+        "minimum_construction_tech_bn", "minimum_agro_genomics_bn", "minimum_seed_production_bn",
+    ):
+        _finite_scalar(policy.get(key), f"policy_constraints.{key}", 0.0)
+
+    escrow = config.get("productive_escrow")
+    if not isinstance(escrow, dict) or escrow.get("implemented_in_this_repo") is not False:
+        raise ValueError("Productive escrow must remain explicitly disabled in this repository")
 
 
 def solve(config: dict) -> dict:
+    _validate_config(config)
     stages = list(config["stages"])
     yields = config["annual_gva_equivalent_yield"]
     tech = config["technology_curves"]
@@ -252,6 +332,7 @@ def solve(config: dict) -> dict:
 
 def validate_invariants(config: dict, solution: dict, tol: float = 1e-5) -> None:
     """Independently re-check the returned allocation; never rely on assert."""
+    _validate_config(config)
     if (isinstance(tol, bool) or not isinstance(tol, (int, float))
             or not np.isfinite(tol) or tol <= 0 or tol > 1e-3):
         raise ValueError("Invariant tolerance must be finite, positive and no greater than 1e-3")
