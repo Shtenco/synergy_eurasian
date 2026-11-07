@@ -19,6 +19,8 @@ def test_financing_modes_share_paired_environment_and_preserve_invariants():
         for row in mode_rows:
             assert row["physical_balance_error"] < 1e-7
             assert row["cash_conservation_error"] < 1e-6
+            assert row["regional_pool_net_position_error"] < 1e-7
+            assert row["regional_pool_utilization_max"] <= 1.0 + 1e-9
             assert 0.0 <= row["service_level"] <= 1.0
             assert row["defaulted_cells"] >= 0.0
     assert set(report["summary"]) == {
@@ -63,3 +65,4 @@ def test_multi_regime_runner_covers_all_shock_regimes_with_paired_paths():
             for row in rows:
                 assert row["physical_balance_error"] < 1e-7
                 assert row["cash_conservation_error"] < 1e-6
+                assert row["regional_pool_net_position_error"] < 1e-7
