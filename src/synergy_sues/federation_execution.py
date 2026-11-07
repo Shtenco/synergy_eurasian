@@ -369,7 +369,18 @@ class AuthorizedActionExecutor:
                             or _canonical(approvals_document).decode("utf-8") != row["approval_envelopes_json"]
                             or not isinstance(approvals_document, list)):
                         return False
+                    decision_document = json.loads(row["decision_json"])
                     signed_request = SignedEventEnvelope(**request_document)
+                    if (
+                        decision_document.get("request_event_id") != row["request_event_id"]
+                        or decision_document.get("request_event_hash") != row["request_event_hash"]
+                        or decision_document.get("action") != row["action"]
+                        or decision_document.get("resource_type") != row["resource_type"]
+                        or decision_document.get("resource_id") != row["resource_id"]
+                        or decision_document.get("requester_identity_id") != row["requester_identity_id"]
+                        or decision_document.get("tenant_id") != signed_request.tenant_id
+                    ):
+                        return False
                     if (_event_hash(signed_request.event) != row["request_event_hash"]
                             or signed_request.event["event_id"] != row["request_event_id"]
                             or signed_request.identity_id != row["requester_identity_id"]
