@@ -88,6 +88,8 @@ def _run_one_path(
     total_recovery_requested = 0.0
     total_recovery_unfunded = 0.0
     reserve_exhaustion_cycles = 0
+    regional_reserve_exhaustion_cycles = 0
+    federation_reserve_exhaustion_cycles = 0
     cycles_at_target_after_recovery = 0
     cash_floor_breach_count = 0
     max_cash_conservation_error = 0.0
@@ -177,8 +179,14 @@ def _run_one_path(
             max_period_cap_excess,
             max((period_used[key] - period_caps[key] for key in opening_cash), default=0.0),
         )
-        if any(value <= EPS for value in reserves_after_claim):
+        regional_exhausted = any(value <= EPS for value in reserves_after_claim[:2])
+        federation_exhausted = reserves_after_claim[2] <= EPS
+        if regional_exhausted or federation_exhausted:
             reserve_exhaustion_cycles += 1
+        if regional_exhausted:
+            regional_reserve_exhaustion_cycles += 1
+        if federation_exhausted:
+            federation_reserve_exhaustion_cycles += 1
         if (
             all(abs(snapshot["regional_pool_reserve_by_region"][region] - REGIONAL_TARGET) <= EPS for region in REGIONS)
             and abs(snapshot["federation_pool_reserve_balance"] - FEDERATION_TARGET) <= EPS
@@ -233,6 +241,8 @@ def _run_one_path(
             if total_recovery_requested > EPS else 1.0
         ),
         "reserve_exhaustion_cycles": reserve_exhaustion_cycles,
+        "regional_reserve_exhaustion_cycles": regional_reserve_exhaustion_cycles,
+        "federation_reserve_exhaustion_cycles": federation_reserve_exhaustion_cycles,
         "cycles_at_target_after_recovery": cycles_at_target_after_recovery,
         "cash_floor_breach_count": cash_floor_breach_count,
         "minimum_final_member_cash": min(final_cash),
@@ -294,6 +304,8 @@ def run_paired_reserve_recovery_experiment(
         "total_replenished",
         "total_recovery_unfunded",
         "reserve_exhaustion_cycles",
+        "regional_reserve_exhaustion_cycles",
+        "federation_reserve_exhaustion_cycles",
         "cycles_at_target_after_recovery",
         "cash_floor_breach_count",
         "minimum_final_member_cash",
