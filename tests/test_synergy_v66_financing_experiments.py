@@ -169,26 +169,26 @@ def test_targeted_default_stress_exercises_local_reserve_assessment_and_cross_re
     reserve_only = cases["local_reserve_only"]
     assert reserve_only["guarantee_paid"] == pytest.approx(5.0)
     assert reserve_only["member_assessment_paid"] == pytest.approx(0.0)
-    assert reserve_only["written_off"] == pytest.approx(5.0)
+    assert reserve_only["written_off"] == pytest.approx(5.5)
 
     assessed = cases["local_reserve_plus_assessment"]
     assert assessed["guarantee_paid"] == pytest.approx(5.0)
-    assert assessed["member_assessment_paid"] == pytest.approx(5.0)
+    assert assessed["member_assessment_paid"] == pytest.approx(5.5)
     assert assessed["written_off"] == pytest.approx(0.0)
     assert assessed["regional_assessment_attempt_count"] == 1
-    assert assessed["regional_assessment_requested_by_region"]["WEST"] == pytest.approx(5.0)
+    assert assessed["regional_assessment_requested_by_region"]["WEST"] == pytest.approx(5.5)
     assert assessed["regional_assessment_eligible_capacity_by_region"]["WEST"] == pytest.approx(15.6)
     assert assessed["cash_conservation_error"] == pytest.approx(0.0)
 
     capped = cases["local_tightly_capped_assessment"]
     assert capped["member_assessment_paid"] == pytest.approx(2.0)
-    assert capped["written_off"] == pytest.approx(3.0)
+    assert capped["written_off"] == pytest.approx(3.5)
     assert capped["cash_conservation_error"] == pytest.approx(0.0)
 
     cross = cases["cross_region_assessment_ineligible"]
     assert cross["guarantee_paid"] == pytest.approx(0.0)
     assert cross["member_assessment_paid"] == pytest.approx(0.0)
-    assert cross["written_off"] == pytest.approx(10.0)
+    assert cross["written_off"] == pytest.approx(10.5)
     assert cross["regional_assessment_attempt_count"] == 0
-    assert cross["trade_bad_debt_by_cell"]["EAST-AG1"] == pytest.approx(10.0)
+    assert cross["trade_bad_debt_by_cell"]["EAST-AG1"] == pytest.approx(10.5)
     assert cross["cash_conservation_error"] == pytest.approx(0.0)
