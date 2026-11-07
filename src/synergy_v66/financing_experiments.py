@@ -912,6 +912,7 @@ def compare_liquidity_capped_federation_contributions(
         "initial_cash_by_cell": dict(initial_cash_by_cell),
         "federation_pool_reserve_total": float(reserve_total),
         "federation_reserve_contributions_by_cell": federal_map,
+        "minimum_post_contribution_cash": float(minimum_post_contribution_cash),
     })
     report = compare_financing_modes(seed_list, days, shock_regime, config)
     return {
@@ -958,6 +959,7 @@ def compare_liquidity_capped_reserve_contributions(
         "initial_cash_by_cell": dict(initial_cash_by_cell),
         "regional_pool_reserve_per_region": float(reserve_per_region),
         "regional_reserve_contributions_by_cell": contributions,
+        "minimum_post_contribution_cash": float(minimum_post_contribution_cash),
     })
     report = compare_financing_modes(seed_list, days, shock_regime, config)
     return {
@@ -1045,6 +1047,7 @@ def compare_regional_reserve_size_sensitivities(
         config = dict(config_base)
         config["regional_pool_reserve_per_region"] = float(level)
         config["regional_reserve_contributions_by_cell"] = contributions
+        config["minimum_post_contribution_cash"] = float(minimum_post_contribution_cash)
         comparison = compare_financing_modes(seed_list, days, shock_regime, config)
         mode_diagnostics = {}
         for mode in ("mutual_credit", "hybrid"):
