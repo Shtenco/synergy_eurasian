@@ -28,6 +28,9 @@ def test_100_invoice_cohort_uses_real_default_waterfall_and_reconciles_claims():
     assert row["local_guarantee_paid"] > 0
     assert row["federation_guarantee_paid"] > 0
     assert row["claim_reconciliation_error"] <= 1e-8
+    assert row["seller_bad_debt_reconciliation_error"] <= 1e-8
+    assert row["seller_trade_bad_debt_total"] == pytest.approx(row["total_claim_uncovered"])
+    assert row["external_supplier_bad_debt"] == pytest.approx(0.0)
     assert row["total_claim_requested"] == pytest.approx(
         row["total_claim_paid"] + row["total_claim_uncovered"]
     )
