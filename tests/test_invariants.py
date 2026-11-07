@@ -82,3 +82,27 @@ def test_eiiom_validator_rejects_unreasonably_large_tolerance():
     solution = solve(config)
     with pytest.raises(ValueError, match="no greater than 1e-3"):
         validate_invariants(config, solution, tol=1e9)
+
+
+
+def test_eiiom_rejects_nonstandard_json_constants_and_malformed_model_contracts(tmp_path):
+    bad_json = tmp_path / "nan.json"
+    bad_json.write_text('{"value": NaN}', encoding="utf-8")
+    with pytest.raises(ValueError, match="Non-standard JSON"):
+        load_config(bad_json)
+
+    config = load_config(ROOT / "config" / "base_scenario.json")
+    bad_budget = copy.deepcopy(config)
+    bad_budget["stages"]["2026-30"]["budget_bn_usd"] = float("nan")
+    with pytest.raises(ValueError, match="must be finite"):
+        solve(bad_budget)
+
+    bad_yields = copy.deepcopy(config)
+    del bad_yields["annual_gva_equivalent_yield"]["Compute"]
+    with pytest.raises(ValueError, match="define every modeled sector"):
+        solve(bad_yields)
+
+    bad_escrow = copy.deepcopy(config)
+    bad_escrow["productive_escrow"]["implemented_in_this_repo"] = True
+    with pytest.raises(ValueError, match="must remain explicitly disabled"):
+        solve(bad_escrow)
