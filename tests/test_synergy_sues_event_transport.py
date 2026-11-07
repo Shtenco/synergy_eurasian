@@ -359,6 +359,7 @@ def test_inbox_authenticates_signed_publisher_with_trusted_key_registry(tmp_path
         received_at=utc(9, 2), authenticator=authenticator,
     )
     assert applied == [stored.event_id]
+    assert receiver.verify_inbox(authenticator)
 
     mismatched_event = {
         **signed.event,
