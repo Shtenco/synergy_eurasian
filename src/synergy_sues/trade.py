@@ -213,8 +213,20 @@ class TradeSubledger:
         expected_ap_delta = Decimal("0")
         document_functional_amounts: dict[str, Money] = {}
 
-        def functional(amount: Money, source_ref: str):
+        def functional(amount: Money, source_ref: str, effective_date: date):
             rate_ref = fx_refs.get(source_ref)
+            if amount.currency != journal.functional_currency:
+                rate = journal._fx_rates.get(rate_ref or "")
+                if rate is None:
+                    raise ValueError(f"Unknown FX rate reference: {rate_ref}")
+                rate_date = rate.observed_at.astimezone(timezone.utc).date()
+                if rate_date > effective_date:
+                    raise ValueError("FX rate observation cannot post-date the trade event")
+                age_days = (effective_date - rate_date).days
+                if age_days > journal.max_fx_rate_age_days:
+                    raise ValueError(
+                        f"FX rate is stale by {age_days} days; maximum allowed is {journal.max_fx_rate_age_days}"
+                    )
             return journal.functional_value(amount, rate_ref), rate_ref
 
         for document in sorted(self.documents, key=lambda row: (row.issue_date, row.document_id)):
@@ -228,7 +240,7 @@ class TradeSubledger:
             else:
                 debit_account, credit_account = accounts.purchase_account_id, accounts.payable_account_id
                 debit_side, credit_side = PostingSide.DEBIT, PostingSide.CREDIT
-            functional_amount, fx_ref = functional(document.original_amount, document.source_ref)
+            functional_amount, fx_ref = functional(document.original_amount, document.source_ref, document.issue_date)
             document_functional_amounts[document.document_id] = functional_amount
             if document.side == TradeSide.RECEIVABLE:
                 expected_ar_delta += functional_amount.amount
@@ -284,7 +296,7 @@ class TradeSubledger:
             require_account(settlement.cash_account_id, AccountType.ASSET, NormalBalance.DEBIT)
             if settlement.cash_account_id in configured_accounts:
                 raise ValueError("Settlement cash account must be distinct from trade and FX control accounts")
-            cash_functional, cash_fx_ref = functional(settlement.amount, settlement.source_ref)
+            cash_functional, cash_fx_ref = functional(settlement.amount, settlement.source_ref, settlement.settlement_date)
             carrying_amount = Money(
                 settlement_carrying[settlement.settlement_id], journal.functional_currency
             )
