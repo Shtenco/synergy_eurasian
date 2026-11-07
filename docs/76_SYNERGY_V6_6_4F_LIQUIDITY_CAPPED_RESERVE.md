@@ -43,3 +43,12 @@ The heterogeneous cash fixture is synthetic and deterministic, not empirical dat
 CI ran three seeds for 20 days in the severe synthetic regime with 10 units of reserve per region and a 10% maximum contribution of each member's opening cash. The two-region total contribution was 20 units. In the mutual-credit mode, mean service level was 69.731%, mean defaults were 1.333 per run, mean guarantee payments were 6.725 units, and the maximum cash-conservation residual was zero. In hybrid mode, mean service level was 69.647%, mean defaults were 1.333, mean guarantee payments were 8.675, and the maximum cash-conservation residual was approximately 1.36×10⁻¹².
 
 These are smoke-test observations from a small synthetic sample, not estimates of real-world performance and not a comparison against an otherwise identical uncapped allocation. The key verified properties are that the requested reserve was funded, no member exceeded the 10% contribution cap, and cash remained conserved.
+
+
+## 4. Absolute post-contribution liquidity floor
+
+The allocator also accepts `minimum_post_contribution_cash`. For each member, the maximum contribution is the smaller of the fractional cap and the amount above the absolute floor:
+
+`cap_i = min(alpha * opening_cash_i, max(0, opening_cash_i - minimum_post_contribution_cash))`.
+
+If the reserve target cannot be met without violating either constraint, allocation fails. The floor is a nominal synthetic cash constraint, not a working-capital model: production cycles, payroll, supplier obligations, seasonal cash needs and regional cost differences are not yet calibrated. CI uses a 75-unit synthetic floor in its liquidity-capped reserve scenarios.
