@@ -207,7 +207,7 @@ class FederationAuthorizationPolicy:
             return AuthorizationDecision(False, "insufficient_approvals", request_id,
                 requester.identity_id, tuple(sorted(rule.rule_id for rule in allows)),
                 tuple(sorted(verified_approvals)),
-                tuple(sorted(set(verified_approvals.values()))))
+                tuple(sorted(set(verified_approvals.values()))), **decision_context)
         # Prefer the narrowest resource scope; rule IDs provide deterministic tie-break.
         eligible.sort(key=lambda item: (item[0].resource_id is None, item[0].rule_id))
         selected, selected_approvals = eligible[0]
