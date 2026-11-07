@@ -49,6 +49,7 @@ class PayableInvoice:
     issued_day: int
     status: str = "open"
     guarantee_paid: float = 0.0
+    member_assessment_paid: float = 0.0
     written_off: float = 0.0
 
 
@@ -79,6 +80,8 @@ class CreditLedger:
         regional_pool_limit_per_region: float | None = None,
         regional_pool_reserve_per_region: float = 0.0,
         regional_reserve_contributions_by_cell: dict[str, float] | None = None,
+        regional_assessment_rate: float = 0.0,
+        regional_assessment_limit_per_cell: float | None = None,
         regional_member_debit_limit_per_cell: float | None = None,
         regional_member_credit_limit_per_cell: float | None = None,
         grace_days: int = 2,
@@ -107,6 +110,14 @@ class CreditLedger:
             raise ValueError("regional pool and member limits must be finite and >= 0")
         if not math.isfinite(float(regional_pool_reserve_per_region)) or regional_pool_reserve_per_region < 0:
             raise ValueError("regional_pool_reserve_per_region must be finite and >= 0")
+        if not math.isfinite(float(regional_assessment_rate)) or not 0.0 <= regional_assessment_rate <= 1.0:
+            raise ValueError("regional_assessment_rate must be between 0 and 1")
+        if regional_assessment_limit_per_cell is not None and (
+            isinstance(regional_assessment_limit_per_cell, bool)
+            or not math.isfinite(float(regional_assessment_limit_per_cell))
+            or regional_assessment_limit_per_cell < 0
+        ):
+            raise ValueError("regional_assessment_limit_per_cell must be finite and >= 0")
         cells_per_region = {r: sum(c.region == r for c in CELLS) for r in REGIONS}
         if regional_reserve_contributions_by_cell is None:
             reserve_contributions = {
@@ -173,6 +184,13 @@ class CreditLedger:
             if regional_member_credit_limit_per_cell is not None else None
         )
         self.regional_reserve_contributions_by_cell = dict(reserve_contributions)
+        self.regional_assessment_rate = float(regional_assessment_rate)
+        self.regional_assessment_limit_per_cell = (
+            float(regional_assessment_limit_per_cell)
+            if regional_assessment_limit_per_cell is not None else None
+        )
+        self.regional_assessment_paid_by_region = {r: 0.0 for r in REGIONS}
+        self.regional_assessment_contributed_by_cell = {cell.cell_id: 0.0 for cell in CELLS}
         self.regional_pool_reserve_initial_by_region = {
             r: float(regional_pool_reserve_per_region) for r in REGIONS
         }
@@ -405,6 +423,60 @@ class CreditLedger:
         self.events.append({"day": day, "type": "customer_invoice_issued", "invoice_id": invoice_id, "seller": seller, "amount": float(amount), "due_day": int(due_day)})
         return {"authorized": True, "reason": None, "invoice_id": invoice_id}
 
+    def _assess_regional_members(
+        self,
+        region: str,
+        buyer_id: str,
+        seller_id: str,
+        amount: float,
+        day: int,
+        invoice_id: str,
+    ) -> float:
+        """Collect a capped, cash-funded pro-rata assessment from other solvent members."""
+        if amount <= EPS or self.regional_assessment_rate <= EPS:
+            return 0.0
+        capacities: dict[str, float] = {}
+        for cell in CELLS:
+            if cell.region != region or cell.cell_id in {buyer_id, seller_id}:
+                continue
+            account = self.accounts[cell.cell_id]
+            if account.defaulted:
+                continue
+            capacity = account.cash * self.regional_assessment_rate
+            if self.regional_assessment_limit_per_cell is not None:
+                capacity = min(capacity, self.regional_assessment_limit_per_cell)
+            if capacity > EPS:
+                capacities[cell.cell_id] = capacity
+        total_capacity = sum(capacities.values())
+        if total_capacity <= EPS:
+            return 0.0
+
+        target = min(amount, total_capacity)
+        paid_total = 0.0
+        remaining_target = target
+        ordered = sorted(capacities)
+        for index, cell_id in enumerate(ordered):
+            capacity = capacities[cell_id]
+            if index == len(ordered) - 1:
+                payment = min(capacity, remaining_target)
+            else:
+                payment = min(capacity, target * capacity / total_capacity)
+            if payment <= EPS:
+                continue
+            self.accounts[cell_id].cash -= payment
+            self.accounts[seller_id].cash += payment
+            self.regional_assessment_contributed_by_cell[cell_id] += payment
+            self.regional_assessment_paid_by_region[region] += payment
+            paid_total += payment
+            remaining_target -= payment
+            self.events.append({
+                "day": day, "type": "regional_member_assessment_paid",
+                "invoice_id": invoice_id, "region": region,
+                "contributor": cell_id, "seller": seller_id,
+                "amount": payment,
+            })
+        return paid_total
+
     def _resolve_payable_default(self, invoice: PayableInvoice, day: int) -> None:
         """Resolve a matured default: use local reserve first, then write off residual."""
         buyer = self.accounts[invoice.buyer]
@@ -435,18 +507,31 @@ class CreditLedger:
                 })
 
         uncovered = max(0.0, remaining - guarantee)
+        assessment_paid = 0.0
+        if same_region and seller is not None and uncovered > EPS:
+            assessment_paid = self._assess_regional_members(
+                CELL_BY_ID[invoice.buyer].region,
+                invoice.buyer,
+                invoice.seller,
+                uncovered,
+                day,
+                invoice.invoice_id,
+            )
+        residual_loss = max(0.0, uncovered - assessment_paid)
+
         buyer.trade_payable -= remaining
         if seller is not None:
             seller.trade_receivable -= remaining
             if same_region:
                 buyer.regional_credit_balance += remaining
                 seller.regional_credit_balance -= remaining
-            self.trade_bad_debt_by_cell[invoice.seller] += uncovered
+            self.trade_bad_debt_by_cell[invoice.seller] += residual_loss
         else:
-            self.external_supplier_bad_debt += uncovered
+            self.external_supplier_bad_debt += residual_loss
 
         invoice.guarantee_paid += guarantee
-        invoice.written_off += uncovered
+        invoice.member_assessment_paid += assessment_paid
+        invoice.written_off += residual_loss
         invoice.remaining = 0.0
         invoice.status = "defaulted"
         buyer.defaulted = True
@@ -454,7 +539,9 @@ class CreditLedger:
             "day": day, "type": "default_resolution",
             "cell_id": invoice.buyer, "invoice_id": invoice.invoice_id,
             "remaining_before_resolution": remaining,
-            "guarantee_paid": guarantee, "written_off": uncovered,
+            "guarantee_paid": guarantee,
+            "member_assessment_paid": assessment_paid,
+            "written_off": residual_loss,
         })
 
     def _resolve_buyer_default(self, buyer_id: str, day: int) -> None:
@@ -552,6 +639,10 @@ class CreditLedger:
             },
             "customer_bad_debt": self.customer_bad_debt,
             "trade_bad_debt_by_cell": dict(self.trade_bad_debt_by_cell),
+            "regional_assessment_rate": self.regional_assessment_rate,
+            "regional_assessment_limit_per_cell": self.regional_assessment_limit_per_cell,
+            "regional_assessment_paid_by_region": dict(self.regional_assessment_paid_by_region),
+            "regional_assessment_contributed_by_cell": dict(self.regional_assessment_contributed_by_cell),
             "external_supplier_bad_debt": self.external_supplier_bad_debt,
             "regional_reserve_contributions_by_cell": dict(self.regional_reserve_contributions_by_cell),
             "regional_pool_reserve_initial_by_region": dict(self.regional_pool_reserve_initial_by_region),
