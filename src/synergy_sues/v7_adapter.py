@@ -264,6 +264,8 @@ def adapt_v7_realization_chain(
             raise ValueError(f"{record_type} is missing {id_field}")
         effective = _date(data.get(date_field), date_field) if date_field else None
         source_ref = str(data.get(source_field, ""))
+        if not source_ref:
+            raise ValueError(f"{record_type} source_ref is required")
         evidence = tuple(str(data[x]) for x in evidence_fields if data.get(x))
         related_ids = tuple(str(data[x]) for x in related if data.get(x))
         quantity = Decimal(str(data[quantity_field])) if quantity_field and data.get(quantity_field) is not None else None
@@ -310,6 +312,9 @@ def adapt_v7_realization_chain(
         delivery = delivery_map.get(str(_value(row, "delivery_id")))
         if delivery is None:
             raise ValueError(f"Invoice allocation references unknown delivery: {_value(row, 'allocation_id')}")
+        invoice_id = str(_value(row, "invoice_document_id", ""))
+        if invoice_id not in invoice_map:
+            raise ValueError(f"Invoice allocation references unknown invoice: {_value(row, 'allocation_id')}")
         output = output_map.get(str(_value(delivery, "output_id")))
         add(row, "INVOICE_DELIVERY_ALLOCATION", "allocation_id", None, "source_ref",
             ("source_ref",), ("delivery_id", "invoice_document_id"),
@@ -331,7 +336,9 @@ def adapt_v7_realization_chain(
     for row in collection_rows:
         settlement = settlement_map.get(str(_value(row, "settlement_id")))
         allocation = allocation_map.get(str(_value(row, "invoice_allocation_id")))
-        effective = _value(settlement, "settlement_date") if settlement is not None else None
+        if settlement is None or allocation is None:
+            raise ValueError(f"Collection attribution references an unknown settlement/allocation: {_value(row, 'attribution_id')}")
+        effective = _value(settlement, "settlement_date")
         add(row, "COLLECTION_ATTRIBUTION", "attribution_id", None, "source_ref",
             ("source_ref",), ("settlement_id", "invoice_allocation_id"),
             amount_field="amount", currency_field="currency")
