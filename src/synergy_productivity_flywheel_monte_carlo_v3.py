@@ -189,21 +189,23 @@ def simulate_paths(cfg: dict[str, Any], shock_probability: float) -> dict[str, A
                     reserve + residual * allocation_values["resilience_reserve"],
                     f"path {path} year {year} reserve",
                 )
-                auto_yield = max(
-                    auto_min,
-                    float(rng.normal(auto_mean, auto_std)),
+                auto_yield = _finite_number(
+                    max(auto_min, float(rng.normal(auto_mean, auto_std))),
+                    f"path {path} year {year} automation yield",
                 )
-                successes = int(rng.binomial(
-                    int(rd["independent_projects_per_year"]),
-                    rd_probability,
-                ))
+                successes = int(rng.binomial(rd_count, rd_probability))
                 auto_cohorts.append((year, auto_amount, auto_yield))
                 rd_cohorts.append((year, rd_amount, successes))
             else:
                 shortfall = -residual
                 reserve_draw = min(reserve, shortfall)
-                reserve -= reserve_draw
-                unfunded += shortfall - reserve_draw
+                reserve = _finite_number(
+                    reserve - reserve_draw, f"path {path} year {year} reserve after draw"
+                )
+                unfunded = _finite_number(
+                    unfunded + shortfall - reserve_draw,
+                    f"path {path} cumulative unfunded gap",
+                )
                 if reserve <= 1e-9 and unfunded > 0.0 and exhausted_year == 0:
                     exhausted_year = year
 
@@ -218,6 +220,8 @@ def simulate_paths(cfg: dict[str, Any], shock_probability: float) -> dict[str, A
         first_exhaustion_year[path] = exhausted_year
 
     def quantiles(values: np.ndarray) -> dict[str, float]:
+        if not np.isfinite(values).all():
+            raise ValueError("Monte Carlo output values must remain finite")
         q = np.quantile(values, [0.05, 0.50, 0.95])
         return {"p05": float(q[0]), "median": float(q[1]), "p95": float(q[2])}
 
