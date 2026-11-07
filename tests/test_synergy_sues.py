@@ -813,3 +813,21 @@ def test_trade_payable_settlement_posts_realized_fx_loss_against_invoice_carryin
     trial = journal.trial_balance()
     assert trial["accounts"]["fx-loss"]["debit"] == "2.0"
     assert trial["balanced"]
+
+
+def test_intercompany_elimination_date_must_fall_inside_canonical_period():
+    journal = Journal("USD")
+    journal.add_account(account("seller-revenue", "4100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("buyer-expense", "5100", AccountType.EXPENSE, NormalBalance.DEBIT))
+    rows = [
+        IntercompanyRecord("period-r", "period-tx", "seller", "buyer", "SELLER_REVENUE",
+            Money("10", "USD"), "2026-Q4", "erp:sale", "seller-revenue"),
+        IntercompanyRecord("period-e", "period-tx", "buyer", "seller", "BUYER_EXPENSE",
+            Money("10", "USD"), "2026-Q4", "erp:purchase", "buyer-expense"),
+    ]
+    with pytest.raises(ValueError, match="falls outside period"):
+        post_intercompany_eliminations(
+            journal, rows, {"2026-Q4": date(2027, 1, 15)},
+            datetime(2027, 1, 15, tzinfo=timezone.utc), "period-event", "period-idem",
+        )
+    assert journal.entries == ()
