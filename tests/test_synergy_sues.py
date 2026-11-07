@@ -1042,3 +1042,14 @@ def test_journal_rejects_future_effective_entry_at_construction():
             ),
             "future-event", "future-idem", "Future effective entry",
         )
+
+
+def test_intercompany_cash_only_records_reject_noncanonical_periods():
+    from synergy_sues.consolidation import IntercompanyRecord, IntercompanyRecordType, reconcile_intercompany
+    record = IntercompanyRecord(
+        "cash-bad-period", "tx-cash-only", "seller", "buyer",
+        IntercompanyRecordType.SELLER_CASH_IN, Money("25", "USD"),
+        "2026-Q5", "bank:cash-transfer",
+    )
+    with pytest.raises(ValueError, match="Unsupported or non-canonical"):
+        reconcile_intercompany([record])
