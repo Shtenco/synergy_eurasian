@@ -424,3 +424,5 @@ The credit ledger now tracks local regional net debtor/creditor positions, per-m
 - [V6.6.4-B regional pool sensitivity specification](docs/73_SYNERGY_V6_6_4B_REGIONAL_POOL_SENSITIVITY.md)
 
 The financing experiment module now includes `compare_regional_pool_sensitivities(...)` to sweep regional pool ceilings and member debit/credit caps under paired shocks.
+
+The CI experiment also runs a compact regional-pool sensitivity grid (tight and loose regional/member caps) and writes a separate JSON report under `outputs/`.
