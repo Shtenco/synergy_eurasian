@@ -99,8 +99,11 @@ class InventoryMovement:
 class InventoryLedger:
     """FIFO inventory quantity/value subledger; costs are stored in entity functional currency."""
 
-    def __init__(self, functional_currency: str) -> None:
+    def __init__(self, functional_currency: str, entity_id: str | None = None) -> None:
         self.functional_currency = Money("0", functional_currency).currency
+        if entity_id is not None and (not isinstance(entity_id, str) or not entity_id.strip()):
+            raise ValueError("inventory ledger entity_id must be a non-empty string")
+        self.entity_id = entity_id
         self._lots: dict[tuple[str, str], list[_InventoryLot]] = {}
         self._pool_units: dict[tuple[str, str], str] = {}
         self._lot_ids: set[str] = set()
@@ -401,6 +404,10 @@ class InventoryLedger:
         movement = self._movements.get(movement_id)
         if movement is None:
             raise ValueError(f"Unknown inventory movement: {movement_id}")
+        if self.entity_id is None:
+            raise ValueError("Inventory ledger must be bound to an entity before GL posting")
+        if entity_id != self.entity_id or journal.entity_id != self.entity_id:
+            raise ValueError("Inventory ledger, journal and posting entity ownership mismatch")
         if movement.movement_type in {InventoryMovementType.TRANSFER_IN, InventoryMovementType.TRANSFER_OUT}:
             return None
         _aware(recorded_at, "recorded_at")
