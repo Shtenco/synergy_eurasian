@@ -227,9 +227,12 @@ def test_production_json_schema_validates_all_procurement_and_production_contrac
         {"event_id": "labor-1", "order_id": "batch", "entity_id": "co1", "cost_type": "LABOR",
          "amount": {"amount": "5", "currency": "USD"}, "effective_date": "2026-11-06",
          "source_ref": "payroll:1", "evidence_ref": "timesheet:1"},
+        {"order_id": "batch", "output_quantity": {"amount": "1", "unit": "unit"},
+         "completed_at": "2026-11-06T12:00:00Z", "evidence_ref": "production:completion:1"},
         {"order_id": "batch", "direct_material_cost": {"amount": "10", "currency": "USD"},
          "conversion_cost": {"amount": "5", "currency": "USD"}, "capitalized_cost": {"amount": "15", "currency": "USD"},
-         "output_quantity": {"amount": "1", "unit": "unit"}, "journal_entry_ids": ["entry:1"]},
+         "output_quantity": {"amount": "1", "unit": "unit"}, "completion_evidence_ref": "production:completion:1",
+         "completed_at": "2026-11-06T12:00:00Z", "journal_entry_ids": ["entry:1"]},
     ]
     for sample in samples:
         validator.validate(sample)
