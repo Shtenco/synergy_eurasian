@@ -12,6 +12,7 @@ from typing import Any
 from .network_topology import CELLS, CELL_BY_ID, REGIONS
 
 EPS = 1e-9
+RECOVERY_PERIOD_DAYS = 30
 
 # Synthetic commercial parameters; not observed EAEU prices or cost benchmarks.
 TRANSFER_PRICE = {"grain": 2.0, "oilseed": 2.5, "flour": 4.0, "oil": 5.0, "energy": 0.8}
@@ -841,10 +842,13 @@ class CreditLedger:
             raise ValueError("replenishment_id must be a non-empty string")
         if replenishment_id in self.federation_replenishment_ids:
             raise ValueError("replenishment_id has already been processed")
-        if recovery_period_id is not None and (
-            not isinstance(recovery_period_id, str) or not recovery_period_id.strip()
-        ):
-            raise ValueError("recovery_period_id must be a non-empty string when supplied")
+        if not isinstance(recovery_period_id, str) or not recovery_period_id.strip():
+            raise ValueError("recovery_period_id is required for multi-level recovery")
+        expected_period_id = f"day-window-{day // RECOVERY_PERIOD_DAYS}"
+        if recovery_period_id != expected_period_id:
+            raise ValueError(f"recovery_period_id must be the ledger-defined {expected_period_id}")
+        if contribution_limit_by_cell is None:
+            raise ValueError("contribution_limit_by_cell is required for multi-level recovery")
 
         expected_ids = set(CELL_BY_ID)
         if not isinstance(regional_contributions_by_cell, dict) or set(regional_contributions_by_cell) != expected_ids:
