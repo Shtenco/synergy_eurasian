@@ -290,7 +290,7 @@ def test_realization_adapter_rejects_duplicate_source_ids_and_nonfinite_quantiti
             lambda *args: {}, [Output(observed_quantity=0.1)], [], [], [Invoice()],
             [], [], [], "2026-11-06",
         )
-    with pytest.raises(ValueError, match="finite and positive"):
+    with pytest.raises(ValueError, match="must be finite"):
         adapt_v7_realization_chain(
             lambda *args: {}, [Output(observed_quantity="NaN")], [], [], [Invoice()],
             [], [], [], "2026-11-06",
