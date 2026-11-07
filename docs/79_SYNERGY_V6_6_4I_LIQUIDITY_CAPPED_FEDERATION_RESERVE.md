@@ -60,4 +60,4 @@ The three-seed, 20-day severe synthetic run used a 10-unit federation reserve, 5
 
 In this small fixture, the hybrid path exhausted the federation reserve while the mutual-credit path used only a small fraction. This is a scenario-specific exposure result, not evidence that hybrid is generally riskier or that the reserve size is adequate. The sample does not establish a recommended contribution rule or reserve target.
 
-**Validation:** 147 pytest tests passed on commit `3a64a6a6bcfab55a776b4b5a60718169c69182f7`. Full EIIOM CI and README integrity completed successfully. The CI step wrote `outputs/synergy_v66_federation_liquidity_cap.json`.
+**Validation:** 148 pytest tests passed on commit `c5f094f3ea46c62fb50e1ac26f48c78e320d331a`. Full EIIOM CI completed successfully, including the new multi-default exhaustion test and federation liquidity-cap experiment. The README integrity check also passed on the preceding model commit. The CI step wrote `outputs/synergy_v66_federation_liquidity_cap.json`.
