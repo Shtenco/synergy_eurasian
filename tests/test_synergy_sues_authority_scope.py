@@ -284,9 +284,38 @@ def test_scope_reservation_release_is_append_only_and_reuses_only_settled_headro
         db.row_factory = sqlite3.Row
         db.execute("BEGIN IMMEDIATE")
         scoped_engine.reserve_in_transaction(db, first, "80", "signed-event:1")
-        db.execute("CREATE TABLE settlement_records (settlement_ref TEXT PRIMARY KEY)")
-        db.execute("INSERT INTO settlement_records VALUES('bank:settlement-1')")
-        scoped_engine.release_in_transaction(db, "req:release-1", "bank:settlement-1")
+        db.execute("""CREATE TABLE settlement_records (
+            settlement_ref TEXT PRIMARY KEY, request_id TEXT NOT NULL,
+            scope_id TEXT NOT NULL, tenant_id TEXT NOT NULL,
+            currency TEXT NOT NULL, amount TEXT NOT NULL
+        )""")
+        db.execute(
+            "INSERT INTO settlement_records VALUES(?,?,?,?,?,?)",
+            ("bank:settlement-1", "req:release-1", configured.scope_id,
+             configured.tenant_id, "USD", "15"),
+        )
+
+        def verify_settlement(connection, request_id, settlement_ref,
+                              scope_id, tenant_id, currency, amount):
+            row = connection.execute(
+                "SELECT request_id,scope_id,tenant_id,currency,amount "
+                "FROM settlement_records WHERE settlement_ref=?",
+                (settlement_ref,),
+            ).fetchone()
+            return row is not None and (
+                row[0] == request_id and row[1] == scope_id
+                and row[2] == tenant_id and row[3] == currency
+                and Decimal(row[4]) == Decimal(amount)
+            )
+
+        with pytest.raises(ValueError, match="settlement_verifier"):
+            scoped_engine.release_in_transaction(
+                db, "req:release-1", "bank:settlement-1"
+            )
+        scoped_engine.release_in_transaction(
+            db, "req:release-1", "bank:settlement-1",
+            settlement_verifier=verify_settlement,
+        )
         db.commit()
 
     next_evaluation = evaluate_scope(
