@@ -282,3 +282,37 @@ def test_inbox_handler_cannot_mutate_receipt_identity_and_receipts_are_append_on
             db.execute("UPDATE inbox SET event_id='forged' WHERE consumer='consumer'")
         with pytest.raises(sqlite3.IntegrityError, match="append-only"):
             db.execute("DELETE FROM inbox WHERE consumer='consumer'")
+
+
+
+def test_inbox_requires_authentication_and_rejects_false_or_mutating_authenticators(tmp_path):
+    sender = DurableEventStore(str(tmp_path / "sender-auth.db"))
+    receiver = DurableEventStore(str(tmp_path / "receiver-auth.db"))
+    stored = sender.append(event(), now=utc())
+    claimed = sender.claim_outbox(now=utc())[0]
+    message = {
+        "message_id": claimed.message_id,
+        "event_id": claimed.event_id,
+        "event_hash": claimed.event_hash,
+        "payload_json": claimed.payload_json,
+    }
+    handler = lambda *_: None
+    with pytest.raises(ValueError, match="trusted signed-message authenticator"):
+        receiver.consume_inbox("consumer", message, handler, received_at=utc())
+    with pytest.raises(ValueError, match="authentication failed"):
+        receiver.consume_inbox(
+            "consumer", message, handler, received_at=utc(),
+            authenticator=lambda _: False,
+        )
+
+    def mutating_authenticator(snapshot):
+        snapshot["event_hash"] = "f" * 64
+        return True
+
+    with pytest.raises(ValueError, match="mutated the signed message"):
+        receiver.consume_inbox(
+            "consumer", message, handler, received_at=utc(),
+            authenticator=mutating_authenticator,
+        )
+    assert not receiver.inbox_contains("consumer", claimed.message_id)
+    assert receiver.verify()
