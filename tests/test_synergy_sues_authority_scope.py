@@ -230,6 +230,12 @@ def test_sqlite_scope_reservations_prevent_two_requests_spending_same_headroom(t
     assert first_evaluation.allowed
 
     with sqlite3.connect(path) as db:
+        with pytest.raises(ValueError, match="active SQLite transaction"):
+            scoped_engine.reserve_in_transaction(
+                db, first_evaluation, "80", "signed-event:reserve-1"
+            )
+
+    with sqlite3.connect(path) as db:
         db.row_factory = sqlite3.Row
         db.execute("BEGIN IMMEDIATE")
         assert scoped_engine.reserve_in_transaction(
