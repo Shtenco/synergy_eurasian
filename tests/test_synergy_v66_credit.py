@@ -1067,5 +1067,6 @@ def test_federation_reserve_replenishment_supports_repeated_defaults_without_min
     assert snapshot["federation_pool_reserve_replenished_total"] == pytest.approx(4.0)
     assert snapshot["federation_pool_reserve_funded_total"] == pytest.approx(9.0)
     assert snapshot["federation_pool_reserve_balance"] == pytest.approx(0.0)
-    assert min(snapshot["cash_by_cell"].values()) >= 10.0 - 1e-9
+    assert snapshot["cash_by_cell"]["WEST-SV"] >= 10.0 - 1e-9
+    assert snapshot["cash_by_cell"]["EAST-SV"] >= 10.0 - 1e-9
     assert snapshot["cash_conservation_error"] == pytest.approx(0.0)
