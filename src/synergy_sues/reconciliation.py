@@ -97,14 +97,15 @@ def reconcile_bank_account(
         raise ValueError("Bank reconciliation requires a debit-normal asset cash account")
 
     journal_movements = {}
+    opening_ledger_balance = Decimal("0")
     late_recorded_journal_lines = []
     for entry in journal.entries:
-        if not statement.period.contains(entry.effective_date):
+        if entry.effective_date > statement.period.end:
             continue
-        # Preserve the historical knowledge cut-off: a backdated entry recorded
-        # after the statement period closed must not rewrite that period's
-        # reconciliation. It remains a visible late-recording exception.
+        # A ledger opening balance is derived from the journal history before
+        # period start, never trusted from the statement's caller-supplied field.
         recorded_date_utc = entry.recorded_at.astimezone(timezone.utc).date()
+        is_opening_entry = entry.effective_date < statement.period.start
         if recorded_date_utc > statement.period.end:
             for line in entry.lines:
                 if line.account_id == statement.account_id:
@@ -113,7 +114,10 @@ def reconcile_bank_account(
                         "effective_date": entry.effective_date.isoformat(),
                         "recorded_at": entry.recorded_at.isoformat(),
                         "recorded_after_period_end": statement.period.end.isoformat(),
+                        "affects_opening_balance": is_opening_entry,
                     })
+            continue
+        if not is_opening_entry and not statement.period.contains(entry.effective_date):
             continue
         for line in entry.lines:
             if line.account_id != statement.account_id:
@@ -121,6 +125,9 @@ def reconcile_bank_account(
             if line.amount.currency != statement.currency:
                 raise ValueError(f"Cash journal line currency mismatch: {entry.entry_id}:{line.line_id}")
             signed = line.amount.amount if line.side == PostingSide.DEBIT else -line.amount.amount
+            if is_opening_entry:
+                opening_ledger_balance += signed
+                continue
             ref = (entry.entry_id, line.line_id)
             if ref in journal_movements:
                 raise ValueError(f"Duplicate journal cash line reference: {ref}")
@@ -185,7 +192,8 @@ def reconcile_bank_account(
     statement_net = sum((line.signed_amount.amount for line in statement.lines), Decimal("0"))
     ledger_net = sum(journal_movements.values(), Decimal("0"))
     bank_close = statement.opening_bank_balance.amount + statement_net
-    ledger_close = statement.opening_ledger_balance.amount + ledger_net
+    ledger_close = opening_ledger_balance + ledger_net
+    opening_balance_difference = statement.opening_ledger_balance.amount - opening_ledger_balance
     closing_difference = bank_close - ledger_close
 
     return {
@@ -195,7 +203,10 @@ def reconcile_bank_account(
         "period_id": statement.period.period_id,
         "bank_opening_balance": str(statement.opening_bank_balance.amount),
         "bank_closing_balance": str(bank_close),
-        "ledger_opening_balance": str(statement.opening_ledger_balance.amount),
+        "ledger_opening_balance": str(opening_ledger_balance),
+        "statement_asserted_opening_ledger_balance": str(statement.opening_ledger_balance.amount),
+        "opening_ledger_balance_difference": str(opening_balance_difference),
+        "ledger_opening_balance_matches_journal_history": opening_balance_difference == 0,
         "ledger_closing_balance": str(ledger_close),
         "bank_minus_ledger_closing_difference": str(closing_difference),
         "statement_line_count": len(statement.lines),
@@ -205,8 +216,8 @@ def reconcile_bank_account(
         "unmatched_journal_lines": journal_exceptions,
         "late_recorded_journal_lines": late_recorded_journal_lines,
         "fully_reconciled": (
-            closing_difference == 0 and not bank_exceptions and not journal_exceptions
-            and not late_recorded_journal_lines
+            opening_balance_difference == 0 and closing_difference == 0
+            and not bank_exceptions and not journal_exceptions and not late_recorded_journal_lines
         ),
         "automatic_matching_performed": False,
     }
