@@ -741,3 +741,51 @@ def test_federation_reserve_rejects_incomplete_or_mismatched_contribution_maps()
             federation_pool_reserve_total=0.0,
             federation_reserve_contributions_by_cell=contributions,
         )
+
+
+def test_heterogeneous_opening_cash_cannot_be_overcommitted_across_both_reserves():
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 25.0 for cell in CELLS}
+    regional = {cell.cell_id: 0.0 for cell in CELLS}
+    federation = {cell.cell_id: 0.0 for cell in CELLS}
+    regional["WEST-AG1"] = 15.0
+    federation["WEST-AG1"] = 11.0
+    with pytest.raises(ValueError):
+        CreditLedger(
+            initial_cash_by_cell=cash,
+            regional_pool_reserve_per_region=15.0,
+            regional_reserve_contributions_by_cell={
+                **regional,
+                **{cell.cell_id: (15.0 if cell.region == "EAST" and cell.cell_id == "EAST-AG1" else regional[cell.cell_id]) for cell in CELLS},
+            },
+            federation_pool_reserve_total=11.0,
+            federation_reserve_contributions_by_cell=federation,
+        )
+
+
+def test_heterogeneous_opening_cash_and_both_reserves_conserve_consolidated_cash():
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 30.0 + index for index, cell in enumerate(CELLS)}
+    regional = {cell.cell_id: 0.0 for cell in CELLS}
+    federation = {cell.cell_id: 0.0 for cell in CELLS}
+    regional["WEST-AG1"] = 2.0
+    regional["EAST-AG1"] = 2.0
+    federation["WEST-PR1"] = 3.0
+    federation["EAST-PR1"] = 3.0
+    ledger = CreditLedger(
+        initial_cash_by_cell=cash,
+        regional_pool_reserve_per_region=2.0,
+        regional_reserve_contributions_by_cell=regional,
+        federation_pool_reserve_total=6.0,
+        federation_reserve_contributions_by_cell=federation,
+    )
+    snapshot = ledger.snapshot()
+    consolidated = (
+        sum(snapshot["cash_by_cell"].values())
+        + sum(snapshot["regional_pool_reserve_by_region"].values())
+        + snapshot["federation_pool_reserve_balance"]
+    )
+    assert consolidated == pytest.approx(sum(cash.values()))
+    assert snapshot["cash_conservation_error"] == pytest.approx(0.0)
