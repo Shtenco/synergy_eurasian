@@ -10,8 +10,14 @@ FINANCING_MODES = {
     "unconstrained_reference": None,
     "cash_only": {"bank_limit_per_cell": 0.0, "trade_credit_limit_per_cell": 0.0},
     "bank_only": {"bank_limit_per_cell": 80.0, "trade_credit_limit_per_cell": 0.0},
-    "mutual_credit": {"bank_limit_per_cell": 0.0, "trade_credit_limit_per_cell": 80.0},
-    "hybrid": {"bank_limit_per_cell": 80.0, "trade_credit_limit_per_cell": 80.0},
+    "mutual_credit": {
+        "bank_limit_per_cell": 0.0, "trade_credit_limit_per_cell": 80.0,
+        "regional_pool_reserve_per_region": 20.0,
+    },
+    "hybrid": {
+        "bank_limit_per_cell": 80.0, "trade_credit_limit_per_cell": 80.0,
+        "regional_pool_reserve_per_region": 20.0,
+    },
 }
 
 BASE_CONFIG = {
@@ -48,6 +54,10 @@ METRICS = (
     "regional_pool_rejections",
     "regional_pool_net_position_error",
     "regional_pool_utilization_max",
+    "regional_pool_reserve_balance",
+    "regional_pool_guarantee_paid",
+    "trade_bad_debt",
+    "external_supplier_bad_debt",
     "physical_balance_error",
     "cash_conservation_error",
 )
@@ -69,6 +79,10 @@ def _metrics(result: dict[str, Any]) -> dict[str, float]:
             "regional_pool_rejection_count": 0,
             "regional_pool_net_position_by_region": {},
             "regional_pool_utilization_by_region": {},
+            "regional_pool_reserve_by_region": {},
+            "regional_pool_guarantee_paid_by_region": {},
+            "trade_bad_debt_by_cell": {},
+            "external_supplier_bad_debt": 0.0,
             "cash_conservation_error": 0.0,
         }
     sold = sum(result["sold_by_sku"].values())
@@ -92,6 +106,10 @@ def _metrics(result: dict[str, Any]) -> dict[str, float]:
         "regional_pool_rejections": float(credit["regional_pool_rejection_count"]),
         "regional_pool_net_position_error": max((abs(v) for v in credit["regional_pool_net_position_by_region"].values()), default=0.0),
         "regional_pool_utilization_max": max(credit["regional_pool_utilization_by_region"].values(), default=0.0),
+        "regional_pool_reserve_balance": sum(credit["regional_pool_reserve_by_region"].values()),
+        "regional_pool_guarantee_paid": sum(credit["regional_pool_guarantee_paid_by_region"].values()),
+        "trade_bad_debt": sum(credit["trade_bad_debt_by_cell"].values()),
+        "external_supplier_bad_debt": float(credit["external_supplier_bad_debt"]),
         "physical_balance_error": abs(float(result["physical_balance_error"])),
         "cash_conservation_error": abs(float(credit["cash_conservation_error"])),
     }
