@@ -27,7 +27,7 @@ def test_multi_level_recovery_plan_is_non_mutating_and_settles_cash_exactly():
         target_federation=20.0,
         allocation_rule="adaptive_liquidity",
         contribution_fraction_per_period=0.10,
-        recovery_period_id="PERIOD-1",
+        recovery_period_id="day-window-0",
     )
     after_plan = ledger.snapshot()
     assert after_plan["cash_by_cell"] == before["cash_by_cell"]
@@ -59,7 +59,7 @@ def test_recovery_period_cap_cannot_be_reset_by_repeated_replenishment_ids():
         target_federation=0.0,
         allocation_rule="equal",
         contribution_fraction_per_period=0.05,
-        recovery_period_id="ASSESSMENT-2026-Q4",
+        recovery_period_id="day-window-0",
     )
     assert first["funded_total"] == pytest.approx(100.0)
     execute_reserve_recovery(ledger, first, "RECOVERY-PERIOD-A", day=0)
@@ -70,7 +70,7 @@ def test_recovery_period_cap_cannot_be_reset_by_repeated_replenishment_ids():
         target_federation=0.0,
         allocation_rule="equal",
         contribution_fraction_per_period=0.05,
-        recovery_period_id="ASSESSMENT-2026-Q4",
+        recovery_period_id="day-window-0",
     )
     assert second["funded_total"] == pytest.approx(0.0)
     assert second["unfunded_total"] == pytest.approx(80.0)
@@ -86,7 +86,7 @@ def test_regional_recovery_uses_only_members_of_the_matching_region():
         target_federation=0.0,
         allocation_rule="equal",
         contribution_fraction_per_period=0.50,
-        recovery_period_id="LOCAL-ONLY",
+        recovery_period_id="day-window-0",
     )
     assert sum(plan["regional_contributions_by_cell"][cell.cell_id] for cell in CELLS if cell.region == "WEST") == pytest.approx(10.0)
     assert sum(plan["regional_contributions_by_cell"][cell.cell_id] for cell in CELLS if cell.region == "EAST") == pytest.approx(0.0)
@@ -102,7 +102,7 @@ def test_production_capacity_weighted_recovery_respects_member_caps():
         target_federation=0.0,
         allocation_rule="production_capacity",
         contribution_fraction_per_period=0.50,
-        recovery_period_id="CAPACITY-WEIGHTED",
+        recovery_period_id="day-window-0",
     )
     west = plan["regional_contributions_by_cell"]
     assert west["WEST-AG1"] > west["WEST-MF2"]
@@ -116,7 +116,7 @@ def test_stale_recovery_plan_is_rejected_before_any_transfer():
         ledger,
         target_regional_by_region={"WEST": 5.0, "EAST": 5.0},
         target_federation=0.0,
-        recovery_period_id="STALE-PLAN",
+        recovery_period_id="day-window-0",
     )
     ledger.accounts["WEST-PR1"].cash -= 1.0
     before = ledger.snapshot()
@@ -142,6 +142,8 @@ def test_unified_reserve_replenishment_is_atomic_when_one_member_breaches_floor(
             federation,
             day=0,
             replenishment_id="ATOMIC-MULTI-LEVEL",
+            recovery_period_id="day-window-0",
+            contribution_limit_by_cell={cell.cell_id: 20.0 for cell in CELLS},
         )
     after = ledger.snapshot()
     assert after["cash_by_cell"] == before["cash_by_cell"]
@@ -167,7 +169,7 @@ def test_modified_recovery_plan_is_rejected_before_settlement():
         ledger,
         target_regional_by_region={"WEST": 5.0, "EAST": 5.0},
         target_federation=0.0,
-        recovery_period_id="PLAN-INTEGRITY",
+        recovery_period_id="day-window-0",
     )
     plan["regional_contributions_by_cell"]["WEST-PR1"] += 1.0
     before = ledger.snapshot()
