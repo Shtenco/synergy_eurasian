@@ -438,3 +438,5 @@ The CI experiment now also compares equal-all-member and production-capacity-wei
 - [V6.6.4-E regional guarantee loss waterfall](docs/75_SYNERGY_V6_6_4E_REGIONAL_LOSS_WATERFALL.md)
 
 An optional, disabled-by-default capped pro-rata member assessment can now follow reserve coverage on local defaults. The transfer is taken from solvent members' cash and paid to the claimant seller; any remaining uncovered loss stays with the seller.
+
+The loss-waterfall runner also executes deterministic targeted local and cross-region default fixtures so reserve coverage, capped member assessments and cross-border exclusions are exercised even when naturally generated defaults do not trigger those paths.
