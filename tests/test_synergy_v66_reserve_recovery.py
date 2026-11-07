@@ -426,6 +426,20 @@ def test_recovery_plan_rejects_changed_opening_cash_capacity_schedule():
     assert after["regional_pool_reserve_by_region"] == before["regional_pool_reserve_by_region"]
 
 
+
+def test_100_cycle_claim_beneficiaries_rotate_across_all_region_members():
+    from synergy_v66.reserve_cycle_experiments import run_paired_reserve_recovery_experiment
+
+    result = run_paired_reserve_recovery_experiment(
+        seeds=[53], cycles=100, shock_regime="severe",
+        allocation_rules=["no_replenishment"],
+    )
+    rows = result["observations"]["no_replenishment"][0]["cycle_rows"]
+    for region in ("WEST", "EAST"):
+        beneficiaries = {row["claim_beneficiary_by_region"][region] for row in rows}
+        assert len(beneficiaries) == sum(cell.region == region for cell in CELLS)
+
+
 def test_recovery_planner_requires_initialized_nonnegative_ledger_day():
     ledger = CreditLedger(initial_cash_per_cell=100.0)
     with pytest.raises(ValueError, match="initialized with process_day"):
