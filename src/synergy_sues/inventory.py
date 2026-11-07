@@ -108,6 +108,7 @@ class InventoryLedger:
         self._pool_units: dict[tuple[str, str], str] = {}
         self._lot_ids: set[str] = set()
         self._movements: dict[str, InventoryMovement] = {}
+        self._journal_posted_movements: set[str] = set()
 
     @property
     def movements(self) -> tuple[InventoryMovement, ...]:
@@ -115,10 +116,16 @@ class InventoryLedger:
 
     def _snapshot(self):
         """Capture mutable inventory state for an atomic compound operation."""
-        return deepcopy((self._lots, self._pool_units, self._lot_ids, self._movements))
+        return deepcopy((
+            self._lots, self._pool_units, self._lot_ids, self._movements,
+            self._journal_posted_movements,
+        ))
 
     def _restore(self, snapshot) -> None:
-        self._lots, self._pool_units, self._lot_ids, self._movements = deepcopy(snapshot)
+        (
+            self._lots, self._pool_units, self._lot_ids, self._movements,
+            self._journal_posted_movements,
+        ) = deepcopy(snapshot)
 
     def _check_pool(self, item_id: str, location_id: str, unit: str) -> tuple[str, str]:
         key = (item_id, location_id)
@@ -408,6 +415,8 @@ class InventoryLedger:
             raise ValueError("Inventory ledger must be bound to an entity before GL posting")
         if entity_id != self.entity_id or journal.entity_id != self.entity_id:
             raise ValueError("Inventory ledger, journal and posting entity ownership mismatch")
+        if movement_id in self._journal_posted_movements:
+            raise ValueError(f"Inventory movement already journalized: {movement_id}")
         if movement.movement_type in {InventoryMovementType.TRANSFER_IN, InventoryMovementType.TRANSFER_OUT}:
             return None
         _aware(recorded_at, "recorded_at")
@@ -437,9 +446,11 @@ class InventoryLedger:
                 JournalLine(f"{entry_id}:cr", inventory_account_id, PostingSide.CREDIT,
                     money, money, entity_id, movement.source_ref),
             )
-        return journal.post(JournalEntry(
+        posted = journal.post(JournalEntry(
             entry_id, movement.movement_date, recorded_at, journal.functional_currency,
             lines, f"inventory-movement:{movement.movement_id}",
             f"inventory-movement:{movement.movement_id}",
             f"Post inventory {movement.movement_type.value.lower()} {movement.movement_id}",
         ))
+        self._journal_posted_movements.add(movement_id)
+        return posted
