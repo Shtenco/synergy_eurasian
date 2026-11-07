@@ -7,7 +7,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Iterable
 
-from .contracts import Money, Quantity, _aware
+from .contracts import Money, Quantity, _aware, _calendar_date
 from .journal import AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide
 
 
@@ -64,8 +64,7 @@ class InventoryMovement:
             raise ValueError("Inventory movement identity and source are required")
         if not isinstance(self.movement_type, InventoryMovementType):
             object.__setattr__(self, "movement_type", InventoryMovementType(self.movement_type))
-        if not isinstance(self.movement_date, date):
-            raise ValueError("Inventory movement date must be a date")
+        _calendar_date(self.movement_date, "inventory movement date")
         if self.quantity.amount <= 0:
             raise ValueError("Inventory movement quantity must be positive")
         if self.cost.amount < 0:
@@ -147,8 +146,7 @@ class InventoryLedger:
             raise ValueError("Inventory receipt quantity must be positive")
         if functional_cost.currency != self.functional_currency or functional_cost.amount < 0:
             raise ValueError("Inventory receipt cost must be non-negative and in functional currency")
-        if not isinstance(received_date, date):
-            raise ValueError("received_date must be a date")
+        _calendar_date(received_date, "received_date")
         movement = InventoryMovement(
             receipt_id, InventoryMovementType.RECEIPT, item_id, location_id,
             quantity, functional_cost, received_date, source_ref, lot_id=lot_id,
@@ -160,15 +158,31 @@ class InventoryLedger:
         self._lot_ids.add(lot_id)
         return self._add_movement(movement)
 
-    def available(self, item_id: str, location_id: str, unit: str) -> Quantity:
+    def available(
+        self, item_id: str, location_id: str, unit: str,
+        as_of_date: date | None = None,
+    ) -> Quantity:
+        if as_of_date is not None:
+            _calendar_date(as_of_date, "inventory availability date")
         key = self._check_pool(item_id, location_id, unit)
-        amount = sum((lot.remaining_quantity.amount for lot in self._lots.get(key, [])), Decimal("0"))
+        amount = sum((
+            lot.remaining_quantity.amount for lot in self._lots.get(key, [])
+            if as_of_date is None or lot.received_date <= as_of_date
+        ), Decimal("0"))
         return Quantity(amount, unit)
 
-    def preview_issue_cost(self, item_id: str, location_id: str, quantity: Quantity) -> Money:
+    def preview_issue_cost(
+        self, item_id: str, location_id: str, quantity: Quantity,
+        as_of_date: date | None = None,
+    ) -> Money:
         """Return FIFO issue cost without mutating lots or recording a movement."""
+        if as_of_date is not None:
+            _calendar_date(as_of_date, "inventory valuation date")
         key = self._check_pool(item_id, location_id, quantity.unit)
-        lots = self._lots.get(key, [])
+        lots = [
+            lot for lot in self._lots.get(key, [])
+            if as_of_date is None or lot.received_date <= as_of_date
+        ]
         available = sum((lot.remaining_quantity.amount for lot in lots), Decimal("0"))
         if quantity.amount <= 0 or available < quantity.amount:
             raise ValueError(f"Insufficient inventory: requested {quantity.amount}, available {available}")
@@ -186,9 +200,17 @@ class InventoryLedger:
             remaining -= take
         return Money(total_cost, self.functional_currency)
 
-    def _consume_fifo(self, item_id: str, location_id: str, quantity: Quantity) -> list[tuple[Quantity, Money, _InventoryLot]]:
+    def _consume_fifo(
+        self, item_id: str, location_id: str, quantity: Quantity,
+        as_of_date: date | None = None,
+    ) -> list[tuple[Quantity, Money, _InventoryLot]]:
+        if as_of_date is not None:
+            _calendar_date(as_of_date, "inventory consumption date")
         key = self._check_pool(item_id, location_id, quantity.unit)
-        lots = self._lots.get(key, [])
+        lots = [
+            lot for lot in self._lots.get(key, [])
+            if as_of_date is None or lot.received_date <= as_of_date
+        ]
         available = sum((lot.remaining_quantity.amount for lot in lots), Decimal("0"))
         if available < quantity.amount:
             raise ValueError(f"Insufficient inventory: requested {quantity.amount}, available {available}")
@@ -224,11 +246,12 @@ class InventoryLedger:
     ) -> InventoryMovement:
         if not all((issue_id, item_id, location_id, source_ref)):
             raise ValueError("Inventory issue identity and source are required")
-        if not isinstance(issue_date, date) or quantity.amount <= 0:
-            raise ValueError("Inventory issue date and positive quantity are required")
+        _calendar_date(issue_date, "inventory issue date")
+        if quantity.amount <= 0:
+            raise ValueError("Inventory issue quantity must be positive")
         if issue_id in self._movements:
             raise ValueError(f"Duplicate inventory movement_id: {issue_id}")
-        consumed = self._consume_fifo(item_id, location_id, quantity)
+        consumed = self._consume_fifo(item_id, location_id, quantity, issue_date)
         total_cost = sum((money.amount for _, money, _ in consumed), Decimal("0"))
         lot_allocations = tuple(
             InventoryLotAllocation(lot.lot_id, taken_quantity, taken_cost, lot.source_ref)
@@ -251,11 +274,12 @@ class InventoryLedger:
     ) -> InventoryMovement:
         if not all((writeoff_id, item_id, location_id, source_ref)):
             raise ValueError("Inventory writeoff identity and source are required")
-        if not isinstance(writeoff_date, date) or quantity.amount <= 0:
-            raise ValueError("Inventory writeoff date and positive quantity are required")
+        _calendar_date(writeoff_date, "inventory writeoff date")
+        if quantity.amount <= 0:
+            raise ValueError("Inventory writeoff quantity must be positive")
         if writeoff_id in self._movements:
             raise ValueError(f"Duplicate inventory movement_id: {writeoff_id}")
-        consumed = self._consume_fifo(item_id, location_id, quantity)
+        consumed = self._consume_fifo(item_id, location_id, quantity, writeoff_date)
         total_cost = sum((money.amount for _, money, _ in consumed), Decimal("0"))
         lot_allocations = tuple(
             InventoryLotAllocation(lot.lot_id, taken_quantity, taken_cost, lot.source_ref)
@@ -281,15 +305,19 @@ class InventoryLedger:
             raise ValueError("Inventory transfer identity and endpoints are required")
         if source_location_id == destination_location_id:
             raise ValueError("Inventory transfer locations must differ")
-        if not isinstance(transfer_date, date) or quantity.amount <= 0:
-            raise ValueError("Inventory transfer date and positive quantity are required")
+        _calendar_date(transfer_date, "inventory transfer date")
+        if quantity.amount <= 0:
+            raise ValueError("Inventory transfer quantity must be positive")
         out_id, in_id = f"{transfer_id}:OUT", f"{transfer_id}:IN"
         if out_id in self._movements or in_id in self._movements:
             raise ValueError(f"Duplicate inventory transfer_id: {transfer_id}")
         # Preflight all source lots and destination lot IDs before mutating stock.
         destination_key = self._check_pool(item_id, destination_location_id, quantity.unit)
         source_key = self._check_pool(item_id, source_location_id, quantity.unit)
-        source_lots = self._lots.get(source_key, [])
+        source_lots = [
+            lot for lot in self._lots.get(source_key, [])
+            if lot.received_date <= transfer_date
+        ]
         available = sum((lot.remaining_quantity.amount for lot in source_lots), Decimal("0"))
         if available < quantity.amount:
             raise ValueError(f"Insufficient inventory: requested {quantity.amount}, available {available}")
@@ -305,7 +333,7 @@ class InventoryLedger:
         candidate_lot_ids = [f"{transfer_id}:LOT:{index}" for index in range(1, lots_needed + 1)]
         if any(lot_id in self._lot_ids for lot_id in candidate_lot_ids):
             raise ValueError(f"Duplicate destination lot ID for transfer: {transfer_id}")
-        source_consumed = self._consume_fifo(item_id, source_location_id, quantity)
+        source_consumed = self._consume_fifo(item_id, source_location_id, quantity, transfer_date)
         total_cost = sum((money.amount for _, money, _ in source_consumed), Decimal("0"))
         transfer_allocations = []
         for index, (taken_quantity, taken_cost, source_lot) in enumerate(source_consumed, start=1):
