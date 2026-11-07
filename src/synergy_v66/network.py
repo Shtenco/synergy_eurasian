@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import Any
 from .network_topology import (
-    CELLS, CELL_BY_ID, REGIONS, SECTORS, RECIPES, SUPPLIERS, TARGET_STOCK,
+    CELLS, CELL_BY_ID, REGIONS, SECTORS, DAYS_DEFAULT, RECIPES, SUPPLIERS, TARGET_STOCK,
     DEMAND_SKUS, SKUS, Lot, Shipment, make_environment, _fingerprint,
     _stock, _consume_fifo,
 )
