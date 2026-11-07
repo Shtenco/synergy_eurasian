@@ -15,6 +15,8 @@ from synergy_v66.financing_experiments import (
     compare_regional_pool_sensitivities,
     compare_reserve_contribution_schemes,
     compare_regional_loss_waterfalls,
+    compare_liquidity_capped_reserve_contributions,
+    make_synthetic_heterogeneous_cash_fixture,
 )
 
 
@@ -27,6 +29,7 @@ def main() -> int:
     parser.add_argument("--sensitivity", action="store_true")
     parser.add_argument("--reserve-allocation", action="store_true")
     parser.add_argument("--loss-waterfall", action="store_true")
+    parser.add_argument("--liquidity-capped-reserve", action="store_true")
     args = parser.parse_args()
     if args.seed_count < 1 or args.days < 1:
         parser.error("--seed-count and --days must be >= 1")
@@ -147,6 +150,35 @@ def main() -> int:
                 "cash_conservation_error": case["cash_conservation_error"],
             }, sort_keys=True))
         print(f"LOSS_WATERFALL_REPORT_WRITTEN: {waterfall_path}")
+
+    if args.liquidity_capped_reserve:
+        cash_fixture = make_synthetic_heterogeneous_cash_fixture()
+        liquidity_report = compare_liquidity_capped_reserve_contributions(
+            seeds=range(args.seed_start, args.seed_start + args.seed_count),
+            initial_cash_by_cell=cash_fixture,
+            days=args.days,
+            shock_regime="severe",
+            reserve_per_region=10.0,
+            max_contribution_fraction=0.10,
+            scheme="production_capacity_weighted",
+        )
+        liquidity_path = output.with_name("synergy_v66_liquidity_capped_reserve.json")
+        liquidity_path.write_text(json.dumps(liquidity_report, indent=2, allow_nan=False), encoding="utf-8")
+        comparison = liquidity_report["comparison"]
+        for mode in ("mutual_credit", "hybrid"):
+            metrics = comparison["summary"][mode]
+            print(json.dumps({
+                "liquidity_capped_reserve": True,
+                "mode": mode,
+                "reserve_per_region": liquidity_report["reserve_per_region"],
+                "max_contribution_fraction": liquidity_report["max_contribution_fraction"],
+                "service_level_mean": metrics["service_level"]["mean"],
+                "defaults_mean": metrics["defaulted_cells"]["mean"],
+                "reserve_paid_mean": metrics["regional_pool_guarantee_paid"]["mean"],
+                "member_contribution_total": sum(liquidity_report["contributions_by_cell"].values()),
+                "cash_conservation_error_max": metrics["cash_conservation_error"]["max"],
+            }, sort_keys=True))
+        print(f"LIQUIDITY_CAPPED_REPORT_WRITTEN: {liquidity_path}")
     return 0
 
 
