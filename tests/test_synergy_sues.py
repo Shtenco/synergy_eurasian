@@ -465,7 +465,10 @@ def test_trial_balance_translation_rejects_missing_historical_rate_and_future_ra
         reporting_date=date(2026, 11, 6),
         translation_adjustment_account_id="cta",
     )
-    equity = [TrialBalanceAccount("capital", AccountType.EQUITY, Money("0", "EUR"), Money("10", "EUR"))]
+    equity = [
+        TrialBalanceAccount("cash", AccountType.ASSET, Money("10", "EUR"), Money("0", "EUR")),
+        TrialBalanceAccount("capital", AccountType.EQUITY, Money("0", "EUR"), Money("10", "EUR")),
+    ]
     with pytest.raises(ValueError, match="Missing historical FX"):
         translate_trial_balance(equity, base, "USD")
 
