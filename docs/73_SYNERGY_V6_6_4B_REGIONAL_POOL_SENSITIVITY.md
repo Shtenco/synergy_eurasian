@@ -47,3 +47,8 @@ A pool limit that never binds is not evidence that the pool is safe; it may simp
 ## 4. Experimental discipline
 
 Use paired seeds, multiple horizons and all three shock regimes. Do not select caps based on a single favorable output metric. Regional credit positions remain memorandum claims; this sensitivity grid does not model a pooled guarantee reserve, loss-sharing waterfall, cross-border clearing, legal enforceability or actual money issuance. All numeric caps are synthetic design probes, not real-world credit recommendations.
+
+
+## 5. CI smoke sensitivity
+
+The repository CI runs a compact severe-regime sample with three seeds, two regional pool ceilings (5 and 150) and two member caps (2 and 80). It writes a machine-readable report under `outputs/synergy_v66_regional_pool_sensitivity.json`. This is a smoke/sensitivity check, not a statistically powered policy evaluation.
