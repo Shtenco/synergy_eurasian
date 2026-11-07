@@ -50,6 +50,7 @@ class PayableInvoice:
     status: str = "open"
     guarantee_paid: float = 0.0
     member_assessment_paid: float = 0.0
+    federation_guarantee_paid: float = 0.0
     written_off: float = 0.0
 
 
@@ -82,6 +83,8 @@ class CreditLedger:
         regional_reserve_contributions_by_cell: dict[str, float] | None = None,
         regional_assessment_rate: float = 0.0,
         regional_assessment_limit_per_cell: float | None = None,
+        federation_pool_reserve_total: float = 0.0,
+        federation_reserve_contributions_by_cell: dict[str, float] | None = None,
         regional_member_debit_limit_per_cell: float | None = None,
         regional_member_credit_limit_per_cell: float | None = None,
         grace_days: int = 2,
@@ -113,6 +116,8 @@ class CreditLedger:
             raise ValueError("regional_pool_reserve_per_region must be finite and >= 0")
         if isinstance(regional_assessment_rate, bool) or not math.isfinite(float(regional_assessment_rate)) or not 0.0 <= regional_assessment_rate <= 1.0:
             raise ValueError("regional_assessment_rate must be between 0 and 1")
+        if isinstance(federation_pool_reserve_total, bool) or not math.isfinite(float(federation_pool_reserve_total)) or federation_pool_reserve_total < 0:
+            raise ValueError("federation_pool_reserve_total must be finite and >= 0")
         if regional_assessment_limit_per_cell is not None and (
             isinstance(regional_assessment_limit_per_cell, bool)
             or not math.isfinite(float(regional_assessment_limit_per_cell))
@@ -163,11 +168,34 @@ class CreditLedger:
             for cell_id, contribution in reserve_contributions.items()
         ):
             raise ValueError("a member contribution cannot exceed that member's initial cash")
+        if federation_reserve_contributions_by_cell is None:
+            federation_contributions = {
+                cell.cell_id: float(federation_pool_reserve_total) / len(CELLS)
+                for cell in CELLS
+            }
+        else:
+            if set(federation_reserve_contributions_by_cell) != set(CELL_BY_ID):
+                raise ValueError("federation reserve contribution map must contain every known cell exactly once")
+            federation_contributions = {}
+            for cell_id, contribution in federation_reserve_contributions_by_cell.items():
+                if isinstance(contribution, bool) or not isinstance(contribution, (int, float)):
+                    raise ValueError("federation contributions must be finite non-negative numbers")
+                if not math.isfinite(float(contribution)) or contribution < 0:
+                    raise ValueError("federation contributions must be finite non-negative numbers")
+                federation_contributions[cell_id] = float(contribution)
+            if abs(sum(federation_contributions.values()) - float(federation_pool_reserve_total)) > EPS:
+                raise ValueError("federation member contributions must sum to federation_pool_reserve_total")
+        if any(
+            reserve_contributions[cell_id] + federation_contributions[cell_id]
+            > member_opening_cash[cell_id] + EPS
+            for cell_id in CELL_BY_ID
+        ):
+            raise ValueError("combined regional and federation reserve contributions exceed member opening cash")
         if grace_days < 0:
             raise ValueError("grace_days must be >= 0")
         self.accounts = {
             c.cell_id: CellAccount(
-                cash=member_opening_cash[c.cell_id] - reserve_contributions[c.cell_id],
+                cash=member_opening_cash[c.cell_id] - reserve_contributions[c.cell_id] - federation_contributions[c.cell_id],
                 bank_limit=float(bank_limit_per_cell),
                 trade_credit_limit=float(trade_credit_limit_per_cell),
                 trade_receivable_limit=(
@@ -200,6 +228,10 @@ class CreditLedger:
             if regional_member_credit_limit_per_cell is not None else None
         )
         self.regional_reserve_contributions_by_cell = dict(reserve_contributions)
+        self.federation_reserve_contributions_by_cell = dict(federation_contributions)
+        self.federation_pool_reserve_initial = float(federation_pool_reserve_total)
+        self.federation_pool_reserve_balance = float(federation_pool_reserve_total)
+        self.federation_pool_guarantee_paid = 0.0
         self.regional_assessment_rate = float(regional_assessment_rate)
         self.regional_assessment_limit_per_cell = (
             float(regional_assessment_limit_per_cell)
@@ -536,17 +568,29 @@ class CreditLedger:
                 })
 
         uncovered = max(0.0, remaining - guarantee)
+        federation_guarantee = 0.0
+        if seller is not None and uncovered > EPS and self.federation_pool_reserve_balance > EPS:
+            federation_guarantee = min(uncovered, self.federation_pool_reserve_balance)
+            self.federation_pool_reserve_balance -= federation_guarantee
+            self.federation_pool_guarantee_paid += federation_guarantee
+            seller.cash += federation_guarantee
+            self.events.append({
+                "day": day, "type": "federation_pool_guarantee_paid",
+                "invoice_id": invoice.invoice_id, "seller": invoice.seller,
+                "buyer": invoice.buyer, "amount": federation_guarantee,
+            })
+        uncovered_after_federation = max(0.0, uncovered - federation_guarantee)
         assessment_paid = 0.0
-        if same_region and seller is not None and uncovered > EPS:
+        if same_region and seller is not None and uncovered_after_federation > EPS:
             assessment_paid = self._assess_regional_members(
                 CELL_BY_ID[invoice.buyer].region,
                 invoice.buyer,
                 invoice.seller,
-                uncovered,
+                uncovered_after_federation,
                 day,
                 invoice.invoice_id,
             )
-        residual_loss = max(0.0, uncovered - assessment_paid)
+        residual_loss = max(0.0, uncovered_after_federation - assessment_paid)
 
         buyer.trade_payable -= remaining
         if seller is not None:
@@ -560,6 +604,7 @@ class CreditLedger:
 
         invoice.guarantee_paid += guarantee
         invoice.member_assessment_paid += assessment_paid
+        invoice.federation_guarantee_paid += federation_guarantee
         invoice.written_off += residual_loss
         invoice.remaining = 0.0
         invoice.status = "defaulted"
@@ -570,6 +615,7 @@ class CreditLedger:
             "remaining_before_resolution": remaining,
             "guarantee_paid": guarantee,
             "member_assessment_paid": assessment_paid,
+            "federation_guarantee_paid": federation_guarantee,
             "written_off": residual_loss,
         })
 
@@ -692,6 +738,10 @@ class CreditLedger:
             "external_supplier_bad_debt": self.external_supplier_bad_debt,
             "initial_cash_by_cell": dict(self.initial_cash_by_cell),
             "regional_reserve_contributions_by_cell": dict(self.regional_reserve_contributions_by_cell),
+            "federation_reserve_contributions_by_cell": dict(self.federation_reserve_contributions_by_cell),
+            "federation_pool_reserve_initial": self.federation_pool_reserve_initial,
+            "federation_pool_reserve_balance": self.federation_pool_reserve_balance,
+            "federation_pool_guarantee_paid": self.federation_pool_guarantee_paid,
             "regional_pool_reserve_initial_by_region": dict(self.regional_pool_reserve_initial_by_region),
             "regional_pool_reserve_by_region": dict(self.regional_pool_reserve_by_region),
             "regional_pool_guarantee_paid_by_region": dict(self.regional_pool_guarantee_paid_by_region),
