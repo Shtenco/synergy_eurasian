@@ -586,3 +586,17 @@ def test_regional_reserve_sizing_respects_absolute_post_contribution_cash_floor(
     assert report["minimum_post_contribution_cash"] == pytest.approx(79.0)
     for cell_id, contribution in item["contributions_by_cell"].items():
         assert cash[cell_id] - contribution >= 79.0 - 1e-9
+
+
+def test_reserve_sizing_can_apply_absolute_cash_floor_without_fractional_cap():
+    from synergy_v66.financing_experiments import compare_regional_reserve_size_sensitivities
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 80.0 for cell in CELLS}
+    report = compare_regional_reserve_size_sensitivities(
+        seeds=[102], reserve_levels_per_region=[20.0], days=3,
+        base_config={"initial_cash_by_cell": cash},
+        minimum_post_contribution_cash=79.0,
+    )
+    for cell_id, contribution in report["sensitivity_reports"][0]["contributions_by_cell"].items():
+        assert cash[cell_id] - contribution >= 79.0 - 1e-9
