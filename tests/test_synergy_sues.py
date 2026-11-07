@@ -595,6 +595,8 @@ def test_trade_subledger_batch_is_atomic_when_later_fx_evidence_is_invalid():
     journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
     journal.add_account(account("ap", "2000", AccountType.LIABILITY, NormalBalance.CREDIT))
     journal.add_account(account("purchases", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    journal.add_account(account("fx-gain", "7100", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_account(account("fx-loss", "8100", AccountType.EXPENSE, NormalBalance.DEBIT))
     journal.add_fx_rate(FXRate("valid-invoice-rate", "EUR", "USD", "1.1",
         datetime(2026, 11, 1, 12, tzinfo=timezone.utc), "fx:invoice"))
     journal.add_fx_rate(FXRate("future-settlement-rate", "EUR", "USD", "1.2",
@@ -607,7 +609,7 @@ def test_trade_subledger_batch_is_atomic_when_later_fx_evidence_is_invalid():
     )
     with pytest.raises(ValueError, match="post-date"):
         subledger.post_to_journal(
-            journal, TradeAccountMap("ar", "revenue", "ap", "purchases"),
+            journal, TradeAccountMap("ar", "revenue", "ap", "purchases", "fx-gain", "fx-loss"),
             datetime(2026, 11, 7, 13, tzinfo=timezone.utc),
             {"invoice:atomic": "valid-invoice-rate", "bank:atomic": "future-settlement-rate"},
         )
