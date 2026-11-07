@@ -383,3 +383,90 @@ def test_regional_member_debit_and_credit_limits_are_enforced():
     )
     credit = credit_limited.authorize_purchase("WEST-PR1", "WEST-AG1", 10.0, 2, 0, "MEMBER-CREDIT")
     assert credit == {"authorized": False, "reason": "regional_member_credit_limit"}
+
+
+def test_member_funded_regional_reserve_covers_local_default_without_minting_cash():
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        trade_credit_limit_per_cell=50.0,
+        regional_pool_limit_per_region=100.0,
+        regional_pool_reserve_per_region=20.0,
+        grace_days=0,
+    )
+    assert sum(a.cash for a in ledger.accounts.values()) + sum(ledger.regional_pool_reserve_by_region.values()) == pytest.approx(ledger.opening_cash)
+    purchase = ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 30.0, 0, 0, "RESERVE-COVER")
+    assert purchase["trade_credit_extended"] == pytest.approx(12.0)
+    ledger.process_day(0)
+    invoice = ledger.payables["RESERVE-COVER"]
+    snap = ledger.snapshot()
+    assert invoice.status == "defaulted"
+    assert invoice.guarantee_paid == pytest.approx(12.0)
+    assert invoice.written_off == pytest.approx(0.0)
+    assert snap["regional_pool_guarantee_paid_by_region"]["WEST"] == pytest.approx(12.0)
+    assert snap["regional_pool_reserve_by_region"]["WEST"] == pytest.approx(8.0)
+    assert snap["trade_bad_debt_by_cell"]["WEST-AG1"] == pytest.approx(0.0)
+    assert snap["trade_payable_by_cell"]["WEST-PR1"] == pytest.approx(0.0)
+    assert snap["trade_receivable_by_cell"]["WEST-AG1"] == pytest.approx(0.0)
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_insufficient_regional_reserve_covers_part_and_seller_absorbs_residual():
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        trade_credit_limit_per_cell=50.0,
+        regional_pool_limit_per_region=100.0,
+        regional_pool_reserve_per_region=5.0,
+        grace_days=0,
+    )
+    ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 30.0, 0, 0, "RESERVE-PARTIAL")
+    ledger.process_day(0)
+    invoice = ledger.payables["RESERVE-PARTIAL"]
+    snap = ledger.snapshot()
+    assert invoice.guarantee_paid == pytest.approx(5.0)
+    assert invoice.written_off == pytest.approx(5.5)
+    assert snap["trade_bad_debt_by_cell"]["WEST-AG1"] == pytest.approx(5.5)
+    assert snap["regional_pool_reserve_by_region"]["WEST"] == pytest.approx(0.0)
+    assert snap["regional_pool_outstanding_by_region"]["WEST"] == pytest.approx(0.0)
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_cross_region_default_is_not_covered_by_local_pool_reserve():
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        trade_credit_limit_per_cell=50.0,
+        regional_pool_reserve_per_region=20.0,
+        grace_days=0,
+    )
+    ledger.authorize_purchase("WEST-PR1", "EAST-AG1", 30.0, 0, 0, "CROSS-DEFAULT")
+    ledger.process_day(0)
+    snap = ledger.snapshot()
+    assert ledger.payables["CROSS-DEFAULT"].guarantee_paid == pytest.approx(0.0)
+    assert snap["trade_bad_debt_by_cell"]["EAST-AG1"] == pytest.approx(12.0)
+    assert snap["regional_pool_reserve_by_region"]["WEST"] == pytest.approx(20.0)
+    assert snap["regional_pool_reserve_by_region"]["EAST"] == pytest.approx(20.0)
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_regional_pool_reserve_cannot_exceed_member_contributions():
+    with pytest.raises(ValueError):
+        CreditLedger(initial_cash_per_cell=1.0, regional_pool_reserve_per_region=11.0)
+
+
+def test_cross_default_resolves_all_open_payables_of_failed_buyer():
+    ledger = CreditLedger(
+        initial_cash_per_cell=0.0,
+        trade_credit_limit_per_cell=100.0,
+        grace_days=0,
+        regional_pool_reserve_per_region=20.0,
+    )
+    ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 10.0, 0, 0, "DEFAULT-1")
+    ledger.authorize_purchase("WEST-PR1", "WEST-AG2", 10.0, 5, 0, "DEFAULT-2")
+    ledger.process_day(0)
+    snap = ledger.snapshot()
+    assert ledger.accounts["WEST-PR1"].defaulted is True
+    assert ledger.payables["DEFAULT-1"].status == "defaulted"
+    assert ledger.payables["DEFAULT-2"].status == "defaulted"
+    assert snap["trade_payable_by_cell"]["WEST-PR1"] == pytest.approx(0.0)
+    assert snap["trade_receivable_by_cell"]["WEST-AG1"] == pytest.approx(0.0)
+    assert snap["trade_receivable_by_cell"]["WEST-AG2"] == pytest.approx(0.0)
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
