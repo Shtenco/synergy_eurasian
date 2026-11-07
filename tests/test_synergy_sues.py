@@ -814,3 +814,42 @@ def test_trade_subledger_foreign_currency_payable_settlement_recognizes_fx_loss(
     assert result["actual_ap_credit_control_delta"] == "88.0"
     assert journal.trial_balance()["accounts"]["fx-loss"]["debit"] == "2.0"
     assert journal.trial_balance()["balanced"]
+
+
+def test_journal_rejects_duplicate_source_event_ids():
+    journal = new_journal()
+    journal.post(entry("source-first", "source-first-idem"))
+    with pytest.raises(ValueError, match="Duplicate source_event_id"):
+        journal.post(entry("source-second", "source-second-idem"))
+
+
+def test_journal_close_blocks_backdated_posting_but_allows_forward_reversal():
+    journal = new_journal()
+    original = journal.post(entry("close-original", "close-original-idem"))
+    journal.close_through(date(2026, 11, 30))
+    assert journal.closed_through == date(2026, 11, 30)
+    late = JournalEntry(
+        "late-after-close", date(2026, 11, 15),
+        datetime(2026, 12, 2, 9, tzinfo=timezone.utc), "USD",
+        (
+            JournalLine("late-dr", "cash", "DEBIT", Money("5", "USD"),
+                Money("5", "USD"), "co1", "bank:late"),
+            JournalLine("late-cr", "revenue", "CREDIT", Money("5", "USD"),
+                Money("5", "USD"), "co1", "sale:late"),
+        ),
+        "late-event", "late-idem", "Late backdated posting",
+    )
+    with pytest.raises(ValueError, match="closed accounting period"):
+        journal.post(late)
+    reversal = journal.reverse(
+        original.entry_id, "close-reversal", date(2026, 12, 1),
+        datetime(2026, 12, 1, 12, tzinfo=timezone.utc),
+        "close-reversal-event", "close-reversal-idem", "Reverse after close",
+    )
+    assert reversal.reversal_of == original.entry_id
+    with pytest.raises(ValueError, match="cannot precede"):
+        journal.reverse(
+            original.entry_id, "too-early-reversal", date(2026, 11, 5),
+            datetime(2026, 12, 1, 12, tzinfo=timezone.utc),
+            "too-early-event", "too-early-idem", "Invalid early reversal",
+        )
