@@ -32,7 +32,7 @@ Available capacity is:
 
 Defaulted members have zero capacity. A period identifier is therefore part of the control, not merely a reporting label: a caller cannot reset the period limit by submitting another replenishment ID.
 
-The period limit is a synthetic policy parameter. A production policy would require a governed period definition, evidence-backed cash availability, exemptions and appeals.
+The period identifier is not caller-selectable. The research ledger derives it from its simulation day using fixed 30-day windows (`day-window-{day // 30}`) and rejects arbitrary labels. The period limit is a synthetic policy parameter. A production policy would require calendar-period semantics, a governed assessment schedule, evidence-backed cash availability, exemptions and appeals.
 
 ## 3. Targeting and allocation
 
@@ -56,7 +56,7 @@ This release accepts explicit targets. A stress-quantile / CVaR target-calibrati
 
 `execute_reserve_recovery(...)` rejects a stale plan. It also requires the ledger day to match the planning day. The underlying ledger validates the complete regional and federation contribution maps, every member's combined cash floor, default status, duplicate operation ID and cumulative period limit before changing any balance.
 
-The ledger then debits member cash and credits the matching regional and federation reserve accounts. Regional contributions can only be credited to the contributor's own region. Each leg is recorded as an audit event.
+The ledger requires the canonical ledger-derived period ID and the complete per-member period ceiling map; direct callers cannot omit the cumulative-cap control or choose a fresh arbitrary period label. The ledger then debits member cash and credits the matching regional and federation reserve accounts. Regional contributions can only be credited to the contributor's own region. Each leg is recorded as an audit event.
 
 The older `replenish_federation_reserve(...)` API remains available for compatibility with V6.6.4-K.
 
