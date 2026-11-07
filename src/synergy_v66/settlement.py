@@ -24,6 +24,8 @@ def replay_settlement(
     terms=(customer_terms_days,supplier_terms_days,local_terms_days,cross_border_terms_days)
     if any(x<0 for x in terms): raise ValueError("payment terms must be >= 0 days")
     required=("days","shipment_dispatch_audit","sales_audit","production_audit")
+    if physical_result.get("credit_constrained"):
+        raise ValueError("credit-constrained results already contain the integrated cash ledger; do not replay settlement twice")
     if any(k not in physical_result for k in required):
         raise ValueError("physical result is missing commercial audit fields")
 
