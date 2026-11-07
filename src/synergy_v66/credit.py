@@ -250,6 +250,9 @@ class CreditLedger:
         self.federation_reserve_contributions_by_cell = dict(federation_contributions)
         self.federation_pool_reserve_initial = float(federation_pool_reserve_total)
         self.federation_pool_reserve_balance = float(federation_pool_reserve_total)
+        self.federation_pool_reserve_replenished_total = 0.0
+        self.federation_reserve_replenished_by_cell = {cell.cell_id: 0.0 for cell in CELLS}
+        self.federation_replenishment_ids: set[str] = set()
         self.federation_reserve_allocation_rule = federation_reserve_allocation_rule
         self.federation_pool_guarantee_paid = 0.0
         self.regional_assessment_rate = float(regional_assessment_rate)
@@ -820,6 +823,74 @@ class CreditLedger:
         if batch_default_buyers:
             self._resolve_buyer_defaults_batch(batch_default_buyers, day)
 
+    def replenish_federation_reserve(
+        self,
+        contributions_by_cell: dict[str, float],
+        day: int,
+        replenishment_id: str,
+    ) -> dict[str, Any]:
+        """Transfer explicit member cash into the federation reserve atomically."""
+        if not isinstance(day, int) or isinstance(day, bool) or day < self.current_day:
+            raise ValueError("replenishment day must be an integer not earlier than current_day")
+        if day > self.current_day:
+            self.process_day(day)
+        if not isinstance(replenishment_id, str) or not replenishment_id.strip():
+            raise ValueError("replenishment_id must be a non-empty string")
+        if replenishment_id in self.federation_replenishment_ids:
+            raise ValueError("replenishment_id has already been processed")
+        if not isinstance(contributions_by_cell, dict) or set(contributions_by_cell) != set(CELL_BY_ID):
+            raise ValueError("replenishment map must contain every known cell exactly once")
+
+        normalized: dict[str, float] = {}
+        for cell_id, amount in contributions_by_cell.items():
+            if (
+                isinstance(amount, bool)
+                or not isinstance(amount, (int, float))
+                or not math.isfinite(float(amount))
+                or amount < 0
+            ):
+                raise ValueError("replenishment contributions must be finite and non-negative")
+            normalized[cell_id] = float(amount)
+
+        total = sum(normalized.values())
+        if total <= EPS:
+            raise ValueError("replenishment must transfer a positive amount")
+        # Validate every contributor before moving any cash: failure is all-or-nothing.
+        for cell_id, amount in normalized.items():
+            if amount <= EPS:
+                continue
+            account = self.accounts[cell_id]
+            if account.defaulted:
+                raise ValueError(f"defaulted member {cell_id} cannot replenish the federation reserve")
+            if account.cash - amount < self.minimum_post_contribution_cash - EPS:
+                raise ValueError(f"replenishment would breach the cash floor for {cell_id}")
+
+        for cell_id, amount in normalized.items():
+            if amount <= EPS:
+                continue
+            self.accounts[cell_id].cash -= amount
+            self.federation_reserve_replenished_by_cell[cell_id] += amount
+            self.events.append({
+                "day": day, "type": "federation_reserve_replenishment_contribution",
+                "replenishment_id": replenishment_id, "cell_id": cell_id,
+                "amount": amount,
+            })
+        self.federation_pool_reserve_balance += total
+        self.federation_pool_reserve_replenished_total += total
+        self.federation_replenishment_ids.add(replenishment_id)
+        self.events.append({
+            "day": day, "type": "federation_reserve_replenished",
+            "replenishment_id": replenishment_id, "amount": total,
+            "reserve_balance_after": self.federation_pool_reserve_balance,
+        })
+        return {
+            "replenishment_id": replenishment_id,
+            "day": day,
+            "amount": total,
+            "reserve_balance_after": self.federation_pool_reserve_balance,
+            "cash_conservation_error": self.snapshot()["cash_conservation_error"],
+        }
+
     def snapshot(self) -> dict[str, Any]:
         cash = {cell: account.cash for cell, account in self.accounts.items()}
         bank_debt = {cell: account.bank_debt for cell, account in self.accounts.items()}
@@ -869,6 +940,11 @@ class CreditLedger:
             "federation_reserve_allocation_rule": self.federation_reserve_allocation_rule,
             "federation_pool_reserve_initial": self.federation_pool_reserve_initial,
             "federation_pool_reserve_balance": self.federation_pool_reserve_balance,
+            "federation_pool_reserve_replenished_total": self.federation_pool_reserve_replenished_total,
+            "federation_pool_reserve_funded_total": (
+                self.federation_pool_reserve_initial + self.federation_pool_reserve_replenished_total
+            ),
+            "federation_reserve_replenished_by_cell": dict(self.federation_reserve_replenished_by_cell),
             "federation_pool_guarantee_paid": self.federation_pool_guarantee_paid,
             "regional_pool_reserve_initial_by_region": dict(self.regional_pool_reserve_initial_by_region),
             "regional_pool_reserve_by_region": dict(self.regional_pool_reserve_by_region),
