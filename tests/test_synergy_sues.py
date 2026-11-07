@@ -1053,3 +1053,32 @@ def test_intercompany_cash_only_records_reject_noncanonical_periods():
     )
     with pytest.raises(ValueError, match="Unsupported or non-canonical"):
         reconcile_intercompany([record])
+
+
+def test_bank_reconciliation_does_not_rewrite_closed_period_with_late_backdated_entry():
+    journal = new_journal()
+    late = JournalEntry(
+        "late-backdated-cash", date(2026, 11, 6),
+        datetime(2026, 12, 2, 9, tzinfo=timezone.utc), "USD",
+        (
+            JournalLine("late-cash", "cash", "DEBIT", Money("50", "USD"),
+                Money("50", "USD"), "co1", "bank:late"),
+            JournalLine("late-revenue", "revenue", "CREDIT", Money("50", "USD"),
+                Money("50", "USD"), "co1", "sale:late"),
+        ),
+        "evt-late", "idem-late", "Late backdated bank receipt",
+    )
+    journal.post(late)
+    period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
+    statement = BankStatement(
+        "stmt-late", "cash", "USD", period, Money("100", "USD"),
+        Money("150", "USD"), Money("100", "USD"),
+        (BankStatementLine("bank-line-late", date(2026, 11, 6),
+            Money("50", "USD"), "bank:late", "statement:late"),),
+    )
+    result = reconcile_bank_account(journal, statement, [])
+    assert result["ledger_closing_balance"] == "100"
+    assert result["bank_closing_balance"] == "150"
+    assert not result["fully_reconciled"]
+    assert result["late_recorded_journal_lines"][0]["journal_line_ref"] == "late-backdated-cash:late-cash"
+    assert result["bank_minus_ledger_closing_difference"] == "50"
