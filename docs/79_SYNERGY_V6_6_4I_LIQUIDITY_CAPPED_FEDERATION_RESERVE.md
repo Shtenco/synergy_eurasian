@@ -61,3 +61,10 @@ The three-seed, 20-day severe synthetic run used a 10-unit federation reserve, 5
 In this small fixture, the hybrid path exhausted the federation reserve while the mutual-credit path used only a small fraction. This is a scenario-specific exposure result, not evidence that hybrid is generally riskier or that the reserve size is adequate. The sample does not establish a recommended contribution rule or reserve target.
 
 **Validation:** 148 pytest tests passed on commit `c5f094f3ea46c62fb50e1ac26f48c78e320d331a`. Full EIIOM CI completed successfully, including the new multi-default exhaustion test and federation liquidity-cap experiment. The README integrity check also passed on the preceding model commit. The CI step wrote `outputs/synergy_v66_federation_liquidity_cap.json`.
+
+
+## 5. Absolute cash floor across both reserve tiers
+
+The federation allocator accepts `minimum_post_contribution_cash`. It computes the combined member cap as the minimum of the declared fraction of opening cash and the amount above the absolute floor, then subtracts the member's already-funded regional contribution. A regional contribution that already breaches the combined floor causes rejection; it is not concealed by assigning zero federation contribution.
+
+The CI fixture uses a 75-unit synthetic minimum post-contribution cash floor. This is a mechanical test threshold, not a real-world liquidity recommendation or an estimate of working-capital requirements.
