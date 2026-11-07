@@ -887,3 +887,26 @@ def test_bank_reconciliation_does_not_trust_caller_supplied_opening_ledger_balan
     assert result["ledger_opening_balance_calculated"] == "100"
     assert result["opening_ledger_balance_difference"] == "-10"
     assert not result["fully_reconciled"]
+
+
+def test_journal_rejects_stale_foreign_exchange_rate():
+    journal = Journal("USD", entity_id="co1", max_fx_rate_age_days=7)
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("revenue", "4000", AccountType.REVENUE, NormalBalance.CREDIT))
+    journal.add_fx_rate(FXRate(
+        "stale-eurusd", "EUR", "USD", "1.1",
+        datetime(2026, 10, 1, 12, tzinfo=timezone.utc), "fx:stale",
+    ))
+    now = datetime(2026, 11, 6, 12, tzinfo=timezone.utc)
+    stale_entry = JournalEntry(
+        "stale-fx-entry", date(2026, 11, 6), now, "USD",
+        (
+            JournalLine("stale-dr", "cash", "DEBIT", Money("2", "EUR"),
+                Money("2.2", "USD"), "co1", "bank:stale", fx_rate_ref="stale-eurusd"),
+            JournalLine("stale-cr", "revenue", "CREDIT", Money("2.2", "USD"),
+                Money("2.2", "USD"), "co1", "sale:stale"),
+        ),
+        "stale-fx-event", "stale-fx-idem", "Stale FX valuation",
+    )
+    with pytest.raises(ValueError, match="FX rate is stale"):
+        journal.post(stale_entry)
