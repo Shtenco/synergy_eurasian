@@ -381,3 +381,28 @@ def test_100_cycle_experiment_is_bitwise_reproducible_for_same_seeds():
     first = run_paired_reserve_recovery_experiment(**kwargs)
     second = run_paired_reserve_recovery_experiment(**kwargs)
     assert first == second
+
+
+def test_exogenous_stress_claim_reports_uncovered_amount_without_creating_cash():
+    ledger = CreditLedger(
+        initial_cash_per_cell=100.0,
+        regional_pool_reserve_per_region=2.0,
+        federation_pool_reserve_total=3.0,
+    )
+    ledger.process_day(0)
+    before = ledger.snapshot()
+    result = ledger.apply_exogenous_guarantee_claim(
+        claim_id="STRESS-UNCOVERED-001",
+        region="EAST",
+        beneficiary_cell="EAST-MF1",
+        amount=10.0,
+        day=0,
+    )
+    after = ledger.snapshot()
+    assert result["paid"] == pytest.approx(5.0)
+    assert result["uncovered"] == pytest.approx(5.0)
+    assert after["exogenous_guarantee_claim_requested_total"] == pytest.approx(10.0)
+    assert after["exogenous_guarantee_claim_paid_total"] == pytest.approx(5.0)
+    assert after["exogenous_guarantee_claim_uncovered_total"] == pytest.approx(5.0)
+    assert after["cash_by_cell"]["EAST-MF1"] - before["cash_by_cell"]["EAST-MF1"] == pytest.approx(5.0)
+    assert after["cash_conservation_error"] == pytest.approx(0.0)
