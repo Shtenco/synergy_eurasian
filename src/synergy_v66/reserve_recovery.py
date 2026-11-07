@@ -69,15 +69,15 @@ def _waterfill(
     remaining = max(0.0, float(requested))
     active = {cell_id for cell_id, cap in capacities.items() if cap > EPS}
     while remaining > EPS and active:
-        positive_weight_total = sum(max(0.0, weights.get(cell_id, 0.0)) for cell_id in active)
+        positive_weight_total = sum(max(0.0, weights.get(cell_id, 0.0)) for cell_id in sorted(active))
         effective_weights = {
             cell_id: (
                 max(0.0, weights.get(cell_id, 0.0))
                 if positive_weight_total > EPS else capacities[cell_id] - allocation[cell_id]
             )
-            for cell_id in active
+            for cell_id in sorted(active)
         }
-        weight_total = sum(effective_weights.values())
+        weight_total = sum(effective_weights[cell_id] for cell_id in sorted(effective_weights))
         if weight_total <= EPS:
             break
         round_remaining = remaining
