@@ -260,3 +260,43 @@ def test_synthetic_heterogeneous_cash_fixture_is_deterministic_and_validated():
     assert len(set(first.values())) == len(CELLS)
     with pytest.raises(ValueError):
         make_synthetic_heterogeneous_cash_fixture(float("nan"), 1.0)
+
+
+def test_regional_reserve_size_sensitivity_uses_paired_paths_and_reports_liquidity_cost():
+    from synergy_v66.financing_experiments import compare_regional_reserve_size_sensitivities
+
+    report = compare_regional_reserve_size_sensitivities(
+        seeds=[81, 82], reserve_levels_per_region=[0.0, 5.0, 10.0],
+        days=8, shock_regime="severe",
+    )
+    assert report["model_id"] == "SYNERGY_V6.6.4G_REGIONAL_RESERVE_ADEQUACY"
+    assert [x["reserve_per_region"] for x in report["sensitivity_reports"]] == [0.0, 5.0, 10.0]
+    for item in report["sensitivity_reports"]:
+        assert item["total_initial_reserve"] == pytest.approx(2.0 * item["reserve_per_region"])
+        for pair in item["comparison"]["paired_environment_hashes"]:
+            assert len(set(pair["environment_hashes"].values())) == 1
+        for mode in ("mutual_credit", "hybrid"):
+            diagnostics = item["diagnostics"][mode]
+            assert diagnostics["cash_conservation_error_max"] < 1e-6
+            assert diagnostics["reserve_remaining_mean"] >= -1e-9
+            assert 0.0 <= diagnostics["reserve_exhaustion_rate"] <= 1.0
+
+
+def test_regional_reserve_size_sensitivity_supports_liquidity_caps_and_rejects_invalid_levels():
+    from synergy_v66.financing_experiments import (
+        compare_regional_reserve_size_sensitivities,
+        make_synthetic_heterogeneous_cash_fixture,
+    )
+
+    cash = make_synthetic_heterogeneous_cash_fixture()
+    report = compare_regional_reserve_size_sensitivities(
+        seeds=[83], reserve_levels_per_region=[5.0], days=5,
+        initial_cash_by_cell=cash if False else None,
+    ) if False else compare_regional_reserve_size_sensitivities(
+        seeds=[83], reserve_levels_per_region=[5.0], days=5,
+        max_contribution_fraction=0.10,
+        base_config={"initial_cash_by_cell": cash},
+    )
+    assert report["sensitivity_reports"][0]["total_initial_reserve"] == pytest.approx(10.0)
+    with pytest.raises(ValueError):
+        compare_regional_reserve_size_sensitivities([1], [float("nan")])
