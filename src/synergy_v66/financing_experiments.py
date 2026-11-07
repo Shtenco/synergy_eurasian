@@ -146,6 +146,10 @@ def compare_financing_modes(
             else:
                 mode_config = dict(config)
                 mode_config.update(overrides)
+                if mode in {"mutual_credit", "hybrid"}:
+                    mode_config["regional_pool_reserve_per_region"] = config.get(
+                        "regional_pool_reserve_per_region", 20.0
+                    )
                 result = simulate(environment, credit_config=mode_config)
             hashes[mode] = result["environment_hash"]
             metrics = _metrics(result)
