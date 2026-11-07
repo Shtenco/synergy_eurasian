@@ -373,7 +373,7 @@ def execute_production_order(
                 f"Insufficient component {component.item_id}: required {quantity.amount}, available {available.amount}"
             )
         previewed_cost += inventory.preview_issue_cost(
-            component.item_id, order.location_id, quantity, order.planned_date
+            component.item_id, order.location_id, quantity, completion_date
         ).amount
         required.append((component, quantity))
     # Validate output pool units and zero-cost policy before consuming any input.
@@ -411,7 +411,7 @@ def execute_production_order(
             completion.output_quantity,
             capitalized_cost,
             completion_date,
-            f"production-order:{order.order_id}:completed-output",
+            f"production-order:{order.order_id}:completed-output:{completion.evidence_ref}",
         )
 
         entries: list[JournalEntry] = []
@@ -447,18 +447,19 @@ def execute_production_order(
             ))
         completion_id = f"production:{order.order_id}:capitalize"
         entries.append(JournalEntry(
-            completion_id, order.planned_date, recorded_at, journal.functional_currency,
+            completion_id, completion_date, recorded_at, journal.functional_currency,
             (
                 JournalLine(f"{completion_id}:dr", finished_goods_account_id, PostingSide.DEBIT,
-                    capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref),
+                    capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref,
+                    evidence_ids=(completion.evidence_ref,)),
                 JournalLine(f"{completion_id}:cr", wip_account_id, PostingSide.CREDIT,
-                    capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref),
+                    capitalized_cost, capitalized_cost, order.entity_id, output_movement.source_ref,
+                    evidence_ids=(completion.evidence_ref,)),
             ),
             f"production-completion:{order.order_id}",
             f"production-completion:{order.order_id}",
             f"Capitalize finished output for {order.order_id}",
         ))
-        journal.post_many(entries)
         journal.post_many(entries)
     except Exception:
         inventory._restore(inventory_snapshot)
