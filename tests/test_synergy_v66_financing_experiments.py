@@ -24,6 +24,13 @@ def test_financing_modes_share_paired_environment_and_preserve_invariants():
     assert set(report["summary"]) == {
         "unconstrained_reference", "cash_only", "bank_only", "mutual_credit", "hybrid"
     }
+    assert set(report["paired_deltas_vs_unconstrained_reference"]) == {
+        "cash_only", "bank_only", "mutual_credit", "hybrid"
+    }
+    for mode, rows in report["paired_deltas_vs_unconstrained_reference"].items():
+        assert [row["seed"] for row in rows] == [11, 12]
+        assert all("service_level" in row for row in rows)
+        assert "service_level" in report["paired_delta_summary_vs_unconstrained_reference"][mode]
 
 
 def test_financing_experiment_is_deterministic():
