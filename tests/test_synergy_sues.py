@@ -927,3 +927,22 @@ def test_observed_and_verified_physical_flows_require_evidence_ids():
     with pytest.raises(ValueError, match="require evidence_id"):
         PhysicalFlow("observed-no-proof", "factory", "customer", "steel",
             Quantity("1", "tonne"), "2026-Q4", evidence_status=FlowEvidenceStatus.OBSERVED)
+
+
+def test_inventory_gl_bridge_rejects_semantically_invalid_offset_accounts():
+    ledger = InventoryLedger("USD", entity_id="co1")
+    receipt = ledger.receive("bad-offset-receipt", "bad-offset-lot", "steel", "factory",
+        Quantity("2", "kg"), Money("20", "USD"), date(2026, 11, 1), "receipt:bad-offset")
+    journal = Journal("USD", entity_id="co1")
+    journal.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    journal.add_account(account("cogs", "5000", AccountType.EXPENSE, NormalBalance.DEBIT))
+    with pytest.raises(ValueError, match="receipt offset"):
+        ledger.post_to_journal(receipt.movement_id, journal, "inventory", "cash", "co1",
+            datetime(2026, 11, 2, tzinfo=timezone.utc))
+    issue = ledger.issue("bad-offset-issue", "steel", "factory",
+        Quantity("1", "kg"), date(2026, 11, 2), "issue:bad-offset")
+    with pytest.raises(ValueError, match="issue offset"):
+        ledger.post_to_journal(issue.movement_id, journal, "inventory", "grni", "co1",
+            datetime(2026, 11, 3, tzinfo=timezone.utc))
