@@ -291,9 +291,6 @@ def test_regional_reserve_size_sensitivity_supports_liquidity_caps_and_rejects_i
     cash = make_synthetic_heterogeneous_cash_fixture()
     report = compare_regional_reserve_size_sensitivities(
         seeds=[83], reserve_levels_per_region=[5.0], days=5,
-        initial_cash_by_cell=cash if False else None,
-    ) if False else compare_regional_reserve_size_sensitivities(
-        seeds=[83], reserve_levels_per_region=[5.0], days=5,
         max_contribution_fraction=0.10,
         base_config={"initial_cash_by_cell": cash},
     )
