@@ -163,7 +163,7 @@ class CreditLedger:
         day: int,
         invoice_id: str,
     ) -> dict[str, Any]:
-        """Authorize a purchase only if the buyer has unused trade-credit capacity."""
+        """Authorize cash, mixed cash/trade-credit, or bank-funded procurement."""
         account = self._cell(buyer)
         if seller is not None:
             self._cell(seller)
@@ -178,16 +178,67 @@ class CreditLedger:
             return {"authorized": False, "reason": "buyer_defaulted"}
         if seller is not None and self.accounts[seller].defaulted:
             return {"authorized": False, "reason": "seller_defaulted"}
-        if account.trade_payable + amount > account.trade_credit_limit + EPS:
-            self.events.append({"day": day, "type": "purchase_rejected", "buyer": buyer, "amount": amount, "reason": "trade_credit_limit"})
-            return {"authorized": False, "reason": "trade_credit_limit"}
-        invoice = PayableInvoice(invoice_id, buyer, seller, float(amount), float(amount), int(due_day), int(day))
+
+        cash_part = min(account.cash, float(amount))
+        credit_part = float(amount) - cash_part
+        available_trade = max(0.0, account.trade_credit_limit - account.trade_payable)
+        bank_draw = 0.0
+        funding_mode = "cash"
+
+        if credit_part > available_trade + EPS:
+            # If trade credit cannot cover the remainder, test the bank line
+            # before mutating cash. _fund() is called only after sufficiency is known.
+            required_draw = max(0.0, float(amount) - account.cash)
+            available_bank = max(0.0, account.bank_limit - account.bank_debt)
+            if required_draw > available_bank + EPS:
+                self.events.append({"day": day, "type": "purchase_rejected", "buyer": buyer, "amount": float(amount), "reason": "insufficient_cash_and_credit"})
+                return {"authorized": False, "reason": "insufficient_cash_and_credit"}
+            ok, bank_draw = self._fund(buyer, float(amount), day)
+            if not ok:
+                raise RuntimeError("bank funding pre-check and draw disagreed")
+            account.cash -= float(amount)
+            funding_mode = "bank_funded_cash"
+            cash_part = float(amount)
+            credit_part = 0.0
+        else:
+            # Cash is paid immediately; only the uncovered remainder is invoiced.
+            account.cash -= cash_part
+            funding_mode = "cash_and_trade_credit" if credit_part > EPS else "cash"
+
+        invoice = PayableInvoice(
+            invoice_id, buyer, seller, float(amount), credit_part,
+            int(due_day), int(day), "paid" if credit_part <= EPS else "open",
+        )
         self.payables[invoice_id] = invoice
-        account.trade_payable += float(amount)
-        if seller is not None:
-            self.accounts[seller].trade_receivable += float(amount)
-        self.events.append({"day": day, "type": "purchase_authorized", "invoice_id": invoice_id, "buyer": buyer, "seller": seller, "amount": float(amount), "due_day": int(due_day)})
-        return {"authorized": True, "reason": None, "invoice_id": invoice_id}
+
+        if cash_part > EPS:
+            if seller is None:
+                self.external_supplier_payments += cash_part
+            else:
+                self.accounts[seller].cash += cash_part
+                self.internal_transfer_out += cash_part
+                self.internal_transfer_in += cash_part
+            self.events.append({
+                "day": day, "type": "purchase_cash_settled", "invoice_id": invoice_id,
+                "buyer": buyer, "seller": seller, "amount": cash_part,
+            })
+
+        if credit_part > EPS:
+            account.trade_payable += credit_part
+            if seller is not None:
+                self.accounts[seller].trade_receivable += credit_part
+
+        self.events.append({
+            "day": day, "type": "purchase_authorized", "invoice_id": invoice_id,
+            "buyer": buyer, "seller": seller, "amount": float(amount),
+            "cash_paid": cash_part, "trade_credit_extended": credit_part,
+            "bank_draw": bank_draw, "funding_mode": funding_mode, "due_day": int(due_day),
+        })
+        return {
+            "authorized": True, "reason": None, "invoice_id": invoice_id,
+            "cash_paid": cash_part, "trade_credit_extended": credit_part,
+            "bank_draw": bank_draw, "funding_mode": funding_mode,
+        }
 
     def issue_customer_invoice(
         self, seller: str, amount: float, due_day: int, day: int, invoice_id: str
