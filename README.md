@@ -434,3 +434,7 @@ The regional guarantee reserve is funded by an equal member-cash contribution at
 The guarantee reserve ledger accepts an explicit per-cell contribution map. Equal-all-member funding remains the default; a paired research experiment compares it with production-capacity-weighted contributions while holding the regional reserve size and exogenous paths constant.
 
 The CI experiment now also compares equal-all-member and production-capacity-weighted guarantee-reserve contributions on paired severe-shock paths, keeping total reserve capital fixed.
+
+- [V6.6.4-E regional guarantee loss waterfall](docs/75_SYNERGY_V6_6_4E_REGIONAL_LOSS_WATERFALL.md)
+
+An optional, disabled-by-default capped pro-rata member assessment can now follow reserve coverage on local defaults. The transfer is taken from solvent members' cash and paid to the claimant seller; any remaining uncovered loss stays with the seller.
