@@ -87,3 +87,10 @@ F_i leq maxleft(0,min(alpha C_i, C_i-M)-R_iight)
 where (C_i) is opening cash, (M) is the absolute minimum cash floor, (R_i) is the regional reserve contribution and (alpha) is the combined contribution fraction. If the requested federation reserve cannot be funded within these remaining caps, allocation fails.
 
 The same floor is passed into the credit ledger, which independently checks regional plus federal contributions before initializing member cash. The floor therefore cannot be bypassed by calling the ledger directly or by supplying a contribution map generated elsewhere. It remains a synthetic liquidity safeguard, not an empirically calibrated operating-cash requirement.
+
+
+## 7. CI validation of combined caps and cash floor
+
+The latest complete financing experiment on commit `f05e1d5d3ed14648636af810a73ea85b535813f5` passed **160 pytest tests** and the full EIIOM CI workflow. The federation reserve scenario funded 10 units with a 10% combined contribution cap and an absolute 75-unit post-contribution cash floor. The ledger independently enforced the floor after deducting both regional and federation contributions.
+
+In the three-seed, 20-day severe sample, the federation contribution total was exactly 10 units. Maximum consolidated cash residual was approximately (1.8	imes10^{-12}) in hybrid mode and (9.1	imes10^{-13}) in mutual-credit mode. This verifies accounting consistency for the synthetic fixture; it does not validate 75 units as a real operating-liquidity threshold.
