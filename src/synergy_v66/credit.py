@@ -29,6 +29,7 @@ class CellAccount:
     bank_limit: float
     bank_debt: float = 0.0
     trade_credit_limit: float = 0.0
+    trade_receivable_limit: float | None = None
     trade_payable: float = 0.0
     trade_receivable: float = 0.0
     customer_receivable: float = 0.0
@@ -66,11 +67,16 @@ class CreditLedger:
         initial_cash_per_cell: float = 200.0,
         bank_limit_per_cell: float = 0.0,
         trade_credit_limit_per_cell: float = 100.0,
+        trade_receivable_limit_per_cell: float | None = None,
         grace_days: int = 2,
     ) -> None:
         limits = (initial_cash_per_cell, bank_limit_per_cell, trade_credit_limit_per_cell)
         if any(not math.isfinite(float(x)) or float(x) < 0 for x in limits):
             raise ValueError("cash and credit limits must be finite and >= 0")
+        if trade_receivable_limit_per_cell is not None and (
+            not math.isfinite(float(trade_receivable_limit_per_cell)) or trade_receivable_limit_per_cell < 0
+        ):
+            raise ValueError("trade receivable limit must be finite and >= 0")
         if grace_days < 0:
             raise ValueError("grace_days must be >= 0")
         self.accounts = {
@@ -78,6 +84,10 @@ class CreditLedger:
                 cash=float(initial_cash_per_cell),
                 bank_limit=float(bank_limit_per_cell),
                 trade_credit_limit=float(trade_credit_limit_per_cell),
+                trade_receivable_limit=(
+                    float(trade_receivable_limit_per_cell)
+                    if trade_receivable_limit_per_cell is not None else None
+                ),
             )
             for c in CELLS
         }
@@ -202,6 +212,12 @@ class CreditLedger:
             credit_part = 0.0
         else:
             # Cash is paid immediately; only the uncovered remainder is invoiced.
+            if seller is not None:
+                seller_account = self.accounts[seller]
+                exposure_limit = seller_account.trade_receivable_limit
+                if exposure_limit is not None and seller_account.trade_receivable + credit_part > exposure_limit + EPS:
+                    self.events.append({"day": day, "type": "purchase_rejected", "buyer": buyer, "seller": seller, "amount": float(amount), "reason": "seller_exposure_limit"})
+                    return {"authorized": False, "reason": "seller_exposure_limit"}
             account.cash -= cash_part
             funding_mode = "cash_and_trade_credit" if credit_part > EPS else "cash"
 
@@ -279,13 +295,16 @@ class CreditLedger:
             account = self.accounts[invoice.buyer]
             if account.defaulted:
                 continue
-            ok, draw = self._fund(invoice.buyer, invoice.remaining, day)
-            if ok:
-                amount = invoice.remaining
+            available_liquidity = account.cash + max(0.0, account.bank_limit - account.bank_debt)
+            amount = min(invoice.remaining, available_liquidity)
+            draw = 0.0
+            if amount > EPS:
+                ok, draw = self._fund(invoice.buyer, amount, day)
+                if not ok:
+                    raise RuntimeError("partial settlement liquidity pre-check and draw disagreed")
                 account.cash -= amount
                 account.trade_payable -= amount
-                invoice.remaining = 0.0
-                invoice.status = "paid"
+                invoice.remaining -= amount
                 if invoice.seller is None:
                     self.external_supplier_payments += amount
                 else:
@@ -294,8 +313,15 @@ class CreditLedger:
                     seller.trade_receivable -= amount
                     self.internal_transfer_out += amount
                     self.internal_transfer_in += amount
-                self.events.append({"day": day, "type": "payable_settled", "invoice_id": invoice.invoice_id, "buyer": invoice.buyer, "seller": invoice.seller, "amount": amount, "bank_draw": draw})
-            elif day >= invoice.due_day + self.grace_days:
+                if invoice.remaining <= EPS:
+                    invoice.remaining = 0.0
+                    invoice.status = "paid"
+                else:
+                    invoice.status = "overdue" if day > invoice.due_day else "partial"
+                self.events.append({"day": day, "type": "payable_partial_or_full_settlement", "invoice_id": invoice.invoice_id, "buyer": invoice.buyer, "seller": invoice.seller, "amount": amount, "remaining": invoice.remaining, "bank_draw": draw})
+            if invoice.remaining > EPS and day > invoice.due_day:
+                invoice.status = "overdue"
+            if invoice.remaining > EPS and day >= invoice.due_day + self.grace_days:
                 invoice.status = "defaulted"
                 account.defaulted = True
                 self.events.append({"day": day, "type": "default", "cell_id": invoice.buyer, "invoice_id": invoice.invoice_id, "remaining": invoice.remaining})
@@ -323,6 +349,11 @@ class CreditLedger:
             },
             "trade_credit_utilization_by_cell": {
                 k: (v.trade_payable / v.trade_credit_limit if v.trade_credit_limit > EPS else 0.0)
+                for k, v in self.accounts.items()
+            },
+            "trade_receivable_limit_by_cell": {k: v.trade_receivable_limit for k, v in self.accounts.items()},
+            "trade_receivable_utilization_by_cell": {
+                k: (v.trade_receivable / v.trade_receivable_limit if v.trade_receivable_limit is not None and v.trade_receivable_limit > EPS else 0.0)
                 for k, v in self.accounts.items()
             },
             "open_payables": {k: v.remaining for k, v in self.payables.items() if v.remaining > EPS},
