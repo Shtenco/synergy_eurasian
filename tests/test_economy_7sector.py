@@ -253,3 +253,24 @@ def test_repair_scenario_handles_zero_target_replacement_without_infinity():
     assert result["target_replacement_coverage"] is None
     assert result["target_residual_margin_pct_of_replacement"] is None
     assert result["replacement_coverage_defined"] is False
+
+
+def test_leontief_matrix_rejects_boolean_and_string_coefficients():
+    cfg = config()
+    bad_boolean = copy.deepcopy(cfg)
+    bad_boolean["input_output_matrix"][0][0] = True
+    try:
+        leontief_results(bad_boolean)
+    except ValueError as exc:
+        assert "not a boolean or string" in str(exc)
+    else:
+        raise AssertionError("Boolean Leontief coefficient was accepted")
+
+    bad_string = copy.deepcopy(cfg)
+    bad_string["input_output_matrix"][0][0] = "0.1"
+    try:
+        leontief_results(bad_string)
+    except ValueError as exc:
+        assert "not a boolean or string" in str(exc)
+    else:
+        raise AssertionError("String Leontief coefficient was accepted")
