@@ -920,6 +920,13 @@ def compare_regional_reserve_size_sensitivities(
         or not 0.0 <= max_contribution_fraction <= 1.0
     ):
         raise ValueError("max_contribution_fraction must be finite and in [0, 1]")
+    if (
+        isinstance(minimum_post_contribution_cash, bool)
+        or not isinstance(minimum_post_contribution_cash, (int, float))
+        or not math.isfinite(float(minimum_post_contribution_cash))
+        or minimum_post_contribution_cash < 0
+    ):
+        raise ValueError("minimum_post_contribution_cash must be finite and non-negative")
 
     config_base = dict(base_config or {})
     config_base.pop("regional_reserve_contributions_by_cell", None)
