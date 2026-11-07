@@ -7,7 +7,7 @@ FX rate reference and functional-currency valuation.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Iterable
@@ -105,12 +105,18 @@ class JournalEntry:
 class Journal:
     """In-memory reference journal; durable storage is a separate infrastructure task."""
 
-    def __init__(self, functional_currency: str, entity_id: str | None = None) -> None:
+    def __init__(
+        self, functional_currency: str, entity_id: str | None = None,
+        max_fx_rate_age_days: int = 7,
+    ) -> None:
         # Reuse Money's canonical currency validation.
         self.functional_currency = Money(Decimal("0"), functional_currency).currency
         if entity_id is not None and not entity_id:
             raise ValueError("entity_id cannot be empty")
+        if isinstance(max_fx_rate_age_days, bool) or not isinstance(max_fx_rate_age_days, int) or max_fx_rate_age_days < 0:
+            raise ValueError("max_fx_rate_age_days must be a non-negative integer")
         self.entity_id = entity_id
+        self.max_fx_rate_age_days = max_fx_rate_age_days
         self._accounts: dict[str, Account] = {}
         self._entries: dict[str, JournalEntry] = {}
         self._idempotency_keys: set[str] = set()
@@ -206,8 +212,14 @@ class Journal:
                         raise ValueError(f"Unknown FX rate reference: {line.fx_rate_ref}")
                     if rate.base_currency != line.amount.currency or rate.quote_currency != self.functional_currency:
                         raise ValueError("FX rate direction must convert transaction currency to functional currency")
-                    if rate.observed_at.date() > entry.effective_date:
+                    rate_date_utc = rate.observed_at.astimezone(timezone.utc).date()
+                    if rate_date_utc > entry.effective_date:
                         raise ValueError("FX rate observation cannot post-date the journal effective date")
+                    fx_age_days = (entry.effective_date - rate_date_utc).days
+                    if fx_age_days > self.max_fx_rate_age_days:
+                        raise ValueError(
+                            f"FX rate is stale by {fx_age_days} days; maximum allowed is {self.max_fx_rate_age_days}"
+                        )
                     expected_functional = rate.convert(line.amount)
                     if expected_functional.amount != line.functional_amount.amount:
                         raise ValueError("Functional amount does not match the referenced FX rate")
