@@ -440,3 +440,7 @@ The CI experiment now also compares equal-all-member and production-capacity-wei
 An optional, disabled-by-default capped pro-rata member assessment can now follow reserve coverage on local defaults. The transfer is taken from solvent members' cash and paid to the claimant seller; any remaining uncovered loss stays with the seller.
 
 The loss-waterfall runner also executes deterministic targeted local and cross-region default fixtures so reserve coverage, capped member assessments and cross-border exclusions are exercised even when naturally generated defaults do not trigger those paths.
+
+- [V6.6.4-F liquidity-capped reserve contributions](docs/76_SYNERGY_V6_6_4F_LIQUIDITY_CAPPED_RESERVE.md)
+
+The credit ledger supports heterogeneous opening cash by cell. A deterministic weighted water-filling allocator funds regional reserves without exceeding each member's configured fraction of opening cash; it rejects reserve targets that cannot be funded within those caps.
