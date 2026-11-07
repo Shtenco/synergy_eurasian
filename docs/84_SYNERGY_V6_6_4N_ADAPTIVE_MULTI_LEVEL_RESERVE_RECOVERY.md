@@ -32,7 +32,7 @@ Available capacity is:
 
 Defaulted members have zero capacity. A period identifier is therefore part of the control, not merely a reporting label: a caller cannot reset the period limit by submitting another replenishment ID.
 
-The period identifier is not caller-selectable. The research ledger derives it from its simulation day using fixed 30-day windows (`day-window-{day // 30}`) and rejects arbitrary labels. The period limit is a synthetic policy parameter. A production policy would require calendar-period semantics, a governed assessment schedule, evidence-backed cash availability, exemptions and appeals.
+The period identifier is not caller-selectable. The research ledger derives it from its simulation day using fixed 30-day windows (`day-window-{day // 30}`) and rejects arbitrary labels. The maximum fraction is owned by the ledger configuration (`reserve_recovery_contribution_fraction`, default 10% of opening cash). The planner may request a lower fraction but cannot raise the ledger ceiling, and the ledger independently rejects caller-supplied per-member caps above its own setting. The 10% value is a synthetic policy parameter. A production policy would require calendar-period semantics, a governed assessment schedule, evidence-backed cash availability, exemptions and appeals.
 
 ## 3. Targeting and allocation
 
