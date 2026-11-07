@@ -144,3 +144,30 @@ def compare_financing_modes(
             "Compare distributions across seeds and regimes; validate parameters against observed data."
         ),
     }
+
+
+
+def compare_all_shock_regimes(
+    seeds: Iterable[int],
+    days: int = 45,
+    base_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run paired financing comparisons under normal, volatile and severe shocks."""
+    seed_list = list(seeds)
+    if not seed_list:
+        raise ValueError("at least one seed is required")
+    reports = {
+        regime: compare_financing_modes(seed_list, days, regime, base_config)
+        for regime in ("normal", "volatile", "severe")
+    }
+    return {
+        "model_id": "SYNERGY_V6.6.3E_MULTI_REGIME_FINANCING_STRESS",
+        "days": days,
+        "seeds": seed_list,
+        "shock_regimes": list(reports),
+        "reports_by_regime": reports,
+        "interpretation_guard": (
+            "Synthetic paired multi-regime experiment. Compare paired distributions and downside "
+            "metrics; this report does not establish real-world policy superiority."
+        ),
+    }
