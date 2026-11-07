@@ -128,3 +128,34 @@ def test_reserve_contribution_scheme_rejects_unknown_rule():
 
     with pytest.raises(ValueError):
         build_regional_reserve_contributions("equal_but_not_equal")
+
+
+def test_regional_loss_waterfall_comparison_keeps_paired_environments_and_cash_balance():
+    from synergy_v66.financing_experiments import compare_regional_loss_waterfalls
+
+    report = compare_regional_loss_waterfalls(
+        [61], days=10, shock_regime="severe",
+        reserve_per_region=10.0, assessment_rate=0.10,
+        assessment_limit_per_cell=1.0,
+    )
+    assert report["model_id"] == "SYNERGY_V6.6.4E_REGIONAL_LOSS_WATERFALL"
+    cases = report["reports_by_waterfall"]
+    assert set(cases) == {"reserve_only", "reserve_plus_capped_assessment"}
+    for case in cases.values():
+        for pair in case["paired_environment_hashes"]:
+            assert len(set(pair["environment_hashes"].values())) == 1
+        for mode in ("mutual_credit", "hybrid"):
+            for row in case["observations"][mode]:
+                assert row["cash_conservation_error"] < 1e-6
+                assert row["regional_pool_net_position_error"] < 1e-7
+    assessment = cases["reserve_plus_capped_assessment"]["observations"]["mutual_credit"][0]
+    assert assessment["regional_member_assessment_paid"] >= 0.0
+
+
+def test_regional_loss_waterfall_rejects_non_finite_assessment_parameters():
+    from synergy_v66.financing_experiments import compare_regional_loss_waterfalls
+
+    with pytest.raises(ValueError):
+        compare_regional_loss_waterfalls([1], assessment_rate=float("nan"))
+    with pytest.raises(ValueError):
+        compare_regional_loss_waterfalls([1], assessment_limit_per_cell=float("inf"))
