@@ -188,9 +188,3 @@ def test_historical_signature_remains_verifiable_after_later_key_revocation(tmp_
     assert registry.verify_historical(
         signed, verified_at="2026-11-06T10:01:00+00:00"
     ).identity_id == "org:a"
-    after_revocation = sign_event(
-        event(tmp_path, "after-revocation.db"), "org:a", "tenant:a", "k1",
-        # The test helper's key is not exposed here; the existing signed envelope
-        # is deliberately kept as the only pre-revocation signature.
-        b"", "2026-11-06T10:00:45+00:00",
-    )
