@@ -980,67 +980,38 @@ class CreditLedger:
         contributions_by_cell: dict[str, float],
         day: int,
         replenishment_id: str,
+        contribution_fraction_per_period: float = 0.10,
     ) -> dict[str, Any]:
-        """Transfer explicit member cash into the federation reserve atomically."""
+        """Compatibility wrapper using the ledger-defined 30-day contribution cap."""
+        if (
+            isinstance(contribution_fraction_per_period, bool)
+            or not isinstance(contribution_fraction_per_period, (int, float))
+            or not math.isfinite(float(contribution_fraction_per_period))
+            or not 0.0 <= contribution_fraction_per_period <= 1.0
+        ):
+            raise ValueError("contribution_fraction_per_period must be between 0 and 1")
         if not isinstance(day, int) or isinstance(day, bool) or day < self.current_day:
             raise ValueError("replenishment day must be an integer not earlier than current_day")
-        if not isinstance(replenishment_id, str) or not replenishment_id.strip():
-            raise ValueError("replenishment_id must be a non-empty string")
-        if replenishment_id in self.federation_replenishment_ids:
-            raise ValueError("replenishment_id has already been processed")
-        if not isinstance(contributions_by_cell, dict) or set(contributions_by_cell) != set(CELL_BY_ID):
-            raise ValueError("replenishment map must contain every known cell exactly once")
-
-        normalized: dict[str, float] = {}
-        for cell_id, amount in contributions_by_cell.items():
-            if (
-                isinstance(amount, bool)
-                or not isinstance(amount, (int, float))
-                or not math.isfinite(float(amount))
-                or amount < 0
-            ):
-                raise ValueError("replenishment contributions must be finite and non-negative")
-            normalized[cell_id] = float(amount)
-
-        total = sum(normalized.values())
-        if total <= EPS:
-            raise ValueError("replenishment must transfer a positive amount")
-        if day > self.current_day:
-            self.process_day(day)
-        # Validate every contributor before moving any cash: failure is all-or-nothing.
-        for cell_id, amount in normalized.items():
-            if amount <= EPS:
-                continue
-            account = self.accounts[cell_id]
-            if account.defaulted:
-                raise ValueError(f"defaulted member {cell_id} cannot replenish the federation reserve")
-            if account.cash - amount < self.minimum_post_contribution_cash - EPS:
-                raise ValueError(f"replenishment would breach the cash floor for {cell_id}")
-
-        for cell_id, amount in normalized.items():
-            if amount <= EPS:
-                continue
-            self.accounts[cell_id].cash -= amount
-            self.federation_reserve_replenished_by_cell[cell_id] += amount
-            self.events.append({
-                "day": day, "type": "federation_reserve_replenishment_contribution",
-                "replenishment_id": replenishment_id, "cell_id": cell_id,
-                "amount": amount,
-            })
-        self.federation_pool_reserve_balance += total
-        self.federation_pool_reserve_replenished_total += total
-        self.federation_replenishment_ids.add(replenishment_id)
-        self.events.append({
-            "day": day, "type": "federation_reserve_replenished",
-            "replenishment_id": replenishment_id, "amount": total,
-            "reserve_balance_after": self.federation_pool_reserve_balance,
-        })
+        period_id = f"day-window-{day // RECOVERY_PERIOD_DAYS}"
+        regional_zero = {cell_id: 0.0 for cell_id in CELL_BY_ID}
+        period_limits = {
+            cell_id: self.initial_cash_by_cell[cell_id] * float(contribution_fraction_per_period)
+            for cell_id in CELL_BY_ID
+        }
+        result = self.replenish_reserves(
+            regional_contributions_by_cell=regional_zero,
+            federation_contributions_by_cell=contributions_by_cell,
+            day=day,
+            replenishment_id=replenishment_id,
+            recovery_period_id=period_id,
+            contribution_limit_by_cell=period_limits,
+        )
         return {
             "replenishment_id": replenishment_id,
             "day": day,
-            "amount": total,
-            "reserve_balance_after": self.federation_pool_reserve_balance,
-            "cash_conservation_error": self.snapshot()["cash_conservation_error"],
+            "amount": result["federation_amount"],
+            "reserve_balance_after": result["federation_reserve_balance"],
+            "cash_conservation_error": result["cash_conservation_error"],
         }
 
     def snapshot(self) -> dict[str, Any]:
