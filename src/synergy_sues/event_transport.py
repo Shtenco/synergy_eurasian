@@ -567,7 +567,11 @@ class DurableEventStore:
                 if supplied_hash != digest or digest != stored["event_hash"]:
                     return False
                 snapshot = json.loads(_canonical(message))
-                if authenticator(snapshot) is not True:
+                try:
+                    authenticated = authenticator(snapshot)
+                except Exception:
+                    return False
+                if authenticated is not True:
                     return False
                 if _canonical(snapshot) != _canonical(message):
                     return False
