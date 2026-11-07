@@ -241,3 +241,15 @@ def test_supply_solver_rejects_boolean_controls_and_indices():
         assert "must be a boolean" in str(exc)
     else:
         raise AssertionError("String critical-floor switch was accepted")
+
+
+
+def test_repair_scenario_handles_zero_target_replacement_without_infinity():
+    from synergy_economy_7sector import reproduction_repair_results
+    cfg = config()
+    cfg["reproduction_repair_plan"]["replacement_cost_reduction_target"] = 1.0
+    result = reproduction_repair_results(cfg)
+    assert result["target_replacement_capex_usd"] == 0.0
+    assert result["target_replacement_coverage"] is None
+    assert result["target_residual_margin_pct_of_replacement"] is None
+    assert result["replacement_coverage_defined"] is False
