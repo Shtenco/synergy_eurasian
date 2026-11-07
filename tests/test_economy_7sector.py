@@ -172,7 +172,7 @@ def test_portfolio_simulation_rejects_invalid_horizon_yield_and_allocation():
     try:
         simulate_portfolio(bad_allocation)
     except ValueError as exc:
-        assert "between 0 and 1" in str(exc)
+        assert "surplus_allocation" in str(exc) and ("<= 1" in str(exc) or ">= 0" in str(exc))
     else:
         raise AssertionError("Out-of-range allocation shares were accepted")
 
