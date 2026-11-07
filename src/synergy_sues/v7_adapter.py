@@ -235,11 +235,20 @@ def adapt_v7_realization_chain(
         raise ValueError("V7 realization evaluator must return a report object")
     report_json = _canonical(report)
 
-    output_map = {str(_value(x, "output_id")): x for x in output_rows}
-    delivery_map = {str(_value(x, "delivery_id")): x for x in delivery_rows}
-    invoice_map = {str(_value(x, "document_id")): x for x in invoice_rows}
-    settlement_map = {str(_value(x, "settlement_id")): x for x in settlement_rows}
-    allocation_map = {str(_value(x, "allocation_id")): x for x in allocation_rows}
+    def unique_index(rows: list[Any], field: str, label: str) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for item in rows:
+            identifier = str(_value(item, field, ""))
+            if not identifier or identifier in result:
+                raise ValueError(f"{label} contains a missing or duplicate {field}: {identifier}")
+            result[identifier] = item
+        return result
+
+    output_map = unique_index(output_rows, "output_id", "outputs")
+    delivery_map = unique_index(delivery_rows, "delivery_id", "deliveries")
+    invoice_map = unique_index(invoice_rows, "document_id", "invoices")
+    settlement_map = unique_index(settlement_rows, "settlement_id", "settlements")
+    allocation_map = unique_index(allocation_rows, "allocation_id", "invoice allocations")
 
     links: list[SUESRealizationLink] = []
 
@@ -258,7 +267,11 @@ def adapt_v7_realization_chain(
         evidence = tuple(str(data[x]) for x in evidence_fields if data.get(x))
         related_ids = tuple(str(data[x]) for x in related if data.get(x))
         quantity = Decimal(str(data[quantity_field])) if quantity_field and data.get(quantity_field) is not None else None
+        if quantity is not None and (not quantity.is_finite() or quantity <= 0):
+            raise ValueError(f"{record_type} quantity must be finite and positive")
         amount = Money(Decimal(str(data[amount_field])), str(data[currency_field])) if amount_field and data.get(amount_field) is not None else None
+        if amount is not None and amount.amount <= 0:
+            raise ValueError(f"{record_type} amount must be positive")
         status = _source_class(data.get(status_field)) if status_field else None
         payload = _canonical(data)
         links.append(SUESRealizationLink(
@@ -282,6 +295,13 @@ def adapt_v7_realization_chain(
         add(row, "DELIVERY_ACCEPTANCE", "delivery_id", "accepted_date", "acceptance_ref",
             ("acceptance_ref",), ("output_id",),
             quantity_field="accepted_quantity", unit_field="unit", status_field="source_class")
+        links[-1] = SUESRealizationLink(**{
+            **links[-1].__dict__,
+            "entity_id": str(_value(output, "enterprise_id", "")),
+            "project_id": str(_value(output, "project_id", "")),
+            "benefit_stream_id": str(_value(output, "benefit_stream_id", "")),
+            "period_id": str(_value(output, "period", "")),
+        })
     for row in invoice_rows:
         add(row, "TRADE_DOCUMENT", "document_id", "issue_date", "source_ref",
             ("source_ref",), ("counterparty_id",),
@@ -319,6 +339,17 @@ def adapt_v7_realization_chain(
             links[-1] = SUESRealizationLink(**{
                 **links[-1].__dict__, "effective_date": _date(effective, "settlement_date")
             })
+        if allocation is not None:
+            linked_delivery = delivery_map.get(str(_value(allocation, "delivery_id")))
+            linked_output = output_map.get(str(_value(linked_delivery, "output_id"))) if linked_delivery is not None else None
+            if linked_output is not None:
+                links[-1] = SUESRealizationLink(**{
+                    **links[-1].__dict__,
+                    "entity_id": str(_value(linked_output, "enterprise_id", "")),
+                    "project_id": str(_value(linked_output, "project_id", "")),
+                    "benefit_stream_id": str(_value(linked_output, "benefit_stream_id", "")),
+                    "period_id": str(_value(linked_output, "period", "")),
+                })
     for row in cost_rows:
         add(row, "COST_OBSERVATION", "cost_id", None, "evidence_id", ("evidence_id",), (),
             "enterprise_id", "project_id", "benefit_stream_id", "period",
