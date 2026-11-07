@@ -869,3 +869,34 @@ def test_inventory_ledger_rejects_cross_entity_journal_posting():
     with pytest.raises(ValueError, match="ownership mismatch"):
         ledger.post_to_journal(receipt.movement_id, journal, "inventory", "grni", "co2",
             datetime(2026, 11, 2, tzinfo=timezone.utc))
+
+
+def test_benefit_registry_rejects_duplicate_enterprise_period_metric_counterfactual_scope():
+    registry = BenefitAttributionRegistry()
+    registry.add_event(BenefitEvent(
+        "benefit-scope-a", "measurement-a", "enterprise-1", "2026-Q4",
+        "ENERGY_SAVING", Money("100", "USD"), "baseline-vs-control",
+        ["meter:site-a"], EvidenceStatus.VERIFIED,
+    ))
+    with pytest.raises(ValueError, match="measurement scope already registered"):
+        registry.add_event(BenefitEvent(
+            "benefit-scope-b", "measurement-b", "enterprise-1", "2026-Q4",
+            "ENERGY_SAVING", Money("100", "USD"), "baseline-vs-control",
+            ["meter:site-b"], EvidenceStatus.VERIFIED,
+        ))
+    # Distinct explicit scopes represent separate measured facilities.
+    registry.add_event(BenefitEvent(
+        "benefit-scope-c", "measurement-c", "enterprise-1", "2026-Q4",
+        "ENERGY_SAVING", Money("100", "USD"), "baseline-vs-control",
+        ["meter:site-b"], EvidenceStatus.VERIFIED, "facility:site-b",
+    ))
+
+
+def test_benefit_event_freezes_evidence_ids():
+    evidence = ["meter:one"]
+    event = BenefitEvent(
+        "benefit-immutable", "measurement-immutable", "enterprise-1", "2026-Q4",
+        "OUTPUT_GAIN", Money("10", "KZT"), "baseline-1", evidence, EvidenceStatus.OBSERVED,
+    )
+    evidence.append("attacker:injected")
+    assert event.evidence_ids == ("meter:one",)
