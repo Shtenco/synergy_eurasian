@@ -690,3 +690,71 @@ def test_fifo_inventory_movements_post_to_balanced_journal():
     assert journal.trial_balance()["balanced"]
     assert journal.trial_balance()["total_debits"] == journal.trial_balance()["total_credits"] == "140"
     assert [x.movement_type for x in ledger.movements].count(InventoryMovementType.TRANSFER_OUT) == 1
+
+
+def test_calendar_date_contracts_reject_datetime_subclasses():
+    instant = datetime(2026, 11, 6, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="calendar date"):
+        EconomicPeriod("bad", instant, date(2026, 11, 30))
+    period = EconomicPeriod("good", date(2026, 11, 1), date(2026, 11, 30))
+    with pytest.raises(ValueError, match="calendar date"):
+        period.contains(instant)
+    with pytest.raises(ValueError, match="calendar date"):
+        EvidenceRecord("e-date", "source", EvidenceStatus.OBSERVED, instant, instant)
+
+
+def test_money_and_quantity_reject_binary_float_inputs():
+    with pytest.raises(ValueError, match="binary floats are rejected"):
+        Money(0.1, "USD")
+    with pytest.raises(ValueError, match="binary floats are rejected"):
+        Quantity(0.1, "kg")
+    with pytest.raises(ValueError, match="binary floats are rejected"):
+        Money("1", "USD").scale(0.1)
+
+
+def test_inventory_fifo_excludes_future_receipts_from_historical_availability_and_issue():
+    ledger = InventoryLedger("USD")
+    ledger.receive("future-r", "future-lot", "steel", "factory",
+        Quantity("5", "kg"), Money("50", "USD"), date(2026, 11, 7), "receipt:future")
+    assert ledger.available("steel", "factory", "kg", date(2026, 11, 6)) == Quantity("0", "kg")
+    assert ledger.available("steel", "factory", "kg") == Quantity("5", "kg")
+    before = ledger.summary()
+    with pytest.raises(ValueError, match="Insufficient inventory"):
+        ledger.issue("early-issue", "steel", "factory", Quantity("1", "kg"),
+            date(2026, 11, 6), "production:early")
+    assert ledger.summary() == before
+
+
+def test_intercompany_cash_only_records_reject_noncanonical_periods():
+    record = IntercompanyRecord(
+        "cash-bad-period", "tx-cash-only", "seller", "buyer",
+        "SELLER_CASH_IN", Money("25", "USD"), "2026-Q5", "bank:cash-transfer",
+    )
+    with pytest.raises(ValueError, match="Unsupported or non-canonical"):
+        reconcile_intercompany([record])
+
+
+def test_bank_reconciliation_excludes_backdated_entries_recorded_after_period_close():
+    journal = new_journal()
+    late = JournalEntry(
+        "late-backdated-cash", date(2026, 11, 6),
+        datetime(2026, 12, 2, 9, tzinfo=timezone.utc), "USD",
+        (
+            JournalLine("late-cash", "cash", "DEBIT", Money("50", "USD"),
+                Money("50", "USD"), "co1", "bank:late"),
+            JournalLine("late-revenue", "revenue", "CREDIT", Money("50", "USD"),
+                Money("50", "USD"), "co1", "sale:late"),
+        ),
+        "evt-late", "idem-late", "Late backdated bank receipt",
+    )
+    journal.post(late)
+    period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
+    statement = BankStatement("stmt-late", "cash", "USD", period,
+        Money("100", "USD"), Money("150", "USD"), Money("100", "USD"),
+        (BankStatementLine("bank-line-late", date(2026, 11, 6),
+            Money("50", "USD"), "bank:late", "statement:late"),))
+    result = reconcile_bank_account(journal, statement, [])
+    assert result["ledger_closing_balance"] == "100"
+    assert result["bank_closing_balance"] == "150"
+    assert not result["fully_reconciled"]
+    assert result["late_recorded_journal_lines"][0]["journal_line_ref"] == "late-backdated-cash:late-cash"
