@@ -71,3 +71,6 @@ The CI fixture uses a 75-unit synthetic minimum post-contribution cash floor. Th
 
 
 The ledger also checks the absolute floor after combining both contribution maps. This independent guard prevents a manually constructed regional-plus-federation funding map from bypassing the allocator's feasibility checks; the configured floor is included in snapshots.
+
+
+**Additional validation:** 158 pytest tests passed and the full EIIOM CI completed successfully on commit `b9d767165ea55e4fb77c37266d5ee3b3614361fd`. This run included the ledger-level absolute cash-floor guard, reserve sizing with the floor, the heterogeneous reserve-allocation comparison and the federation liquidity-cap smoke experiment. Maximum consolidated cash-conservation residuals in the reserve experiments remained at approximately 10⁻¹².
