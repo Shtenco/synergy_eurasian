@@ -652,7 +652,6 @@ class CreditLedger:
     def _resolve_buyer_default(self, buyer_id: str, day: int) -> None:
         """Apply cross-default to all open payables of the failed buyer."""
         self.accounts[buyer_id].defaulted = True
-        batch_default_buyers: set[str] = set()
         for invoice in sorted(self.payables.values(), key=lambda x: (x.due_day, x.invoice_id)):
             if invoice.buyer == buyer_id and invoice.remaining > EPS and invoice.status != "defaulted":
                 self._resolve_payable_default(invoice, day)
@@ -775,6 +774,7 @@ class CreditLedger:
                 invoice.status = "defaulted"
                 self.events.append({"day": day, "type": "customer_default", "invoice_id": invoice.invoice_id, "seller": invoice.seller, "bad_debt": bad_debt})
 
+        batch_default_buyers: set[str] = set()
         for invoice in sorted(self.payables.values(), key=lambda x: (x.due_day, x.invoice_id)):
             if invoice.remaining <= EPS or invoice.due_day > day or invoice.status == "defaulted":
                 continue
