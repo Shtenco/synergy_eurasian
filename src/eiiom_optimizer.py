@@ -278,6 +278,8 @@ def validate_invariants(config: dict, solution: dict, tol: float = 1e-5) -> None
     power_by_country = defaultdict(float)
     grid_by_country = defaultdict(float)
     gva_equiv = 0.0
+    objective_recomputed = 0.0
+    yields = config["annual_gva_equivalent_yield"]
 
     allocation = solution.get("allocation")
     if not isinstance(allocation, list):
@@ -297,6 +299,10 @@ def validate_invariants(config: dict, solution: dict, tol: float = 1e-5) -> None
         capex_by_sector[sector] += amount
         capex_by_sector_stage[(sector, stage)] += amount
         gva_equiv += amount * float(yields[sector]) * SUIT[country][sector]
+        objective_recomputed -= (
+            amount * float(yields[sector]) * SUIT[country][sector]
+            * float(config["stages"][stage]["time_weight"])
+        )
         if sector == "Compute":
             compute_by_country[country] += amount * float(config["technology_curves"]["compute_it_mw_per_bn"][stage])
         if sector == "DataCenterInfra":
@@ -437,6 +443,7 @@ def validate_invariants(config: dict, solution: dict, tol: float = 1e-5) -> None
         "compute_it_mw": total_compute,
         "dc_shell_mw": total_dc,
         "annual_gva_equivalent_2045_bn_usd": gva_equiv,
+        "objective_minimized": objective_recomputed,
     }
     for key, expected_value in expected_metrics.items():
         actual = solution.get(key)
