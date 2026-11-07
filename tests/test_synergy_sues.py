@@ -1110,3 +1110,30 @@ def test_translation_policy_rejects_datetime_and_freezes_historical_rates():
             reporting_date=datetime(2026, 11, 6, 10, tzinfo=timezone.utc),
             translation_adjustment_account_id="cta",
         )
+
+
+
+def test_scenario_benefits_never_enter_verified_project_totals():
+    registry = BenefitAttributionRegistry()
+    registry.add_event(BenefitEvent(
+        "verified-benefit", "meter-verified", "enterprise-1", "2026-Q4",
+        "ENERGY_SAVING", Money("100", "USD"), "baseline-1",
+        ("meter:verified",), EvidenceStatus.VERIFIED,
+    ))
+    registry.add_event(BenefitEvent(
+        "scenario-benefit", "model-scenario", "enterprise-1", "2026-Q4",
+        "ENERGY_SAVING", Money("900", "USD"), "baseline-2",
+        ("scenario:model-1",), EvidenceStatus.SCENARIO,
+    ))
+    registry.add_claim(BenefitAttribution("claim-verified", "verified-benefit", "project-a", "1"))
+    registry.add_claim(BenefitAttribution("claim-scenario", "scenario-benefit", "project-a", "1"))
+    summary = registry.summary()
+    assert summary["attributed_amount_by_project_currency"] == [
+        {"project_id": "project-a", "currency": "USD", "amount": "100"}
+    ]
+    by_status = {
+        row["evidence_status"]: row["amount"]
+        for row in summary["attributed_amount_by_project_currency_and_status"]
+    }
+    assert by_status == {"SCENARIO": "900", "VERIFIED": "100"}
+    assert summary["scenario_amounts_are_excluded_from_verified_project_totals"]
