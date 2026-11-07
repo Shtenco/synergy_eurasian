@@ -25,10 +25,11 @@ When `credit_config` is omitted, V6.6.2 behavior is retained. When supplied, pro
 - Local and cross-region invoice due dates use separate configurable terms.
 - If authorization fails, no stock is removed from the supplier and no shipment enters transit.
 
-### Customer sales
-- Final sales create customer invoices.
-- Customer invoices are collected automatically on their due date in this synthetic kernel.
+### Customer sales and credit risk
+- Final sales create customer invoices only if the seller's customer-receivable exposure limit has room.
+- Customer invoices collect the configured recovery fraction on the due date; unpaid residuals remain receivable through the customer grace period and are then written off as bad debt.
 - A defaulted final producer cannot issue new customer invoices or make new sales.
+- Customer exposure rejection prevents the physical sale and leaves finished goods in inventory.
 
 ## 3. Configuration
 
@@ -37,6 +38,10 @@ credit_config = {
     "initial_cash_per_cell": 200.0,
     "bank_limit_per_cell": 50.0,
     "trade_credit_limit_per_cell": 100.0,
+    "trade_receivable_limit_per_cell": 150.0,
+    "customer_receivable_limit_per_cell": 250.0,
+    "customer_recovery_rate": 0.85,
+    "customer_grace_days": 2,
     "grace_days": 2,
     "customer_terms_days": 2,
     "local_terms_days": 3,
@@ -58,7 +63,7 @@ print(report["credit_ledger"]["production_rejection_count"])
 print(report["credit_ledger"]["trade_credit_utilization_by_cell"])
 ```
 
-All prices, costs, limits and terms are synthetic research parameters. Production conversion costs are paid immediately; internal input invoices are settled at their configured due dates. Customer invoices are assumed collected in full at due date. These assumptions isolate the liquidity and trade-credit channel; they are not empirical claims.
+All prices, costs, limits and terms are synthetic research parameters. Production conversion costs are paid immediately; internal input invoices are settled from available cash and undrawn bank credit, allowing partial payment until the grace period expires. Customer invoices collect a configured deterministic recovery fraction once on the due date; the residual becomes bad debt after the customer grace period. These assumptions isolate liquidity, bilateral trade credit and customer default channels; they are not empirical claims.
 
 ## 4. Required invariants
 
@@ -70,7 +75,7 @@ All prices, costs, limits and terms are synthetic research parameters. Productio
 - Internal AR/AP match and internal transfer cash-in equals cash-out.
 - Consolidated cash reconciles to opening cash, bank draws, customer collections, external production payments and bank principal repayments.
 - The physical per-SKU mass balance remains closed.
-- Credit diagnostics expose production/purchase rejections, default events, bank-line utilization and trade-credit utilization.
+- Credit diagnostics expose production/purchase/customer-invoice rejections, buyer and supplier credit utilization, customer bad debt, default events and bank-line utilization.
 - With sufficiently large funding and trade-credit limits, the physical path must match the unconstrained V6.6.2 path under the same exogenous environment.
 - With zero cash, zero bank lines and zero trade credit, no cash-costed production or supplier procurement is authorized.
 
