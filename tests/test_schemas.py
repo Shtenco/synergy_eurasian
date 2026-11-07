@@ -37,3 +37,58 @@ def test_technology_candidate_has_evidence_and_next_gate():
     schema = load("interfaces/technology_candidate.schema.json")
     assert "evidence" in schema["required"]
     assert "next_gate" in schema["required"]
+
+
+def test_demand_price_requires_explicit_currency():
+    schema = load("interfaces/demand_signal.schema.json")
+    validator = Draft202012Validator(schema)
+    sample = {
+        "signal_id": "demand-001", "as_of": "2026-11-06T00:00:00Z",
+        "known_at": "2026-11-06T00:00:00Z",
+        "source": {"authority": "market", "reference": "feed:1", "source_class": "B"},
+        "geography": {"country": "KZ"},
+        "demand": {"commodity_or_service": "power", "quantity": 10, "unit": "MWh",
+            "time_horizon": "month", "price": 50},
+        "status": "OBSERVED", "confidence": 0.8,
+    }
+    assert list(validator.iter_errors(sample))
+    sample["demand"]["currency"] = "USD"
+    assert not list(validator.iter_errors(sample))
+
+
+def test_resource_state_rejects_negative_capacity_and_untyped_cost():
+    schema = load("interfaces/resource_state.schema.json")
+    validator = Draft202012Validator(schema)
+    sample = {
+        "resource_state_id": "resource-001", "resource_type": "POWER", "node_id": "node-1",
+        "effective_time": "2026-11-06T00:00:00Z", "known_at": "2026-11-06T00:00:00Z",
+        "capacity": {"available": -1, "unit": "MW"},
+        "source": {"publisher": "operator", "reference": "grid:1", "source_class": "A"},
+        "status": "OBSERVED", "confidence": 0.9,
+    }
+    assert list(validator.iter_errors(sample))
+    sample["capacity"]["available"] = 1
+    sample["cost"] = {"value": 10, "per_unit": "MWh"}
+    assert list(validator.iter_errors(sample))
+    sample["cost"]["currency"] = "KZT"
+    assert not list(validator.iter_errors(sample))
+
+
+def test_replicated_technology_requires_replication_evidence_and_economic_currency():
+    schema = load("interfaces/technology_candidate.schema.json")
+    validator = Draft202012Validator(schema)
+    sample = {
+        "technology_id": "tech-001", "name": "Storage", "problem": "Long duration storage",
+        "claimed_effect": {"metric": "efficiency", "baseline": 0.8, "target": 0.9,
+            "unit": "ratio", "claim_status": "REPLICATED"},
+        "trl": 6, "evidence": {"independent_replications": 0, "references": []},
+        "next_gate": {"description": "pilot", "required_capex": 100, "currency": "USD",
+            "success_criteria": ["measured"]},
+        "economics": {"unrisked_project_value": 1000, "probability_science": 0.8,
+            "probability_scale": 0.5, "probability_market": 0.5},
+        "status": "PILOT",
+    }
+    assert list(validator.iter_errors(sample))
+    sample["evidence"] = {"independent_replications": 1, "references": ["study:1"]}
+    sample["economics"]["currency"] = "USD"
+    assert not list(validator.iter_errors(sample))
