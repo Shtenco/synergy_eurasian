@@ -323,35 +323,60 @@ def compare_regional_pool_sensitivities(
 def build_regional_reserve_contributions(
     scheme: str,
     reserve_per_region: float = 20.0,
+    initial_cash_by_cell: dict[str, float] | None = None,
 ) -> dict[str, float]:
-    """Build explicit per-cell reserve contributions for a documented allocation rule."""
-    if scheme not in {"equal_all_members", "production_capacity_weighted"}:
+    """Build explicit per-cell reserve contributions for an auditable allocation rule."""
+    supported = {
+        "equal_all_members",
+        "production_capacity_weighted",
+        "opening_cash_weighted",
+    }
+    if scheme not in supported:
         raise ValueError("unsupported reserve contribution scheme")
     if isinstance(reserve_per_region, bool) or not isinstance(reserve_per_region, (int, float)):
         raise ValueError("reserve_per_region must be a finite non-negative number")
     if not math.isfinite(float(reserve_per_region)) or reserve_per_region < 0:
         raise ValueError("reserve_per_region must be a finite non-negative number")
 
+    if initial_cash_by_cell is None:
+        cash = {cell.cell_id: 200.0 for cell in CELLS}
+    else:
+        if set(initial_cash_by_cell) != {cell.cell_id for cell in CELLS}:
+            raise ValueError("initial_cash_by_cell must contain every known cell exactly once")
+        cash = {}
+        for cell_id, amount in initial_cash_by_cell.items():
+            if isinstance(amount, bool) or not isinstance(amount, (int, float)):
+                raise ValueError("opening cash must be finite non-negative numbers")
+            if not math.isfinite(float(amount)) or amount < 0:
+                raise ValueError("opening cash must be finite non-negative numbers")
+            cash[cell_id] = float(amount)
+
     contributions: dict[str, float] = {}
     for region in sorted({cell.region for cell in CELLS}):
         members = [cell for cell in CELLS if cell.region == region]
         if scheme == "equal_all_members":
             weights = {cell.cell_id: 1.0 for cell in members}
-        else:
+        elif scheme == "production_capacity_weighted":
             weights = {
                 cell.cell_id: cell.capacity if cell.sector in {"primary", "processing", "manufacturing"} else 0.0
                 for cell in members
             }
+        else:
+            weights = {cell.cell_id: cash[cell.cell_id] for cell in members}
         total_weight = sum(weights.values())
         if total_weight <= 0 and reserve_per_region > 0:
             raise ValueError(f"no positive contribution weights in region {region}")
         for cell in members:
-            contributions[cell.cell_id] = (
+            contribution = (
                 float(reserve_per_region) * weights[cell.cell_id] / total_weight
                 if total_weight > 0 else 0.0
             )
+            if contribution > cash[cell.cell_id] + 1e-9:
+                raise ValueError(
+                    f"reserve contribution exceeds opening cash for {cell.cell_id}"
+                )
+            contributions[cell.cell_id] = contribution
     return contributions
-
 
 def compare_reserve_contribution_schemes(
     seeds: Iterable[int],
@@ -365,11 +390,16 @@ def compare_reserve_contribution_schemes(
     if not seed_list:
         raise ValueError("at least one seed is required")
     reports = {}
-    for scheme in ("equal_all_members", "production_capacity_weighted"):
+    for scheme in (
+        "equal_all_members",
+        "production_capacity_weighted",
+        "opening_cash_weighted",
+    ):
         config = dict(base_config or {})
         config["regional_pool_reserve_per_region"] = float(reserve_per_region)
+        opening_cash = config.get("initial_cash_by_cell")
         config["regional_reserve_contributions_by_cell"] = build_regional_reserve_contributions(
-            scheme, reserve_per_region
+            scheme, reserve_per_region, opening_cash
         )
         report = compare_financing_modes(seed_list, days, shock_regime, config)
         reports[scheme] = {
@@ -384,8 +414,9 @@ def compare_reserve_contribution_schemes(
         "reserve_per_region": float(reserve_per_region),
         "reports_by_contribution_scheme": reports,
         "interpretation_guard": (
-            "Synthetic burden-allocation comparison only. Capacity weighting is not a normative "
-            "fairness rule; it may exclude support cells that still benefit from the guarantee."
+            "Synthetic burden-allocation comparison only. Production-capacity weighting may exclude "
+            "support cells; opening-cash weighting scales dues with initial liquidity but does not "
+            "establish benefit, risk or normative fairness."
         ),
     }
 
