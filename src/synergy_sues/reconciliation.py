@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timezone
 from decimal import Decimal
 from typing import Iterable
 
-from .contracts import EconomicPeriod, Money
+from .contracts import EconomicPeriod, Money, _calendar_date
 from .journal import AccountType, Journal, NormalBalance, PostingSide
 
 
@@ -21,8 +21,7 @@ class BankStatementLine:
     def __post_init__(self) -> None:
         if not all((self.line_id, self.bank_reference, self.source_ref)):
             raise ValueError("Bank statement line identity and provenance are required")
-        if not isinstance(self.booked_date, date):
-            raise ValueError("booked_date must be a date")
+        _calendar_date(self.booked_date, "bank booked_date")
         if self.signed_amount.amount == 0:
             raise ValueError("Bank statement movement cannot be zero")
 
@@ -98,8 +97,20 @@ def reconcile_bank_account(
         raise ValueError("Bank reconciliation requires a debit-normal asset cash account")
 
     journal_movements = {}
+    late_recorded_journal_lines = []
     for entry in journal.entries:
         if not statement.period.contains(entry.effective_date):
+            continue
+        recorded_date_utc = entry.recorded_at.astimezone(timezone.utc).date()
+        if recorded_date_utc > statement.period.end:
+            for line in entry.lines:
+                if line.account_id == statement.account_id:
+                    late_recorded_journal_lines.append({
+                        "journal_line_ref": f"{entry.entry_id}:{line.line_id}",
+                        "effective_date": entry.effective_date.isoformat(),
+                        "recorded_at": entry.recorded_at.isoformat(),
+                        "recorded_after_period_end": statement.period.end.isoformat(),
+                    })
             continue
         for line in entry.lines:
             if line.account_id != statement.account_id:
@@ -189,6 +200,10 @@ def reconcile_bank_account(
         "allocations": allocation_results,
         "unmatched_statement_lines": bank_exceptions,
         "unmatched_journal_lines": journal_exceptions,
-        "fully_reconciled": closing_difference == 0 and not bank_exceptions and not journal_exceptions,
+        "late_recorded_journal_lines": late_recorded_journal_lines,
+        "fully_reconciled": (
+            closing_difference == 0 and not bank_exceptions and not journal_exceptions
+            and not late_recorded_journal_lines
+        ),
         "automatic_matching_performed": False,
     }
