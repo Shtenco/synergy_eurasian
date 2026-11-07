@@ -75,7 +75,54 @@ def simulate_paths(cfg: dict[str, Any], shock_probability: float) -> dict[str, A
         raise ValueError("Starting productive capital, cashflow and replacement capex must be positive")
     if not 0.0 <= reserve_share <= 1.0:
         raise ValueError("Initial reserve share must be between 0 and 1")
-    initial_reserve = productive_capital * reserve_share
+    initial_reserve = _finite_number(
+        productive_capital * reserve_share, "initial reserve"
+    )
+
+    uncertainty_fields = (
+        "cashflow_growth_mean", "cashflow_growth_std",
+        "cashflow_growth_min", "cashflow_growth_max",
+        "replacement_inflation_mean", "replacement_inflation_std",
+        "replacement_inflation_min", "replacement_inflation_max",
+    )
+    uncertainty_values = {
+        key: _finite_number(uncertainty[key], f"annual_uncertainty.{key}")
+        for key in uncertainty_fields
+    }
+    if uncertainty_values["cashflow_growth_std"] < 0 or uncertainty_values["replacement_inflation_std"] < 0:
+        raise ValueError("Annual uncertainty standard deviations must be non-negative")
+    if uncertainty_values["cashflow_growth_min"] > uncertainty_values["cashflow_growth_max"]:
+        raise ValueError("Cashflow growth minimum cannot exceed maximum")
+    if uncertainty_values["replacement_inflation_min"] > uncertainty_values["replacement_inflation_max"]:
+        raise ValueError("Replacement inflation minimum cannot exceed maximum")
+    if uncertainty_values["cashflow_growth_min"] < -1.0 or uncertainty_values["replacement_inflation_min"] < -1.0:
+        raise ValueError("Annual growth and inflation bounds cannot be below -100%")
+
+    shock_cash = _finite_number(
+        shock["cashflow_growth_additive_shock"], "cashflow_growth_additive_shock"
+    )
+    shock_replacement = _finite_number(
+        shock["replacement_inflation_additive_shock"], "replacement_inflation_additive_shock"
+    )
+    auto_lag = _strict_int(auto["deployment_lag_years"], "automation deployment lag", 0)
+    auto_life = _strict_int(auto["benefit_life_years"], "automation benefit life", 1)
+    auto_mean = _finite_number(auto["annual_net_residual_yield_mean"], "automation yield mean")
+    auto_std = _finite_number(auto["annual_net_residual_yield_std"], "automation yield std")
+    auto_min = _finite_number(auto["yield_min"], "automation yield minimum")
+    if auto_mean < 0 or auto_std < 0 or auto_min < 0:
+        raise ValueError("Automation yield assumptions must be non-negative")
+    rd_count = _strict_int(rd["independent_projects_per_year"], "independent_projects_per_year", 1)
+    rd_lag = _strict_int(rd["deployment_lag_years"], "R&D deployment lag", 0)
+    rd_life = _strict_int(rd["benefit_life_years"], "R&D benefit life", 1)
+    rd_probability = _finite_number(
+        rd["success_probability_per_project"], "success_probability_per_project"
+    )
+    rd_yield = _finite_number(
+        rd["annual_net_residual_yield_if_success"], "annual_net_residual_yield_if_success"
+    )
+    if not 0.0 <= rd_probability <= 1.0 or rd_yield < 0:
+        raise ValueError("R&D success probability must be in [0, 1] and yield non-negative")
+
     final_reserves = np.zeros(n_paths)
     total_unfunded = np.zeros(n_paths)
     ever_exhausted = np.zeros(n_paths, dtype=bool)
@@ -93,18 +140,24 @@ def simulate_paths(cfg: dict[str, Any], shock_probability: float) -> dict[str, A
 
         for year in range(1, years + 1):
             growth = float(np.clip(
-                rng.normal(uncertainty["cashflow_growth_mean"], uncertainty["cashflow_growth_std"]),
-                uncertainty["cashflow_growth_min"],
-                uncertainty["cashflow_growth_max"],
+                rng.normal(
+                    uncertainty_values["cashflow_growth_mean"],
+                    uncertainty_values["cashflow_growth_std"],
+                ),
+                uncertainty_values["cashflow_growth_min"],
+                uncertainty_values["cashflow_growth_max"],
             ))
             inflation = float(np.clip(
-                rng.normal(uncertainty["replacement_inflation_mean"], uncertainty["replacement_inflation_std"]),
-                uncertainty["replacement_inflation_min"],
-                uncertainty["replacement_inflation_max"],
+                rng.normal(
+                    uncertainty_values["replacement_inflation_mean"],
+                    uncertainty_values["replacement_inflation_std"],
+                ),
+                uncertainty_values["replacement_inflation_min"],
+                uncertainty_values["replacement_inflation_max"],
             ))
             if rng.random() < shock_probability:
-                growth = max(-0.50, growth + float(shock["cashflow_growth_additive_shock"]))
-                inflation = min(0.50, inflation + float(shock["replacement_inflation_additive_shock"]))
+                growth = max(-0.50, growth + shock_cash)
+                inflation = max(-0.50, min(0.50, inflation + shock_replacement))
             gross = _finite_number(gross * (1.0 + growth), f"path {path} year {year} gross cashflow")
             replacement = _finite_number(
                 replacement * (1.0 + inflation), f"path {path} year {year} replacement capex"
@@ -113,28 +166,36 @@ def simulate_paths(cfg: dict[str, Any], shock_probability: float) -> dict[str, A
             automation_return = sum(
                 amount * yield_rate
                 for deployed, amount, yield_rate in auto_cohorts
-                if deployed + int(auto["deployment_lag_years"]) <= year
-                < deployed + int(auto["deployment_lag_years"]) + int(auto["benefit_life_years"])
+                if deployed + auto_lag <= year
+                < deployed + auto_lag + auto_life
             )
             rd_return = sum(
-                amount * successes / int(rd["independent_projects_per_year"])
-                * float(rd["annual_net_residual_yield_if_success"])
+                amount * successes / rd_count
+                * rd_yield
                 for deployed, amount, successes in rd_cohorts
-                if deployed + int(rd["deployment_lag_years"]) <= year
-                < deployed + int(rd["deployment_lag_years"]) + int(rd["benefit_life_years"])
+                if deployed + rd_lag <= year
+                < deployed + rd_lag + rd_life
             )
-            residual = gross - replacement + automation_return + rd_return
+            automation_return = _finite_number(automation_return, f"path {path} year {year} automation return")
+            rd_return = _finite_number(rd_return, f"path {path} year {year} R&D return")
+            residual = _finite_number(
+                gross - replacement + automation_return + rd_return,
+                f"path {path} year {year} residual",
+            )
             if residual >= 0.0:
-                auto_amount = residual * float(allocation["productive_automation"])
-                rd_amount = residual * float(allocation["breakthrough_rd"])
-                reserve += residual * float(allocation["resilience_reserve"])
+                auto_amount = residual * allocation_values["productive_automation"]
+                rd_amount = residual * allocation_values["breakthrough_rd"]
+                reserve = _finite_number(
+                    reserve + residual * allocation_values["resilience_reserve"],
+                    f"path {path} year {year} reserve",
+                )
                 auto_yield = max(
-                    float(auto["yield_min"]),
-                    float(rng.normal(auto["annual_net_residual_yield_mean"], auto["annual_net_residual_yield_std"])),
+                    auto_min,
+                    float(rng.normal(auto_mean, auto_std)),
                 )
                 successes = int(rng.binomial(
                     int(rd["independent_projects_per_year"]),
-                    float(rd["success_probability_per_project"]),
+                    rd_probability,
                 ))
                 auto_cohorts.append((year, auto_amount, auto_yield))
                 rd_cohorts.append((year, rd_amount, successes))
