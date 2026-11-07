@@ -48,6 +48,8 @@ class PayableInvoice:
     due_day: int
     issued_day: int
     status: str = "open"
+    guarantee_paid: float = 0.0
+    written_off: float = 0.0
 
 
 @dataclass
@@ -75,6 +77,7 @@ class CreditLedger:
         customer_recovery_rate: float = 1.0,
         customer_grace_days: int = 0,
         regional_pool_limit_per_region: float | None = None,
+        regional_pool_reserve_per_region: float = 0.0,
         regional_member_debit_limit_per_cell: float | None = None,
         regional_member_credit_limit_per_cell: float | None = None,
         grace_days: int = 2,
@@ -101,11 +104,16 @@ class CreditLedger:
         )
         if any(x is not None and (not math.isfinite(float(x)) or x < 0) for x in regional_limits):
             raise ValueError("regional pool and member limits must be finite and >= 0")
+        if not math.isfinite(float(regional_pool_reserve_per_region)) or regional_pool_reserve_per_region < 0:
+            raise ValueError("regional_pool_reserve_per_region must be finite and >= 0")
+        cells_per_region = {r: sum(c.region == r for c in CELLS) for r in REGIONS}
+        if any(float(regional_pool_reserve_per_region) > float(initial_cash_per_cell) * cells_per_region[r] + EPS for r in REGIONS):
+            raise ValueError("regional pool reserve cannot exceed member cash contributed in that region")
         if grace_days < 0:
             raise ValueError("grace_days must be >= 0")
         self.accounts = {
             c.cell_id: CellAccount(
-                cash=float(initial_cash_per_cell),
+                cash=float(initial_cash_per_cell) - float(regional_pool_reserve_per_region) / cells_per_region[c.region],
                 bank_limit=float(bank_limit_per_cell),
                 trade_credit_limit=float(trade_credit_limit_per_cell),
                 trade_receivable_limit=(
@@ -137,6 +145,13 @@ class CreditLedger:
             float(regional_member_credit_limit_per_cell)
             if regional_member_credit_limit_per_cell is not None else None
         )
+        self.regional_pool_reserve_initial_by_region = {
+            r: float(regional_pool_reserve_per_region) for r in REGIONS
+        }
+        self.regional_pool_reserve_by_region = dict(self.regional_pool_reserve_initial_by_region)
+        self.regional_pool_guarantee_paid_by_region = {r: 0.0 for r in REGIONS}
+        self.trade_bad_debt_by_cell = {c.cell_id: 0.0 for c in CELLS}
+        self.external_supplier_bad_debt = 0.0
         self.current_day = -1
         self.opening_cash = float(initial_cash_per_cell) * len(CELLS)
         self.bank_draws = 0.0
