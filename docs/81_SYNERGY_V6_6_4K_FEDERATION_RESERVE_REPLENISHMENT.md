@@ -42,7 +42,7 @@ All values are synthetic. This mechanism is an accounting prototype, not a legal
 
 ## 5. CI validation
 
-The full EIIOM CI workflow passed on code commit `436eee06d48ea01e190f7294b295254bbd90f7e4` with **167 pytest tests passed**. The replenishment tests verify successful member-funded reserve top-ups, cash conservation, duplicate-ID rejection, atomic rejection when any member would breach the floor, and exclusion of defaulted contributors.
+The full EIIOM CI workflow passed on code commit `4a55946af813ec44b7090ba7d684f233148dfb73` with **170 pytest tests passed**. The replenishment tests verify successful member-funded reserve top-ups, cash conservation, duplicate-ID rejection, atomic rejection when any member would breach the floor, and exclusion of defaulted contributors.
 
 
 ## 6. Repeated-default stress fixture
@@ -53,3 +53,6 @@ A deterministic two-round fixture now tests depletion, funded replenishment and 
 - a second cross-region default consumes those 4 units and leaves 6 units of seller loss.
 
 Total reserve payouts are 9 units, exactly equal to the initial 5-unit funding plus the 4-unit top-up. The cash-conservation residual is zero within numerical tolerance. This verifies that reserve replenishment can support a later claim only by transferring existing member cash; it does not erase the losses from the first default or create new system capital.
+
+
+The 170-test run includes the two-round replenishment stress fixture: an initial reserve payout, a 4-unit funded top-up from two solvent service cells, and a second default drawing the replenished balance. The total 9 units paid by the reserve reconcile to 5 units initially funded plus 4 units replenished.
