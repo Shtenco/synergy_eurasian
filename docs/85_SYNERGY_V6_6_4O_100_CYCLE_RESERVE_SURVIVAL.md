@@ -1,6 +1,6 @@
 # SYNERGY V6.6.4-O — 100-cycle reserve survival experiment
 
-**Status:** research implementation added; 19 focused reserve-recovery tests are present, including a repeated-run determinism check. Full EIIOM CI on the exact current V6.6.4-O head is pending.  
+**Status:** research implementation added; 20 focused reserve-recovery tests are present, including a repeated-run determinism check. Full EIIOM CI on the exact current V6.6.4-O head is pending.  
 **Purpose:** compare no-replenishment and four contribution-allocation policies over 100 repeated reserve-claim / recovery cycles with paired exogenous paths and no external cash inflows.
 
 ## 1. What is being tested
@@ -64,7 +64,7 @@ For each seed and policy, the experiment records:
 - total system cash change;
 - bank draws and external inflows.
 
-The output preserves per-cycle observations as well as paired summaries across seeds. Paired path fingerprints must match across all five policies for each seed. Water-filling sums and ledger settlement iteration are explicitly sorted so repeated runs with the same inputs are bitwise reproducible.
+The output preserves per-cycle observations as well as paired summaries across seeds. Paired path fingerprints must match across all five policies for each seed. Water-filling sums and ledger settlement iteration are explicitly sorted so repeated runs with the same inputs are bitwise reproducible. Recovery-plan fingerprints also bind the opening-cash capacity schedule, not just current cash and reserve balances.
 
 ## 5. Accounting invariant
 
