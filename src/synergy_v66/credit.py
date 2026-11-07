@@ -449,6 +449,12 @@ class CreditLedger:
                 capacities[cell.cell_id] = capacity
         total_capacity = sum(capacities.values())
         if total_capacity <= EPS:
+            self.events.append({
+                "day": day, "type": "regional_member_assessment_attempt",
+                "invoice_id": invoice_id, "region": region,
+                "requested_amount": amount, "eligible_capacity": 0.0,
+                "paid_amount": 0.0,
+            })
             return 0.0
 
         target = min(amount, total_capacity)
@@ -475,6 +481,12 @@ class CreditLedger:
                 "contributor": cell_id, "seller": seller_id,
                 "amount": payment,
             })
+        self.events.append({
+            "day": day, "type": "regional_member_assessment_attempt",
+            "invoice_id": invoice_id, "region": region,
+            "requested_amount": amount, "eligible_capacity": total_capacity,
+            "paid_amount": paid_total,
+        })
         return paid_total
 
     def _resolve_payable_default(self, invoice: PayableInvoice, day: int) -> None:
@@ -643,6 +655,23 @@ class CreditLedger:
             "regional_assessment_limit_per_cell": self.regional_assessment_limit_per_cell,
             "regional_assessment_paid_by_region": dict(self.regional_assessment_paid_by_region),
             "regional_assessment_contributed_by_cell": dict(self.regional_assessment_contributed_by_cell),
+            "regional_assessment_attempt_count": sum(
+                e["type"] == "regional_member_assessment_attempt" for e in self.events
+            ),
+            "regional_assessment_requested_by_region": {
+                r: sum(
+                    e["requested_amount"] for e in self.events
+                    if e["type"] == "regional_member_assessment_attempt" and e["region"] == r
+                )
+                for r in REGIONS
+            },
+            "regional_assessment_eligible_capacity_by_region": {
+                r: sum(
+                    e["eligible_capacity"] for e in self.events
+                    if e["type"] == "regional_member_assessment_attempt" and e["region"] == r
+                )
+                for r in REGIONS
+            },
             "external_supplier_bad_debt": self.external_supplier_bad_debt,
             "regional_reserve_contributions_by_cell": dict(self.regional_reserve_contributions_by_cell),
             "regional_pool_reserve_initial_by_region": dict(self.regional_pool_reserve_initial_by_region),
