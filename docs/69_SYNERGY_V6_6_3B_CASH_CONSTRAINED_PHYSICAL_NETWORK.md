@@ -54,6 +54,8 @@ report = simulate(environment, credit_config=credit_config)
 print(report["unmet_demand_by_sku"])
 print(report["credit_ledger"]["defaulted_cells"])
 print(report["credit_ledger"]["cash_conservation_error"])
+print(report["credit_ledger"]["production_rejection_count"])
+print(report["credit_ledger"]["trade_credit_utilization_by_cell"])
 ```
 
 All prices, costs, limits and terms are synthetic research parameters. Production conversion costs are paid immediately; internal input invoices are settled at their configured due dates. Customer invoices are assumed collected in full at due date. These assumptions isolate the liquidity and trade-credit channel; they are not empirical claims.
@@ -67,6 +69,7 @@ All prices, costs, limits and terms are synthetic research parameters. Productio
 - Internal AR/AP match and internal transfer cash-in equals cash-out.
 - Consolidated cash reconciles to opening cash, bank draws, customer collections, external production payments and bank principal repayments.
 - The physical per-SKU mass balance remains closed.
+- Credit diagnostics expose production/purchase rejections, default events, bank-line utilization and trade-credit utilization.
 - With sufficiently large funding and trade-credit limits, the physical path must match the unconstrained V6.6.2 path under the same exogenous environment.
 - With zero cash, zero bank lines and zero trade credit, no cash-costed production or supplier procurement is authorized.
 
