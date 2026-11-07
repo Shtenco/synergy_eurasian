@@ -595,6 +595,8 @@ def test_member_assessment_is_disabled_by_default_and_rejects_invalid_parameters
     with pytest.raises(ValueError):
         CreditLedger(regional_assessment_rate=1.01)
     with pytest.raises(ValueError):
+        CreditLedger(regional_assessment_rate=True)
+    with pytest.raises(ValueError):
         CreditLedger(regional_assessment_limit_per_cell=-1.0)
 
 
