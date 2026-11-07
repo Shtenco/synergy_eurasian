@@ -385,3 +385,12 @@ V6.6.2-B adds dated internal invoices, customer receivables, external supplier p
 - [Credit kernel tests](tests/test_synergy_v66_credit.py)
 
 V6.6.3-A adds cell cash accounts, approved bank credit lines, trade-credit limits, internal AR/AP, customer receivables, dated settlement, overdue default/freeze rules and pre-authorization of modeled production costs. The kernel is currently a standalone control layer and is **not yet wired into the V6.6.2 physical production/dispatch loop**. It must pass its accounting and credit-boundary tests before physical integration. No implicit overdraft or unbacked credit is created.
+
+
+### SYNERGY V6.6.3-B — cash-constrained physical network
+
+- [Integrated cash-constrained simulator](src/synergy_v66/network.py)
+- [V6.6.3-B integration specification](docs/69_SYNERGY_V6_6_3B_CASH_CONSTRAINED_PHYSICAL_NETWORK.md)
+- [Credit and physical integration tests](tests/test_synergy_v66_network.py)
+
+When `credit_config` is supplied, cash and credit authorization now gate harvest, energy generation, intermediate/final production and supplier dispatch before physical stock is consumed or output/shipment is created. The unconstrained V6.6.2 path remains the default when no credit configuration is supplied. The model is still synthetic and has explicit limits: no partial invoice payments, external customer default, bank capital constraints, interest, collateral or empirical calibration.
