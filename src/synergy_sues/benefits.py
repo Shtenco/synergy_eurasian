@@ -27,8 +27,14 @@ class BenefitEvent:
             raise ValueError("Benefit event identity, measurement and counterfactual are required")
         if not isinstance(self.evidence_status, EvidenceStatus):
             object.__setattr__(self, "evidence_status", EvidenceStatus(self.evidence_status))
+        if isinstance(self.evidence_ids, (str, bytes)) or not isinstance(self.evidence_ids, (tuple, list)):
+            raise ValueError("Benefit evidence_ids must be a tuple or list of strings")
         if not isinstance(self.evidence_ids, tuple):
             object.__setattr__(self, "evidence_ids", tuple(self.evidence_ids))
+        if not isinstance(self.measurement_scope_id, str):
+            raise ValueError("measurement_scope_id must be a string")
+        if self.measurement_scope_id and not self.measurement_scope_id.strip():
+            raise ValueError("measurement_scope_id cannot be whitespace")
         if not self.evidence_ids:
             raise ValueError("Benefit event requires at least one evidence ID")
         if any(not isinstance(item, str) or not item for item in self.evidence_ids):
