@@ -340,3 +340,17 @@ python src/eiiom_optimizer.py --config config/base_scenario.json --output output
 **Copyright © 2026 Evgeniy Koshtenko. All rights reserved.** Проект распространяется под собственной лицензией [`LICENSE`](LICENSE). Публичная доступность GitHub **не означает открытую лицензию** или разрешение на коммерческое использование. Права сторонних компонентов и уже выданные лицензии сохраняются в применимых пределах.
 
 <p align="center"><strong>SYNERGY EURASIAN — капитал имеет смысл тогда, когда превращается в проверяемую реальную производительность, устойчивость и благосостояние.</strong></p>
+
+---
+
+## SYNERGY V6.6 — Federated Self-Organizing Economy
+
+V6.6 is an additive research specification for comparing independent firms, market coordination, centralized planning, local cellular rules, regional DAO coordination and federated self-organization under identical demand and shock paths. It does not claim that decentralization is inherently superior or that a calibrated simulator already exists.
+
+- [V6.6 research specification](docs/64_SYNERGY_V6_6_FEDERATED_SELF_ORGANIZING_ECONOMY.md)
+- [V6.6 economic-cell state schema](interfaces/synergy_v66_cell_state.schema.json)
+- [Minimal economic-cell fixture](examples/synergy_v6_6_cell_state_minimal.json)
+- [V6.6 schema contract tests](tests/test_synergy_v66_contract.py)
+- [Draft implementation PR #16](https://github.com/Shtenco/synergy_eurasian/pull/16)
+
+The first increment defines cell state, decision rights, evidence classes, accounting and physical conservation invariants, eight coordination baselines, staged scale-up from 7 to 200 cells, governance attack scenarios and calibration gates. The schema/fixture/tests are scaffolding; the simulator is not implemented yet. All scenario outputs remain research-only until tested against real, lawful, independently reviewed data.
