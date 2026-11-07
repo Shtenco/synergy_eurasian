@@ -17,7 +17,7 @@ Each of the 20 cells has:
 - customer receivables;
 - default/freeze status.
 
-Cash is never allowed to become negative. A bank draw is recorded explicitly and cannot exceed the cell's approved undrawn limit. There is no implicit overdraft.
+Cash is never allowed to become negative. A bank draw is recorded explicitly and cannot exceed the cell's approved undrawn limit. A cell may repay drawn bank credit only from available cash; repayment reduces both cash and bank debt and is included in the consolidated cash identity. There is no implicit overdraft.
 
 ## 3. Authorization rules
 
@@ -37,7 +37,7 @@ Internal purchases create matching buyer AP and seller AR. An external supplier 
 ### Settlement and default
 At each `process_day(day)`, due customer invoices are collected first, followed by payable invoices in stable due-date / invoice-ID order. A payable is settled only if cash plus unused approved bank credit covers the full remaining amount. Otherwise it remains outstanding; after the configured grace period the buyer defaults and is frozen from new production authorization and purchases.
 
-Partial settlement, interest, collateral, guarantees, legal recovery, priority classes, supplier-side contagion and bank-credit repayment are intentionally not yet modeled.
+Partial settlement, interest, collateral, guarantees, legal recovery, priority classes, supplier-side contagion and automatic debt-service sweeps are intentionally not yet modeled. Manual principal repayment is supported.
 
 ## 4. Accounting invariants
 
