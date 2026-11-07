@@ -976,7 +976,7 @@ class CreditLedger:
                     prior_period_contributions[event["cell_id"]] += float(event["amount"])
 
         # Validate every participant and both reserve legs before mutating any balance.
-        for cell_id in expected_ids:
+        for cell_id in ordered_ids:
             amount = regional[cell_id] + federation[cell_id]
             if amount <= EPS:
                 continue
@@ -992,7 +992,7 @@ class CreditLedger:
                     raise ValueError(f"replenishment exceeds cumulative period limit for {cell_id}")
 
         regional_by_region = {region: 0.0 for region in REGIONS}
-        for cell_id in expected_ids:
+        for cell_id in ordered_ids:
             region = CELL_BY_ID[cell_id].region
             local_amount = regional[cell_id]
             federal_amount = federation[cell_id]
