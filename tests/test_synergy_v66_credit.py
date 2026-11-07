@@ -296,3 +296,86 @@ def test_invalid_customer_recovery_policy_is_rejected():
         CreditLedger(customer_recovery_rate=float("nan"))
     with pytest.raises(ValueError):
         CreditLedger(customer_grace_days=-1)
+
+
+def test_regional_pool_tracks_local_net_positions_and_reverses_on_partial_settlement():
+    ledger = CreditLedger(
+        initial_cash_per_cell=0.0,
+        trade_credit_limit_per_cell=100.0,
+        regional_pool_limit_per_region=100.0,
+        regional_member_debit_limit_per_cell=80.0,
+        regional_member_credit_limit_per_cell=80.0,
+        grace_days=2,
+    )
+    ledger.authorize_purchase("WEST-PR1", "WEST-AG1", 30.0, 2, 0, "POOL-LOCAL")
+    assert ledger.accounts["WEST-PR1"].regional_credit_balance == pytest.approx(-30.0)
+    assert ledger.accounts["WEST-AG1"].regional_credit_balance == pytest.approx(30.0)
+    assert ledger._regional_pool_outstanding("WEST") == pytest.approx(30.0)
+    ledger.issue_customer_invoice("WEST-PR1", 10.0, 2, 0, "POOL-PAY-1")
+    ledger.process_day(2)
+    assert ledger.accounts["WEST-PR1"].regional_credit_balance == pytest.approx(-20.0)
+    assert ledger.accounts["WEST-AG1"].regional_credit_balance == pytest.approx(20.0)
+    ledger.issue_customer_invoice("WEST-PR1", 20.0, 3, 2, "POOL-PAY-2")
+    ledger.process_day(3)
+    snap = ledger.snapshot()
+    assert snap["regional_pool_outstanding_by_region"]["WEST"] == pytest.approx(0.0)
+    assert snap["regional_pool_net_position_by_region"]["WEST"] == pytest.approx(0.0)
+    assert snap["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_cross_region_trade_credit_is_not_misbooked_to_either_local_pool():
+    ledger = CreditLedger(
+        initial_cash_per_cell=0.0,
+        trade_credit_limit_per_cell=100.0,
+        regional_pool_limit_per_region=100.0,
+    )
+    result = ledger.authorize_purchase("WEST-PR1", "EAST-AG1", 25.0, 4, 0, "CROSS-REGION-PO")
+    assert result["authorized"] is True
+    assert ledger.accounts["WEST-PR1"].regional_credit_balance == pytest.approx(0.0)
+    assert ledger.accounts["EAST-AG1"].regional_credit_balance == pytest.approx(0.0)
+    snap = ledger.snapshot()
+    assert snap["regional_pool_outstanding_by_region"]["WEST"] == pytest.approx(0.0)
+    assert snap["regional_pool_outstanding_by_region"]["EAST"] == pytest.approx(0.0)
+
+
+def test_regional_pool_limit_rejects_unsecured_trade_but_bank_line_can_replace_it():
+    limited = CreditLedger(
+        initial_cash_per_cell=0.0,
+        trade_credit_limit_per_cell=100.0,
+        regional_pool_limit_per_region=5.0,
+    )
+    rejected = limited.authorize_purchase("WEST-PR1", "WEST-AG1", 10.0, 2, 0, "POOL-REJECT")
+    assert rejected == {"authorized": False, "reason": "regional_pool_limit"}
+    assert "POOL-REJECT" not in limited.payables
+
+    banked = CreditLedger(
+        initial_cash_per_cell=0.0,
+        bank_limit_per_cell=10.0,
+        trade_credit_limit_per_cell=100.0,
+        regional_pool_limit_per_region=5.0,
+    )
+    funded = banked.authorize_purchase("WEST-PR1", "WEST-AG1", 10.0, 2, 0, "POOL-BANK-FALLBACK")
+    assert funded["authorized"] is True
+    assert funded["funding_mode"] == "bank_funded_cash"
+    assert banked.accounts["WEST-PR1"].regional_credit_balance == pytest.approx(0.0)
+    assert banked.accounts["WEST-PR1"].bank_debt == pytest.approx(10.0)
+
+
+def test_regional_member_debit_and_credit_limits_are_enforced():
+    debit_limited = CreditLedger(
+        initial_cash_per_cell=0.0,
+        trade_credit_limit_per_cell=100.0,
+        regional_pool_limit_per_region=100.0,
+        regional_member_debit_limit_per_cell=5.0,
+    )
+    debit = debit_limited.authorize_purchase("WEST-PR1", "WEST-AG1", 10.0, 2, 0, "MEMBER-DEBIT")
+    assert debit == {"authorized": False, "reason": "regional_member_debit_limit"}
+
+    credit_limited = CreditLedger(
+        initial_cash_per_cell=0.0,
+        trade_credit_limit_per_cell=100.0,
+        regional_pool_limit_per_region=100.0,
+        regional_member_credit_limit_per_cell=5.0,
+    )
+    credit = credit_limited.authorize_purchase("WEST-PR1", "WEST-AG1", 10.0, 2, 0, "MEMBER-CREDIT")
+    assert credit == {"authorized": False, "reason": "regional_member_credit_limit"}
