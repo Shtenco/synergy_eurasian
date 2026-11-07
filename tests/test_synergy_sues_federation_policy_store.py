@@ -409,3 +409,26 @@ def test_rejected_policy_admin_attempt_is_audited_and_audit_chain_is_tamper_evid
         db.execute("DROP TRIGGER authorization_policy_admin_attempts_no_update")
         db.execute("UPDATE authorization_policy_admin_attempts SET reason='hidden'")
     assert not store.verify()
+
+
+def test_policy_approval_event_id_collision_with_different_hash_is_rejected(tmp_path):
+    store, registry, keys = setup(tmp_path)
+    request, _ = make_change(tmp_path, keys, approver_ids=())
+    payload_approve = {
+        "change_id": "change:one", "tenant_id": "tenant:one", "expected_version": 0,
+        "policy_change_event_id": request.event["event_id"],
+        "policy_change_event_hash": request.event["event_hash"], "decision": "APPROVE",
+    }
+    payload_reject = {**payload_approve, "decision": "REJECT"}
+    first_dir = tmp_path / "first-approval"
+    second_dir = tmp_path / "second-approval"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    first = make_signed(first_dir, keys, "admin:one", "AUTHORIZATION_POLICY_APPROVAL",
+        payload_approve, "shared-event", "2026-11-06T10:01:00+00:00")
+    second = make_signed(second_dir, keys, "admin:one", "AUTHORIZATION_POLICY_APPROVAL",
+        payload_reject, "shared-event", "2026-11-06T10:01:00+00:00")
+    assert first.event["event_id"] == second.event["event_id"]
+    assert first.event["event_hash"] != second.event["event_hash"]
+    with pytest.raises(ValueError, match="collision with conflicting event hash"):
+        store.apply_change(request, [first, second], registry, "2026-11-06T10:02:00+00:00")
