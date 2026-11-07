@@ -80,11 +80,13 @@ def _validated_leontief_components(cfg: dict[str, Any]) -> tuple[np.ndarray, flo
         raise ValueError("Input-output matrix A must be square")
     a = np.asarray([
         [
-            _number(value, f"input_output_matrix[{i}][{j}]", minimum=0.0)
+            _number(value, f"input_output_matrix[{i}][{j}]")
             for j, value in enumerate(row)
         ]
         for i, row in enumerate(raw_matrix)
     ], dtype=float)
+    if np.any(a < 0):
+        raise ValueError("Input-output coefficients must be non-negative")
     n = a.shape[0]
     sectors = cfg.get("sectors")
     if (not isinstance(sectors, (list, tuple)) or len(sectors) != n
