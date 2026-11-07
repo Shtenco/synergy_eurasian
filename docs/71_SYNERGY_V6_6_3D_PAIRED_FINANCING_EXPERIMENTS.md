@@ -10,8 +10,8 @@
 | Unconstrained reference | N/A | N/A | Physical upper-reference path without financial authorization |
 | Cash only | 0 | 0 | Own cash funds production and immediate supplier purchases |
 | Bank only | 80 | 0 | Own cash plus approved bank line; no supplier trade credit |
-| Mutual credit | 0 | 80 | Own cash plus bilateral supplier credit; no bank line |
-| Hybrid | 80 | 80 | Own cash, bilateral supplier credit and bank line |
+| Mutual credit | 0 | 80 | Own cash plus bilateral supplier credit and regional net-position ceiling; no bank line |
+| Hybrid | 80 | 80 | Own cash, bilateral supplier credit, regional net-position ceiling and bank line |
 
 All modes use the same base cash, seller exposure cap, customer exposure cap, customer recovery fraction, payment terms and grace periods unless overridden. The numeric values are synthetic experimental settings, not recommendations for real firms.
 
@@ -21,6 +21,7 @@ For each seed, the environment is generated once and replayed under all five mod
 
 Metrics include:
 - finished output and sold units;
+- regional mutual-credit outstanding, pool rejections and net-position residuals;
 - unmet demand and service level;
 - expired goods and closing inventory;
 - defaulted cells and outstanding trade payables;
