@@ -358,6 +358,16 @@ def execute_production_order(
     if len({row.event_id for row in cost_events}) != len(cost_events):
         raise ValueError("Production cost event IDs must be unique")
     account_map: dict[ProductionCostType, str] = {}
+    non_capitalizable_by_default = {
+        ProductionCostType.MAINTENANCE,
+        ProductionCostType.DEPRECIATION,
+        ProductionCostType.OTHER_OVERHEAD,
+    }
+    for event in cost_events:
+        if event.cost_type in non_capitalizable_by_default:
+            raise ValueError(
+                f"{event.cost_type.value} cannot be capitalized without an explicit approved accounting policy"
+            )
     for key, account_id in (conversion_cost_accounts or {}).items():
         kind = key if isinstance(key, ProductionCostType) else ProductionCostType(key)
         account_map[kind] = account_id
