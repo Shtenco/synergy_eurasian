@@ -52,3 +52,19 @@ Use paired seeds, multiple horizons and all three shock regimes. Do not select c
 ## 5. CI smoke sensitivity
 
 The repository CI runs a compact severe-regime sample with three seeds, two regional pool ceilings (5 and 150) and two member caps (2 and 80). It writes a machine-readable report under `outputs/synergy_v66_regional_pool_sensitivity.json`. This is a smoke/sensitivity check, not a statistically powered policy evaluation.
+
+
+## 6. CI smoke-sample observation
+
+A three-seed, 20-day severe-regime CI sample produced the following mean outcomes. These are synthetic smoke-test values, not calibrated forecasts.
+
+| Regional pool cap | Member cap | Mutual-credit pool rejections / run | Hybrid pool rejections / run | Mutual-credit service level | Hybrid service level |
+|---:|---:|---:|---:|---:|---:|
+| 5 | 2 | 4.33 | 1.33 | 70.03% | 70.14% |
+| 5 | 80 | 2.00 | 1.33 | 69.98% | 70.14% |
+| 150 | 2 | 4.33 | 1.33 | 70.03% | 70.14% |
+| 150 | 80 | 0.00 | 0.00 | 69.98% | 70.86% |
+
+The equal rejection rates at member cap 2, despite changing the pool cap from 5 to 150, indicate that the individual member limit is binding in that case. At member cap 80, reducing the regional ceiling to 5 produces rejections. The hybrid mode can substitute bank funding for some blocked mutual-credit purchases, but not all.
+
+The sample is too small to rank policies. It demonstrates that the two limits operate as distinct controls and that their interaction should be studied over longer horizons and larger seed sets.
