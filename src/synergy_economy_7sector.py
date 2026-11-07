@@ -38,7 +38,10 @@ def _number(
 ) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{field} must be a numeric value, not a boolean or string")
-    result = float(value)
+    try:
+        result = float(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be finite") from exc
     if not np.isfinite(result):
         raise ValueError(f"{field} must be finite")
     if minimum is not None and result < minimum:
@@ -67,19 +70,27 @@ def _validated_vector(
 
 
 def _validated_leontief_components(cfg: dict[str, Any]) -> tuple[np.ndarray, float, float]:
-    try:
-        a = _arrays(cfg)["A"]
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Input-output matrix A must be a rectangular numeric matrix") from exc
-    if a.ndim != 2 or a.shape[0] != a.shape[1]:
+    raw_matrix = cfg.get("input_output_matrix")
+    if not isinstance(raw_matrix, (list, tuple)) or not raw_matrix:
+        raise ValueError("Input-output matrix A must be a non-empty rectangular numeric matrix")
+    if any(not isinstance(row, (list, tuple)) for row in raw_matrix):
+        raise ValueError("Input-output matrix A rows must be arrays")
+    row_lengths = {len(row) for row in raw_matrix}
+    if len(row_lengths) != 1 or not row_lengths or next(iter(row_lengths)) != len(raw_matrix):
         raise ValueError("Input-output matrix A must be square")
-    if not np.isfinite(a).all():
-        raise ValueError("Input-output matrix A must contain only finite values")
-    if np.any(a < 0):
-        raise ValueError("Input-output coefficients must be non-negative")
+    a = np.asarray([
+        [
+            _number(value, f"input_output_matrix[{i}][{j}]", minimum=0.0)
+            for j, value in enumerate(row)
+        ]
+        for i, row in enumerate(raw_matrix)
+    ], dtype=float)
     n = a.shape[0]
-    if len(cfg["sectors"]) != n:
-        raise ValueError("Sector count must match input-output matrix dimensions")
+    sectors = cfg.get("sectors")
+    if (not isinstance(sectors, (list, tuple)) or len(sectors) != n
+            or any(not isinstance(name, str) or not name.strip() for name in sectors)
+            or len(set(sectors)) != len(sectors)):
+        raise ValueError("Sector names must be unique non-empty values matching matrix dimensions")
     rho = float(max(abs(np.linalg.eigvals(a))))
     if not np.isfinite(rho) or rho >= 1.0:
         raise ValueError(f"Leontief system is not productive: spectral radius must be < 1, got {rho}")
