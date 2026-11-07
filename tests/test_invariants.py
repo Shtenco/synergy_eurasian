@@ -61,6 +61,11 @@ def test_eiiom_invariant_validation_rejects_tampered_solution_without_asserts():
     with pytest.raises(ValueError, match="does not reconcile"):
         validate_invariants(config, bad_metric)
 
+    bad_objective = copy.deepcopy(solution)
+    bad_objective["objective_minimized"] += 100.0
+    with pytest.raises(ValueError, match="objective_minimized does not reconcile"):
+        validate_invariants(config, bad_objective)
+
     bad_allocation = copy.deepcopy(solution)
     bad_allocation["allocation"][0]["capex_bn_usd"] += 1.0
     with pytest.raises(ValueError, match="Stage .* budget"):
