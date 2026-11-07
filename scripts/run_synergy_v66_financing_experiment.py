@@ -94,11 +94,13 @@ def main() -> int:
         print(f"SENSITIVITY_REPORT_WRITTEN: {sensitivity_path}")
 
     if args.reserve_allocation:
+        cash_fixture = make_synthetic_heterogeneous_cash_fixture()
         allocation = compare_reserve_contribution_schemes(
             seeds=range(args.seed_start, args.seed_start + args.seed_count),
             days=args.days,
             shock_regime="severe",
             reserve_per_region=20.0,
+            base_config={"initial_cash_by_cell": cash_fixture},
         )
         allocation_path = output.with_name("synergy_v66_reserve_contribution_allocation.json")
         allocation_path.write_text(json.dumps(allocation, indent=2, allow_nan=False), encoding="utf-8")
