@@ -923,3 +923,12 @@ def test_bank_reconciliation_rejects_statement_from_another_legal_entity():
     )
     with pytest.raises(ValueError, match="share one bound legal entity"):
         reconcile_bank_account(journal, statement, [])
+
+
+def test_journal_close_date_is_monotonic_and_rejects_datetime():
+    journal = new_journal()
+    journal.close_through(date(2026, 11, 30))
+    with pytest.raises(ValueError, match="cannot move backwards"):
+        journal.close_through(date(2026, 11, 29))
+    with pytest.raises(ValueError, match="calendar date"):
+        journal.close_through(datetime(2026, 12, 1, tzinfo=timezone.utc))
