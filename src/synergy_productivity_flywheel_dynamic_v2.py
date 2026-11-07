@@ -145,7 +145,9 @@ def simulate_case(
             reserve_contribution = residual * float(alloc["resilience_reserve"])
             auto_projects.append((year, automation_contribution))
             rd_projects.append((year, rd_contribution))
-            reserve += reserve_contribution
+            reserve = _finite_float(
+                reserve + reserve_contribution, f"year {year} reserve balance"
+            )
         else:
             shortfall = -residual
             reserve_draw = min(reserve, shortfall)
@@ -171,7 +173,9 @@ def simulate_case(
         })
 
     def total(field: str) -> float:
-        return float(sum(float(row[field]) for row in rows))
+        return _finite_float(
+            sum(float(row[field]) for row in rows), f"cumulative {field}"
+        )
 
     return {
         "annual_cashflow_growth": annual_cashflow_growth,
