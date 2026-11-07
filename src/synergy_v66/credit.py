@@ -85,6 +85,7 @@ class CreditLedger:
         regional_member_debit_limit_per_cell: float | None = None,
         regional_member_credit_limit_per_cell: float | None = None,
         grace_days: int = 2,
+        initial_cash_by_cell: dict[str, float] | None = None,
     ) -> None:
         limits = (initial_cash_per_cell, bank_limit_per_cell, trade_credit_limit_per_cell)
         if any(not math.isfinite(float(x)) or float(x) < 0 for x in limits):
@@ -118,6 +119,18 @@ class CreditLedger:
             or regional_assessment_limit_per_cell < 0
         ):
             raise ValueError("regional_assessment_limit_per_cell must be finite and >= 0")
+        if initial_cash_by_cell is None:
+            member_opening_cash = {cell.cell_id: float(initial_cash_per_cell) for cell in CELLS}
+        else:
+            if set(initial_cash_by_cell) != set(CELL_BY_ID):
+                raise ValueError("initial_cash_by_cell must contain every known cell exactly once")
+            member_opening_cash = {}
+            for cell_id, amount in initial_cash_by_cell.items():
+                if isinstance(amount, bool) or not isinstance(amount, (int, float)):
+                    raise ValueError("member opening cash must be finite non-negative numbers")
+                if not math.isfinite(float(amount)) or amount < 0:
+                    raise ValueError("member opening cash must be finite non-negative numbers")
+                member_opening_cash[cell_id] = float(amount)
         cells_per_region = {r: sum(c.region == r for c in CELLS) for r in REGIONS}
         if regional_reserve_contributions_by_cell is None:
             reserve_contributions = {
@@ -133,8 +146,8 @@ class CreditLedger:
                     raise ValueError("reserve contributions must be finite non-negative numbers")
                 if not math.isfinite(float(contribution)) or contribution < 0:
                     raise ValueError("reserve contributions must be finite non-negative numbers")
-                if contribution > float(initial_cash_per_cell) + EPS:
-                    raise ValueError("a member contribution cannot exceed its initial cash")
+                if contribution > member_opening_cash[cell_id] + EPS:
+                    raise ValueError("a member contribution cannot exceed that member's initial cash")
                 reserve_contributions[cell_id] = float(contribution)
             for region in REGIONS:
                 contributed = sum(
@@ -145,13 +158,16 @@ class CreditLedger:
                     raise ValueError(
                         f"regional contributions for {region} must sum to regional_pool_reserve_per_region"
                     )
-        if any(contribution > float(initial_cash_per_cell) + EPS for contribution in reserve_contributions.values()):
-            raise ValueError("a member contribution cannot exceed its initial cash")
+        if any(
+            contribution > member_opening_cash[cell_id] + EPS
+            for cell_id, contribution in reserve_contributions.items()
+        ):
+            raise ValueError("a member contribution cannot exceed that member's initial cash")
         if grace_days < 0:
             raise ValueError("grace_days must be >= 0")
         self.accounts = {
             c.cell_id: CellAccount(
-                cash=float(initial_cash_per_cell) - reserve_contributions[c.cell_id],
+                cash=member_opening_cash[c.cell_id] - reserve_contributions[c.cell_id],
                 bank_limit=float(bank_limit_per_cell),
                 trade_credit_limit=float(trade_credit_limit_per_cell),
                 trade_receivable_limit=(
@@ -199,7 +215,8 @@ class CreditLedger:
         self.trade_bad_debt_by_cell = {c.cell_id: 0.0 for c in CELLS}
         self.external_supplier_bad_debt = 0.0
         self.current_day = -1
-        self.opening_cash = float(initial_cash_per_cell) * len(CELLS)
+        self.initial_cash_by_cell = dict(member_opening_cash)
+        self.opening_cash = sum(member_opening_cash.values())
         self.bank_draws = 0.0
         self.customer_collections = 0.0
         self.external_supplier_payments = 0.0
@@ -673,6 +690,7 @@ class CreditLedger:
                 for r in REGIONS
             },
             "external_supplier_bad_debt": self.external_supplier_bad_debt,
+            "initial_cash_by_cell": dict(self.initial_cash_by_cell),
             "regional_reserve_contributions_by_cell": dict(self.regional_reserve_contributions_by_cell),
             "regional_pool_reserve_initial_by_region": dict(self.regional_pool_reserve_initial_by_region),
             "regional_pool_reserve_by_region": dict(self.regional_pool_reserve_by_region),
