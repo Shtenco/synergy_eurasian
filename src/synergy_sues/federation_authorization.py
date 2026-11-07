@@ -37,6 +37,12 @@ class AuthorizationDecision:
     approval_event_refs: tuple[tuple[str, str], ...] = ()
     policy_version: int | None = None
     policy_hash: str | None = None
+    request_event_id: str = ""
+    request_event_hash: str = ""
+    action: str = ""
+    resource_type: str = ""
+    resource_id: str = ""
+    tenant_id: str = ""
 
 
 class FederationAuthorizationPolicy:
@@ -97,6 +103,14 @@ class FederationAuthorizationPolicy:
             ("request_id", "action", "resource_type", "resource_id"))
         request_id = payload["request_id"]
         action, resource_type, resource_id = payload["action"], payload["resource_type"], payload["resource_id"]
+        decision_context = {
+            "request_event_id": request.event["event_id"],
+            "request_event_hash": request.event["event_hash"],
+            "action": action,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "tenant_id": request.tenant_id,
+        }
         if any(not isinstance(x, str) or not x.strip() for x in (request_id, action, resource_type, resource_id)):
             raise ValueError("authorization request scope fields must be non-empty strings")
         requested_at = _utc(request.signed_at, "signed_at")
@@ -125,11 +139,11 @@ class FederationAuthorizationPolicy:
         denies = tuple(sorted(rule.rule_id for rule in matching if rule.effect == "DENY"))
         if denies:
             return AuthorizationDecision(False, "explicit_deny_rule", request_id,
-                requester.identity_id, denies)
+                requester.identity_id, denies, **decision_context)
         allows = [rule for rule in matching if rule.effect == "ALLOW"]
         if not allows:
             return AuthorizationDecision(False, "no_matching_allow_rule", request_id,
-                requester.identity_id)
+                requester.identity_id, **decision_context)
 
         verified_approvals: dict[str, tuple[str, str]] = {}
         vetoes: list[tuple[str, str, str]] = []
@@ -176,7 +190,7 @@ class FederationAuthorizationPolicy:
             return AuthorizationDecision(False, "approval_veto", request_id,
                 requester.identity_id, tuple(sorted(rule.rule_id for rule in allows)),
                 tuple(sorted({item[0] for item in vetoes})),
-                tuple(sorted({(item[1], item[2]) for item in vetoes})))
+                tuple(sorted({(item[1], item[2]) for item in vetoes})), **decision_context)
 
         # Rules are evaluated independently: approvals never combine across policies.
         eligible = []
@@ -199,4 +213,5 @@ class FederationAuthorizationPolicy:
         selected, selected_approvals = eligible[0]
         approval_refs = tuple(sorted(verified_approvals[identity_id] for identity_id in selected_approvals))
         return AuthorizationDecision(True, "authorized_by_policy", request_id,
-            requester.identity_id, (selected.rule_id,), selected_approvals, approval_refs)
+            requester.identity_id, (selected.rule_id,), selected_approvals, approval_refs,
+            **decision_context)
