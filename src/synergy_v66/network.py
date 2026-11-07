@@ -22,6 +22,7 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[
     shipments:list[Shipment]=[]
     initial={sku:sum(x.quantity for lots in inventory.values() for x in lots if x.sku==sku) for sku in SKUS}
     produced={s:0.0 for s in SKUS}; delivered={s:0.0 for s in SKUS}
+    production_audit=[]; sales_audit=[]
     consumed={s:0.0 for s in SKUS}; sold={s:0.0 for s in SKUS}
     expired={s:0.0 for s in SKUS}; unmet={s:0.0 for s in DEMAND_SKUS}
     daily=[]; max_wh={r:0.0 for r in REGIONS}; max_transport={r:0.0 for r in REGIONS}
@@ -55,11 +56,13 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[
                 qty=min(farm.capacity*0.55*row["capacity_factor"][farm.cell_id],room)
                 inventory[farm.cell_id].append(Lot(f"H-{farm.cell_id}-{day}",sku,qty,day,day+365,farm.cell_id))
                 produced[sku]+=qty
+                production_audit.append({"day":day,"cell_id":farm.cell_id,"sku":sku,"quantity":qty})
             energy=f"{region}-EN"
             room=max(0.0,CELL_BY_ID[f"{region}-WH"].warehouse_capacity-regional_load(region))
             qty=min(18.0*row["capacity_factor"][energy],room)
             inventory[energy].append(Lot(f"E-{region}-{day}","energy",qty,day,day+1,energy))
             produced["energy"]+=qty
+            production_audit.append({"day":day,"cell_id":energy,"sku":"energy","quantity":qty})
 
         # Production consumes only inventory already received by this day.
         for cell in CELLS:
@@ -76,6 +79,7 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[
             output=batches*recipe.output_per_batch
             inventory[cell.cell_id].append(Lot(f"P-{cell.cell_id}-{day}",recipe.output_sku,output,day,day+recipe.shelf_life_days,cell.cell_id))
             produced[recipe.output_sku]+=output
+            production_audit.append({"day":day,"cell_id":cell.cell_id,"sku":recipe.output_sku,"quantity":output})
 
         transport={r:0.0 for r in REGIONS}
         # Replenishment orders: local supplier first, then the other region.
@@ -124,7 +128,9 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[
                 cell=f"{region}-{role}"; demand=float(row["demand"][f"{region}-{sku}"])
                 qty=min(demand,_stock(inventory[cell],sku,day))
                 if qty>1e-9: _consume_fifo(inventory[cell],sku,qty,day)
-                sold[sku]+=qty; unmet[sku]+=demand-qty
+                sold[sku]+=qty
+                sales_audit.append({"day":day,"cell_id":cell,"sku":sku,"quantity":qty})
+                unmet[sku]+=demand-qty
 
         for region in REGIONS:
             max_wh[region]=max(max_wh[region],regional_load(region))
@@ -144,6 +150,7 @@ def simulate(environment:list[dict[str,Any]],initial_inventory:float=6.0)->dict[
         "environment_hash":_fingerprint(environment),"initial_stock_by_sku":initial,
         "produced_by_sku":produced,"delivered_by_sku":delivered,"consumed_by_sku":consumed,
         "sold_by_sku":sold,"unmet_demand_by_sku":unmet,"expired_by_sku":expired,
+        "production_audit":production_audit,"sales_audit":sales_audit,
         "closing_stock":sum(closing.values()),"closing_stock_by_sku":closing,
         "in_transit_stock":sum(transit.values()),"in_transit_by_sku":transit,
         "physical_balance_error_by_sku":balance,"physical_balance_error":sum(balance.values()),
