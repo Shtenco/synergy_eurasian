@@ -432,3 +432,10 @@ def test_policy_approval_event_id_collision_with_different_hash_is_rejected(tmp_
     assert first.event["event_hash"] != second.event["event_hash"]
     with pytest.raises(ValueError, match="collision with conflicting event hash"):
         store.apply_change(request, [first, second], registry, "2026-11-06T10:02:00+00:00")
+
+
+def test_policy_store_rejects_stale_signed_change_requests(tmp_path):
+    store, registry, keys = setup(tmp_path)
+    request, approvals = make_change(tmp_path, keys, suffix="stale")
+    with pytest.raises(ValueError, match="policy change request is stale"):
+        store.apply_change(request, approvals, registry, "2026-11-06T10:10:00+00:00")
