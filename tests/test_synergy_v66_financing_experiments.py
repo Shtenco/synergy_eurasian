@@ -569,3 +569,20 @@ def test_federation_reserve_batch_allocation_validates_claims_and_reserve():
         allocate_federation_reserve_claims([], -1.0)
     with pytest.raises(ValueError):
         allocate_federation_reserve_claims([], 10.0, rule="priority-by-favor")
+
+
+def test_regional_reserve_sizing_respects_absolute_post_contribution_cash_floor():
+    from synergy_v66.financing_experiments import compare_regional_reserve_size_sensitivities
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 80.0 + index * 5.0 for index, cell in enumerate(CELLS)}
+    report = compare_regional_reserve_size_sensitivities(
+        seeds=[101], reserve_levels_per_region=[20.0], days=4,
+        max_contribution_fraction=0.10,
+        base_config={"initial_cash_by_cell": cash},
+        minimum_post_contribution_cash=79.0,
+    )
+    item = report["sensitivity_reports"][0]
+    assert report["minimum_post_contribution_cash"] == pytest.approx(79.0)
+    for cell_id, contribution in item["contributions_by_cell"].items():
+        assert cash[cell_id] - contribution >= 79.0 - 1e-9
