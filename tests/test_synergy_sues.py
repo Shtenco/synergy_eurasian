@@ -674,7 +674,7 @@ def test_fifo_inventory_rejects_insufficient_stock_without_mutation_and_mixed_un
 
 
 def test_fifo_inventory_movements_post_to_balanced_journal():
-    ledger = InventoryLedger("USD")
+    ledger = InventoryLedger("USD", entity_id="co1")
     receipt = ledger.receive("r1", "lot-1", "components", "factory",
         Quantity("10", "unit"), Money("100", "USD"), date(2026, 11, 1), "receipt:components")
     issue = ledger.issue("i1", "components", "factory", Quantity("4", "unit"),
@@ -833,3 +833,39 @@ def test_intercompany_elimination_date_must_fall_inside_canonical_period():
             datetime(2027, 1, 15, tzinfo=timezone.utc), "period-event", "period-idem",
         )
     assert journal.entries == ()
+
+
+def test_inventory_gl_posting_requires_owner_and_is_single_journal_only():
+    unbound = InventoryLedger("USD")
+    unbound.receive("unbound-receipt", "unbound-lot", "steel", "factory",
+        Quantity("1", "kg"), Money("10", "USD"), date(2026, 11, 1), "receipt:unbound")
+    journal = Journal("USD", entity_id="co1")
+    journal.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    with pytest.raises(ValueError, match="bound to an entity"):
+        unbound.post_to_journal("unbound-receipt", journal, "inventory", "grni", "co1",
+            datetime(2026, 11, 2, tzinfo=timezone.utc))
+
+    ledger = InventoryLedger("USD", entity_id="co1")
+    receipt = ledger.receive("owned-receipt", "owned-lot", "steel", "factory",
+        Quantity("1", "kg"), Money("10", "USD"), date(2026, 11, 1), "receipt:owned")
+    ledger.post_to_journal(receipt.movement_id, journal, "inventory", "grni", "co1",
+        datetime(2026, 11, 2, tzinfo=timezone.utc))
+    other_journal = Journal("USD", entity_id="co1")
+    other_journal.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    other_journal.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    with pytest.raises(ValueError, match="already journalized"):
+        ledger.post_to_journal(receipt.movement_id, other_journal, "inventory", "grni", "co1",
+            datetime(2026, 11, 2, tzinfo=timezone.utc))
+
+
+def test_inventory_ledger_rejects_cross_entity_journal_posting():
+    ledger = InventoryLedger("USD", entity_id="co1")
+    receipt = ledger.receive("cross-entity-receipt", "cross-entity-lot", "steel", "factory",
+        Quantity("1", "kg"), Money("10", "USD"), date(2026, 11, 1), "receipt:cross-entity")
+    journal = Journal("USD", entity_id="co2")
+    journal.add_account(account("inventory", "1300", AccountType.ASSET, NormalBalance.DEBIT))
+    journal.add_account(account("grni", "2100", AccountType.LIABILITY, NormalBalance.CREDIT))
+    with pytest.raises(ValueError, match="ownership mismatch"):
+        ledger.post_to_journal(receipt.movement_id, journal, "inventory", "grni", "co2",
+            datetime(2026, 11, 2, tzinfo=timezone.utc))
