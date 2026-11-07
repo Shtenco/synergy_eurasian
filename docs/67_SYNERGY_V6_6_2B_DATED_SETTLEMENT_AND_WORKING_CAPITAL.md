@@ -68,3 +68,8 @@ python -m pytest -q tests/test_synergy_v66_settlement.py
 - Negative cash is reported as required working capital rather than hidden by invented credit.
 
 No policy ranking or claims of real-world economic superiority are produced by this overlay.
+
+
+## 7. Compatibility with V6.6.3
+
+This replay is intended for the unconstrained V6.6.2 physical output. V6.6.3-B embeds its own stateful cash/credit ledger directly inside the physical simulation. Do **not** pass a result with `credit_constrained=True` to `replay_settlement`; the function rejects that combination to prevent counting the same commercial flows twice. Read `result["credit_ledger"]` for the integrated run.
