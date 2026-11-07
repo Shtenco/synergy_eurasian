@@ -43,3 +43,46 @@ def test_report_contains_five_shock_scenarios():
     cfg["paths"] = 100
     report = build_report(cfg)
     assert len(report["shock_sensitivity"]) == 5
+
+
+def test_monte_carlo_rejects_invalid_dimensions_distributions_and_overflow():
+    cfg = load_config()
+    with pytest.raises(ValueError, match="finite"):
+        simulate_paths(cfg, float("nan"))
+    with pytest.raises(ValueError, match="finite JSON number"):
+        simulate_paths(cfg, True)
+
+    bad = copy.deepcopy(cfg)
+    bad["paths"] = 10.5
+    with pytest.raises(ValueError, match="integer"):
+        simulate_paths(bad, 0.01)
+
+    bad = copy.deepcopy(cfg)
+    bad["horizon_years"] = 0
+    with pytest.raises(ValueError, match="integer"):
+        simulate_paths(bad, 0.01)
+
+    bad = copy.deepcopy(cfg)
+    bad["annual_uncertainty"]["cashflow_growth_std"] = -0.1
+    with pytest.raises(ValueError, match="standard deviations"):
+        simulate_paths(bad, 0.01)
+
+    bad = copy.deepcopy(cfg)
+    bad["annual_uncertainty"]["replacement_inflation_min"] = -1.1
+    with pytest.raises(ValueError, match="bounds cannot be below"):
+        simulate_paths(bad, 0.01)
+
+    bad = copy.deepcopy(cfg)
+    bad["rd_projects"]["independent_projects_per_year"] = 0
+    with pytest.raises(ValueError, match="integer"):
+        simulate_paths(bad, 0.01)
+
+    bad = copy.deepcopy(cfg)
+    bad["starting_point"]["productive_capital_usd"] = -1
+    with pytest.raises(ValueError, match="must be positive"):
+        simulate_paths(bad, 0.01)
+
+    bad = copy.deepcopy(cfg)
+    bad["random_seed"] = 10**10000
+    with pytest.raises(ValueError, match="finite"):
+        simulate_paths(bad, 0.01)
