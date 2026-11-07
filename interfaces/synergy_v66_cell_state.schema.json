@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Shtenco/synergy_eurasian/blob/research/synergy-v6.6-federated-economy/interfaces/synergy_v66_cell_state.schema.json",
+  "$id": "https://github.com/Shtenco/synergy_eurasian/schema/synergy_v66_cell_state.schema.json",
   "title": "SYNERGY V6.6 Economic Cell State",
   "description": "Versioned research contract for one independently governed economic cell. Values are state snapshots, not accounting certification.",
   "type": "object",
