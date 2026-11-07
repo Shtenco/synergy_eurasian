@@ -158,3 +158,22 @@ def test_recovery_rejects_invalid_targets_and_unknown_allocation_rule():
         plan_reserve_recovery(ledger, {"WEST": 1.0, "EAST": 1.0}, 0.0, allocation_rule="magic")
     with pytest.raises(ValueError):
         plan_reserve_recovery(ledger, {"WEST": 1.0, "EAST": 1.0}, 0.0, contribution_fraction_per_period=1.5)
+
+
+def test_modified_recovery_plan_is_rejected_before_settlement():
+    ledger = CreditLedger(initial_cash_per_cell=100.0, minimum_post_contribution_cash=10.0)
+    ledger.process_day(0)
+    plan = plan_reserve_recovery(
+        ledger,
+        target_regional_by_region={"WEST": 5.0, "EAST": 5.0},
+        target_federation=0.0,
+        recovery_period_id="PLAN-INTEGRITY",
+    )
+    plan["regional_contributions_by_cell"]["WEST-PR1"] += 1.0
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match="plan was modified"):
+        execute_reserve_recovery(ledger, plan, "TAMPERED-PLAN", day=0)
+    after = ledger.snapshot()
+    assert after["cash_by_cell"] == before["cash_by_cell"]
+    assert after["regional_pool_reserve_by_region"] == before["regional_pool_reserve_by_region"]
+    assert after["cash_conservation_error"] == pytest.approx(0.0)
