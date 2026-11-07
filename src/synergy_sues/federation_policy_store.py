@@ -70,6 +70,7 @@ class SQLiteAuthorizationPolicyStore:
         administrators: Mapping[str, Iterable[str]],
         min_admin_approvals: int = 2,
         busy_timeout_ms: int = 5000,
+        max_request_age_seconds: int = 300,
     ) -> None:
         if not isinstance(database_path, str) or not database_path.strip() or database_path == ":memory:":
             raise ValueError("authorization policy store requires a file-backed database")
@@ -77,6 +78,8 @@ class SQLiteAuthorizationPolicyStore:
             raise ValueError("min_admin_approvals must be an integer >= 2 for two-person control")
         if isinstance(busy_timeout_ms, bool) or not isinstance(busy_timeout_ms, int) or busy_timeout_ms < 0:
             raise ValueError("busy_timeout_ms must be a non-negative integer")
+        if isinstance(max_request_age_seconds, bool) or not isinstance(max_request_age_seconds, int) or max_request_age_seconds <= 0:
+            raise ValueError("max_request_age_seconds must be a positive integer")
         if not isinstance(administrators, Mapping) or not administrators:
             raise ValueError("an out-of-band tenant administrator allowlist is required")
         normalized: dict[str, tuple[str, ...]] = {}
@@ -94,6 +97,7 @@ class SQLiteAuthorizationPolicyStore:
         self.administrators = normalized
         self.min_admin_approvals = min_admin_approvals
         self.busy_timeout_ms = busy_timeout_ms
+        self.max_request_age_seconds = max_request_age_seconds
         with self._session() as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS authorization_policy_changes (
@@ -281,6 +285,9 @@ class SQLiteAuthorizationPolicyStore:
         if now.tzinfo is None or now.utcoffset() is None:
             raise ValueError("received_at must be timezone-aware")
         now = now.astimezone(timezone.utc)
+        request_age = (now - request_time).total_seconds()
+        if request_age < 0 or request_age > self.max_request_age_seconds:
+            raise ValueError("policy change request is stale or not yet effective")
         verified: dict[str, SignedEventEnvelope] = {}
         seen_event_ids: dict[str, str] = {}
         veto = False
@@ -297,6 +304,10 @@ class SQLiteAuthorizationPolicyStore:
             }
             if set(approval_payload) != approval_fields:
                 raise ValueError("policy approval payload has missing or unsupported fields")
+            approval_time = _utc(approval.signed_at, "signed_at")
+            approval_age = (now - approval_time).total_seconds()
+            if approval_age < 0 or approval_age > self.max_request_age_seconds:
+                raise ValueError("policy approval is stale or not yet effective")
             approval_event_id = approval.event["event_id"]
             approval_event_hash = approval.event["event_hash"]
             previous_hash = seen_event_ids.get(approval_event_id)
@@ -312,7 +323,7 @@ class SQLiteAuthorizationPolicyStore:
                 and approval_payload["policy_change_event_id"] == request.event["event_id"]
                 and approval_payload["policy_change_event_hash"] == request.event["event_hash"]
                 and approver.tenant_id == tenant_id
-                and _utc(approval.signed_at, "signed_at") >= request_time
+                and approval_time >= request_time
             )
             if not exact_binding or approver.identity_id not in admins or approver.identity_id == proposer.identity_id:
                 continue
