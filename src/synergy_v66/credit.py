@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import math
 from typing import Any
 
-from .network import CELLS
+from .network_topology import CELLS
 
 EPS = 1e-9
 
