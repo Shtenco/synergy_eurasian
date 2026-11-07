@@ -953,3 +953,76 @@ def test_batch_pro_rata_keeps_local_reserve_ahead_of_federation_pool():
 def test_credit_ledger_rejects_unknown_federation_reserve_allocation_rule():
     with pytest.raises(ValueError):
         CreditLedger(federation_reserve_allocation_rule="arbitrary_priority")
+
+
+def test_federation_reserve_replenishment_is_cash_funded_and_conserved():
+    from synergy_v66.network_topology import CELLS
+
+    initial_contributions = {cell.cell_id: 0.0 for cell in CELLS}
+    initial_contributions["WEST-LG"] = 2.5
+    initial_contributions["EAST-LG"] = 2.5
+    ledger = CreditLedger(
+        initial_cash_per_cell=20.0,
+        federation_pool_reserve_total=5.0,
+        federation_reserve_contributions_by_cell=initial_contributions,
+        minimum_post_contribution_cash=10.0,
+    )
+    replenishment = {cell.cell_id: 0.0 for cell in CELLS}
+    replenishment["WEST-PR1"] = 2.0
+    replenishment["EAST-PR1"] = 1.5
+    result = ledger.replenish_federation_reserve(replenishment, day=0, replenishment_id="TOPUP-001")
+    snapshot = ledger.snapshot()
+    assert result["amount"] == pytest.approx(3.5)
+    assert snapshot["federation_pool_reserve_balance"] == pytest.approx(8.5)
+    assert snapshot["federation_pool_reserve_replenished_total"] == pytest.approx(3.5)
+    assert snapshot["federation_pool_reserve_funded_total"] == pytest.approx(8.5)
+    assert snapshot["federation_reserve_replenished_by_cell"]["WEST-PR1"] == pytest.approx(2.0)
+    assert snapshot["cash_by_cell"]["WEST-PR1"] == pytest.approx(18.0)
+    assert snapshot["cash_conservation_error"] == pytest.approx(0.0)
+    with pytest.raises(ValueError):
+        ledger.replenish_federation_reserve(replenishment, day=0, replenishment_id="TOPUP-001")
+
+
+def test_federation_reserve_replenishment_is_atomic_when_any_member_breaches_floor():
+    from synergy_v66.network_topology import CELLS
+
+    ledger = CreditLedger(initial_cash_per_cell=20.0, minimum_post_contribution_cash=10.0)
+    contributions = {cell.cell_id: 0.0 for cell in CELLS}
+    contributions["WEST-PR1"] = 1.0
+    contributions["EAST-PR1"] = 11.0
+    before = ledger.snapshot()
+    with pytest.raises(ValueError):
+        ledger.replenish_federation_reserve(contributions, day=0, replenishment_id="TOPUP-ATOMIC")
+    after = ledger.snapshot()
+    assert after["cash_by_cell"] == before["cash_by_cell"]
+    assert after["federation_pool_reserve_balance"] == before["federation_pool_reserve_balance"]
+    assert after["federation_pool_reserve_replenished_total"] == pytest.approx(0.0)
+    assert after["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_defaulted_member_cannot_replenish_federation_reserve():
+    from synergy_v66.network_topology import CELLS
+
+    ledger = CreditLedger(initial_cash_per_cell=20.0)
+    ledger.accounts["WEST-PR1"].defaulted = True
+    contributions = {cell.cell_id: 0.0 for cell in CELLS}
+    contributions["WEST-PR1"] = 1.0
+    with pytest.raises(ValueError):
+        ledger.replenish_federation_reserve(contributions, day=0, replenishment_id="TOPUP-DEFAULTED")
+    assert ledger.snapshot()["federation_pool_reserve_balance"] == pytest.approx(0.0)
+    assert ledger.snapshot()["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_federation_reserve_replenishment_rejects_incomplete_or_nonpositive_maps():
+    from synergy_v66.network_topology import CELLS
+
+    ledger = CreditLedger(initial_cash_per_cell=20.0)
+    with pytest.raises(ValueError):
+        ledger.replenish_federation_reserve({}, day=0, replenishment_id="TOPUP-MISSING")
+    zeros = {cell.cell_id: 0.0 for cell in CELLS}
+    with pytest.raises(ValueError):
+        ledger.replenish_federation_reserve(zeros, day=0, replenishment_id="TOPUP-ZERO")
+    invalid = dict(zeros)
+    invalid["WEST-PR1"] = float("nan")
+    with pytest.raises(ValueError):
+        ledger.replenish_federation_reserve(invalid, day=0, replenishment_id="TOPUP-NAN")
