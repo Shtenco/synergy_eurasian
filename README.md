@@ -340,3 +340,141 @@ python src/eiiom_optimizer.py --config config/base_scenario.json --output output
 **Copyright © 2026 Evgeniy Koshtenko. All rights reserved.** Проект распространяется под собственной лицензией [`LICENSE`](LICENSE). Публичная доступность GitHub **не означает открытую лицензию** или разрешение на коммерческое использование. Права сторонних компонентов и уже выданные лицензии сохраняются в применимых пределах.
 
 <p align="center"><strong>SYNERGY EURASIAN — капитал имеет смысл тогда, когда превращается в проверяемую реальную производительность, устойчивость и благосостояние.</strong></p>
+
+---
+
+## SYNERGY V6.6 — Federated Self-Organizing Economy
+
+V6.6 is an additive research specification for comparing independent firms, market coordination, centralized planning, local cellular rules, regional DAO coordination and federated self-organization under identical demand and shock paths. It does not claim that decentralization is inherently superior or that a calibrated simulator already exists.
+
+- [V6.6 research specification](docs/64_SYNERGY_V6_6_FEDERATED_SELF_ORGANIZING_ECONOMY.md)
+- [V6.6 economic-cell state schema](interfaces/synergy_v66_cell_state.schema.json)
+- [Minimal economic-cell fixture](examples/synergy_v6_6_cell_state_minimal.json)
+- [V6.6 schema contract tests](tests/test_synergy_v66_contract.py)
+- [V6.6.1 seven-cell compatibility kernel](src/synergy_v66/compatibility.py)
+- [V6.6.1 experiment and limitations](docs/65_SYNERGY_V6_6_1_SEVEN_CELL_COMPATIBILITY.md)
+- [V6.6.1 kernel tests](tests/test_synergy_v66_compatibility.py)
+- [Pull request #16](https://github.com/Shtenco/synergy_eurasian/pull/16)
+
+V6.6.0 defines cell state, decision rights, evidence classes, conservation invariants, coordination baselines, staged scale-up, governance attack scenarios and calibration gates. V6.6.1 adds a deterministic seven-cell make-to-order compatibility kernel and paired policy replay. Its DAO label is only a legacy greedy capacity-balancing proxy; CA and market are also deliberately narrow heuristics. Persistent inventory, lead times, credit, FX and real governance remain unimplemented. All scenario outputs remain synthetic research results, not forecasts or proof of policy superiority.
+
+
+### SYNERGY V6.6.2 — 20-cell inventory network
+
+- [V6.6.2 physical network kernel](src/synergy_v66/network.py)
+- [V6.6.2 topology, recipes and environment](src/synergy_v66/network_topology.py)
+- [V6.6.2 model specification and limitations](docs/66_SYNERGY_V6_6_2_20_CELL_INVENTORY_NETWORK.md)
+- [V6.6.2 physical-network tests](tests/test_synergy_v66_network.py)
+
+V6.6.2 adds a deterministic synthetic 20-cell / two-region network with three production sectors, multi-stage recipes, lot inventory, expiry-aware FIFO consumption, lead-time shipments, regional storage and transport constraints, shipment audit and per-SKU physical conservation. This is the physical submodel only: working capital, payment delays, contracts, FX and governance remain explicit next increments, not implemented capabilities. All parameters and outputs are synthetic research fixtures, not calibrated EAEU data or forecasts.
+
+
+### SYNERGY V6.6.2-B — dated settlement and working capital
+
+- [Settlement replay engine](src/synergy_v66/settlement.py)
+- [Commercial and working-capital specification](docs/67_SYNERGY_V6_6_2B_DATED_SETTLEMENT_AND_WORKING_CAPITAL.md)
+- [Settlement tests](tests/test_synergy_v66_settlement.py)
+
+V6.6.2-B adds dated internal invoices, customer receivables, external supplier payables, configurable payment terms, cell cash balances and explicit unfunded working-capital requirements. This is a replay overlay: negative cash is exposed but does not yet constrain production or shipment authorization. Synthetic prices, costs and payment terms are research parameters, not observed market data.
+
+
+### SYNERGY V6.6.3-A — mutual-credit authorization kernel
+
+- [Stateful mutual-credit kernel](src/synergy_v66/credit.py)
+- [Credit and liquidity kernel specification](docs/68_SYNERGY_V6_6_3A_MUTUAL_CREDIT_KERNEL.md)
+- [Credit kernel tests](tests/test_synergy_v66_credit.py)
+
+V6.6.3-A adds cell cash accounts, approved bank credit lines, trade-credit limits, internal AR/AP, customer receivables, dated settlement, overdue default/freeze rules and pre-authorization of modeled production costs. The kernel is currently a standalone control layer and is **not yet wired into the V6.6.2 physical production/dispatch loop**. It must pass its accounting and credit-boundary tests before physical integration. No implicit overdraft or unbacked credit is created.
+
+
+### SYNERGY V6.6.3-B — cash-constrained physical network
+
+- [Integrated cash-constrained simulator](src/synergy_v66/network.py)
+- [V6.6.3-B integration specification](docs/69_SYNERGY_V6_6_3B_CASH_CONSTRAINED_PHYSICAL_NETWORK.md)
+- [Credit and physical integration tests](tests/test_synergy_v66_network.py)
+
+When `credit_config` is supplied, cash and credit authorization now gate harvest, energy generation, intermediate/final production and supplier dispatch before physical stock is consumed or output/shipment is created. The unconstrained V6.6.2 path remains the default when no credit configuration is supplied. The model is still synthetic and has explicit limits: no partial invoice payments, external customer default, bank capital constraints, interest, collateral or empirical calibration.
+
+Cash-first procurement funding is supported: own cash is used first, then unused trade credit, then an approved bank line for immediate payment; an order is rejected without partial cash loss if no permitted source can cover it.
+
+
+The integrated credit ledger now also supports partial invoice settlement during grace periods, supplier-side receivable exposure caps, customer receivable limits, deterministic customer recovery/default write-offs, and credit rejection diagnostics. Customer credit limits can block final sales without consuming finished-goods inventory.
+
+- [V6.6.3-C bilateral exposure and customer credit risk specification](docs/70_SYNERGY_V6_6_3C_BILATERAL_EXPOSURE_AND_CUSTOMER_RISK.md)
+
+
+### SYNERGY V6.6.3-D — paired financing experiments
+
+- [Paired financing-mode runner](src/synergy_v66/financing_experiments.py)
+- [Experiment design and interpretation rules](docs/71_SYNERGY_V6_6_3D_PAIRED_FINANCING_EXPERIMENTS.md)
+- [Experiment tests](tests/test_synergy_v66_financing_experiments.py)
+
+The runner compares cash-only, bank-only, mutual-credit and hybrid modes against an unconstrained reference using identical seed-specific exogenous environments. It reports service level, output, defaults, bad debt, financing usage, rejection counts and accounting residuals. It does not assume any policy is superior.
+
+The experiment module also provides `compare_all_shock_regimes(...)`, which runs the same paired financing comparison under normal, volatile and severe synthetic shocks.
+
+- [Reproducible financing experiment CLI](scripts/run_synergy_v66_financing_experiment.py)
+
+The repository CI now runs a paired three-regime, three-seed financing stress sample and writes a machine-readable report under `outputs/`.
+
+- [V6.6.4-A regional mutual-credit pool specification](docs/72_SYNERGY_V6_6_4A_REGIONAL_MUTUAL_CREDIT_POOL.md)
+
+The credit ledger now tracks local regional net debtor/creditor positions, per-member debit/credit caps and regional pool ceilings. These are memorandum credit claims, not cash or tokens; cross-border clearing and loss allocation remain separate future work.
+
+- [V6.6.4-B regional pool sensitivity specification](docs/73_SYNERGY_V6_6_4B_REGIONAL_POOL_SENSITIVITY.md)
+
+The financing experiment module now includes `compare_regional_pool_sensitivities(...)` to sweep regional pool ceilings and member debit/credit caps under paired shocks.
+
+The CI experiment also runs a compact regional-pool sensitivity grid (tight and loose regional/member caps) and writes a separate JSON report under `outputs/`.
+
+The regional guarantee reserve is funded by an equal member-cash contribution at initialization. It covers same-region default claims up to the available reserve; uncovered amounts become seller trade bad debt. Reserve transfers are included in cash conservation and do not mint new cash.
+
+- [V6.6.4-D regional reserve contribution allocation](docs/74_SYNERGY_V6_6_4D_RESERVE_CONTRIBUTION_ALLOCATION.md)
+
+The guarantee reserve ledger accepts an explicit per-cell contribution map. Paired experiments compare equal-all-member, production-capacity-weighted and opening-cash-weighted contributions on common exogenous paths. A separate liquidity-capped allocator constrains each member's combined reserve burden to a declared fraction of opening cash.
+
+The CI experiment now also compares equal-all-member and production-capacity-weighted guarantee-reserve contributions on paired severe-shock paths, keeping total reserve capital fixed.
+
+- [V6.6.4-E regional guarantee loss waterfall](docs/75_SYNERGY_V6_6_4E_REGIONAL_LOSS_WATERFALL.md)
+
+An optional, disabled-by-default capped pro-rata member assessment can now follow reserve coverage on local defaults. The transfer is taken from solvent members' cash and paid to the claimant seller; any remaining uncovered loss stays with the seller.
+
+The loss-waterfall runner also executes deterministic targeted local and cross-region default fixtures so reserve coverage, capped member assessments and cross-border exclusions are exercised even when naturally generated defaults do not trigger those paths.
+
+- [V6.6.4-F liquidity-capped reserve contributions](docs/76_SYNERGY_V6_6_4F_LIQUIDITY_CAPPED_RESERVE.md)
+
+The credit ledger supports heterogeneous opening cash by cell. A deterministic weighted water-filling allocator funds regional reserves without exceeding each member's configured fraction of opening cash; it rejects reserve targets that cannot be funded within those caps.
+
+- [V6.6.4-G regional reserve adequacy and sizing sensitivity](docs/77_SYNERGY_V6_6_4G_REGIONAL_RESERVE_ADEQUACY.md)
+
+A paired reserve-size grid now reports guarantee utilization, exhaustion, remaining reserve, seller losses, service level and defaults against the opening-liquidity cost of funding the reserve. CI sweeps five synthetic reserve sizes per region under a 10% member contribution cap.
+
+- [V6.6.4-H federation-wide guarantee reserve](docs/78_SYNERGY_V6_6_4H_FEDERATION_GUARANTEE_RESERVE.md)
+
+A separately funded federation reserve now forms the second tier of the guarantee waterfall. Local reserves cover same-region claims first; the federation reserve can cover remaining local claims and eligible cross-region defaults. It is funded by explicit member cash contributions and included in consolidated cash conservation.
+
+- [V6.6.4-I liquidity-capped federation reserve contributions](docs/79_SYNERGY_V6_6_4I_LIQUIDITY_CAPPED_FEDERATION_RESERVE.md)
+
+The federation reserve allocator now accounts for each member's existing regional-reserve contribution before assigning its federal contribution, enforcing a combined per-member opening-cash cap rather than applying two independent caps. Both regional and federation allocators also support an absolute post-contribution cash floor, which the credit ledger independently enforces after both reserve contributions are applied.
+
+The federation reserve is also tested under multiple cross-region defaults: claims are resolved deterministically, the finite reserve is exhausted once, and subsequent uncovered losses remain with sellers. This ordering is a software determinism rule, not a legal creditor-priority rule.
+
+- [V6.6.4-J federation reserve allocation rules](docs/80_SYNERGY_V6_6_4J_FEDERATION_RESERVE_ALLOCATION_RULES.md)
+
+The credit ledger now supports an opt-in `batch_pro_rata` federation-reserve allocation rule for claims from buyers defaulting on the same processing day. FCFS remains the default; local regional reserves retain first-loss priority.
+
+- [V6.6.4-K explicit federation reserve replenishment](docs/81_SYNERGY_V6_6_4K_FEDERATION_RESERVE_REPLENISHMENT.md)
+
+The ledger can now replenish the federation reserve only through an explicit, atomic transfer from member cash. It rejects duplicate replenishment IDs, defaulted contributors and any contribution that breaches the member's minimum post-contribution cash floor.
+
+- [V6.6.4-L federation claim classes and priority rules](docs/82_SYNERGY_V6_6_4L_FEDERATION_CLAIM_PRIORITY.md)
+
+The paired allocation experiment now compares four synthetic rules: FCFS, batch pro-rata, priority-class-then-FCFS and priority-class-then-batch-pro-rata. The operational ledger still exposes only FCFS and batch pro-rata; class priority remains an analytical alternative pending governance and legal design.
+
+- [V6.6.4-M adversarial claim-class relabeling sensitivity](docs/83_SYNERGY_V6_6_4M_CLAIM_CLASS_RELABELING_SENSITIVITY.md)
+
+The research runner measures how relabeling an ordinary claim as essential can shift reserve coverage away from other claims under priority-class rules. This is an incentive-risk analysis; the system does not automatically assign or validate real claim classes.
+
+- [V6.6.4-N adaptive multi-level reserve recovery](docs/84_SYNERGY_V6_6_4N_ADAPTIVE_MULTI_LEVEL_RESERVE_RECOVERY.md)
+
+V6.6.4-N adds a non-mutating recovery planner and atomic settlement across regional and federation reserves. Four deterministic capped allocation rules are supported: equal, production-capacity, opening-cash and adaptive-liquidity weights. Regional deficits are funded by members of the matching region first; federation funding then uses the remaining shared member capacity. A ledger-defined 30-day simulation window and cumulative contribution ceiling prevent callers from resetting the member cap with arbitrary period labels or repeated replenishment IDs. Plans are fingerprinted and rejected if the ledger state changes before execution. The older federation-only replenishment API remains available and delegates to the same ledger-defined 30-day contribution cap (10% of opening cash by default). Repeated correlated-default recovery experiments and full CI verification on the exact implementation head remain required; all inputs are synthetic.
