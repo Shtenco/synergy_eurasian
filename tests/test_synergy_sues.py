@@ -1137,3 +1137,21 @@ def test_scenario_benefits_never_enter_verified_project_totals():
     }
     assert by_status == {"SCENARIO": "900", "VERIFIED": "100"}
     assert summary["scenario_amounts_are_excluded_from_verified_project_totals"]
+
+
+
+def test_currency_translation_refuses_to_plug_an_unbalanced_source_trial_balance():
+    now = datetime(2026, 11, 6, 10, tzinfo=timezone.utc)
+    policy = TranslationPolicy(
+        closing_rate=FXRate("close-source", "EUR", "USD", "1.1", now, "fx:close"),
+        average_rate=FXRate("average-source", "EUR", "USD", "1.05", now, "fx:average"),
+        historical_equity_rates={},
+        reporting_date=date(2026, 11, 6),
+        translation_adjustment_account_id="cta",
+    )
+    unbalanced = [
+        TrialBalanceAccount("cash", AccountType.ASSET, Money("100", "EUR"), Money("0", "EUR")),
+        TrialBalanceAccount("revenue", AccountType.REVENUE, Money("0", "EUR"), Money("90", "EUR")),
+    ]
+    with pytest.raises(ValueError, match="Source functional-currency trial balance is unbalanced"):
+        translate_trial_balance(unbalanced, policy, "USD")
