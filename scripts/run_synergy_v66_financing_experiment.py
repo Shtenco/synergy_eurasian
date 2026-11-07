@@ -43,6 +43,8 @@ def main() -> int:
                 "defaulted_cells_mean": metrics["defaulted_cells"]["mean"],
                 "bank_debt_mean": metrics["bank_debt"]["mean"],
                 "customer_bad_debt_mean": metrics["customer_bad_debt"]["mean"],
+                "regional_pool_outstanding_mean": metrics["regional_pool_outstanding"]["mean"],
+                "regional_pool_rejections_mean": metrics["regional_pool_rejections"]["mean"],
                 "paired_delta_service_level_vs_reference": deltas.get("service_level", {}).get("mean"),
                 "paired_delta_unmet_demand_vs_reference": deltas.get("unmet_demand_units", {}).get("mean"),
                 "paired_delta_defaults_vs_reference": deltas.get("defaulted_cells", {}).get("mean"),
