@@ -209,6 +209,15 @@ class AuthorizedActionExecutor:
             raise ValueError("authorization decision request_id does not match signed request")
         request_event_id = receipt_request.event["event_id"]
         request_event_hash = receipt_request.event["event_hash"]
+        if (
+            decision.request_event_id != request_event_id
+            or decision.request_event_hash != request_event_hash
+            or decision.action != action
+            or decision.resource_type != resource_type
+            or decision.resource_id != resource_id
+            or decision.tenant_id != receipt_request.tenant_id
+        ):
+            raise ValueError("authorization decision is not bound to this signed event and exact action/resource")
         requester = verified_requester.identity_id
         if not decision.allowed:
             return ExecutionResult(False, "DENIED", decision)
@@ -273,6 +282,12 @@ class AuthorizedActionExecutor:
                     "reason": decision.reason,
                     "request_id": decision.request_id,
                     "requester_identity_id": decision.requester_identity_id,
+                    "request_event_id": decision.request_event_id,
+                    "request_event_hash": decision.request_event_hash,
+                    "action": decision.action,
+                    "resource_type": decision.resource_type,
+                    "resource_id": decision.resource_id,
+                    "tenant_id": decision.tenant_id,
                     "matched_rule_ids": list(decision.matched_rule_ids),
                     "approval_identity_ids": list(decision.approval_identity_ids),
                     "approval_event_refs": [list(item) for item in decision.approval_event_refs],
