@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from synergy_sues import (
     Account, AccountType, EconomicPeriod, EvidenceRecord, EvidenceStatus,
     FXRate, Journal, JournalEntry, JournalLine, Money, NormalBalance, Quantity,
-    BenefitAttribution, BenefitAttributionRegistry, BenefitEvent, FlowBoundary,
+    BenefitAttribution, BenefitAttributionRegistry, BenefitEvent, FlowBoundary, FlowEvidenceStatus,
     PhysicalFlow, summarize_physical_flows, IntercompanyRecord, IntercompanyRecordType,
     reconcile_intercompany, post_intercompany_eliminations, BankAllocation, BankStatement, BankStatementLine,
     reconcile_bank_account, TranslationPolicy, TrialBalanceAccount, translate_trial_balance,
@@ -900,3 +900,30 @@ def test_benefit_event_freezes_evidence_ids():
     )
     evidence.append("attacker:injected")
     assert event.evidence_ids == ("meter:one",)
+
+
+def test_physical_flow_summary_separates_scenario_from_observed_and_verified():
+    rows = [
+        PhysicalFlow("planned", "factory", "customer", "steel",
+            Quantity("10", "tonne"), "2026-Q4", evidence_status=FlowEvidenceStatus.PLANNED),
+        PhysicalFlow("scenario", "factory", "customer", "steel",
+            Quantity("100", "tonne"), "2026-Q4", evidence_status=FlowEvidenceStatus.SCENARIO),
+        PhysicalFlow("observed", "factory", "customer", "steel",
+            Quantity("8", "tonne"), "2026-Q4", evidence_id="delivery:8",
+            evidence_status=FlowEvidenceStatus.OBSERVED),
+        PhysicalFlow("verified", "factory", "customer", "steel",
+            Quantity("7", "tonne"), "2026-Q4", evidence_id="acceptance:7",
+            evidence_status=FlowEvidenceStatus.VERIFIED),
+    ]
+    summary = summarize_physical_flows(rows)
+    assert len(summary["flows"]) == 4
+    assert {row["evidence_status"] for row in summary["flows"]} == {
+        "PLANNED", "SCENARIO", "OBSERVED", "VERIFIED"
+    }
+    assert summary["scenario_and_unverified_flows_are_separated"]
+
+
+def test_observed_and_verified_physical_flows_require_evidence_ids():
+    with pytest.raises(ValueError, match="require evidence_id"):
+        PhysicalFlow("observed-no-proof", "factory", "customer", "steel",
+            Quantity("1", "tonne"), "2026-Q4", evidence_status=FlowEvidenceStatus.OBSERVED)
