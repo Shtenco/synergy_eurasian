@@ -69,6 +69,24 @@ def entry(entry_id="je1", key="idem1", amount="100"):
     )
 
 
+
+
+
+def post_opening_cash_balance(journal, amount="100"):
+    journal.add_account(account("opening-equity", "3000", AccountType.EQUITY, NormalBalance.CREDIT))
+    journal.post(JournalEntry(
+        "opening-cash", date(2026, 10, 31),
+        datetime(2026, 10, 31, 12, tzinfo=timezone.utc), "USD",
+        (
+            JournalLine("opening-cash-dr", "cash", "DEBIT", Money(amount, "USD"),
+                Money(amount, "USD"), "co1", "opening:bank-cash"),
+            JournalLine("opening-equity-cr", "opening-equity", "CREDIT", Money(amount, "USD"),
+                Money(amount, "USD"), "co1", "opening:equity"),
+        ),
+        "opening-cash-event", "opening-cash-idem", "Opening cash balance",
+    ))
+
+
 def new_journal():
     journal = Journal("USD")
     journal.add_account(account("cash", "1000", AccountType.ASSET, NormalBalance.DEBIT))
@@ -324,6 +342,7 @@ def test_intercompany_reconciliation_reports_missing_reciprocal_side():
 
 def test_bank_reconciliation_matches_statement_lines_to_cash_journal():
     journal = new_journal()
+    post_opening_cash_balance(journal)
     journal.add_account(account("opex", "6000", AccountType.EXPENSE, NormalBalance.DEBIT))
     now = datetime(2026, 11, 6, 9, tzinfo=timezone.utc)
     sale = JournalEntry("bank-sale", date(2026, 11, 6), now, "USD",
@@ -352,6 +371,7 @@ def test_bank_reconciliation_matches_statement_lines_to_cash_journal():
 
 def test_bank_reconciliation_preserves_unmatched_cash_and_closing_difference():
     journal = new_journal()
+    post_opening_cash_balance(journal)
     now = datetime(2026, 11, 6, 9, tzinfo=timezone.utc)
     sale = JournalEntry("bank-sale", date(2026, 11, 6), now, "USD",
         (JournalLine("cash-in", "cash", "DEBIT", Money("45", "USD"), Money("45", "USD"), "co1", "bank:in"),
@@ -1060,6 +1080,7 @@ def test_intercompany_cash_only_records_reject_noncanonical_periods():
 
 def test_bank_reconciliation_does_not_rewrite_closed_period_with_late_backdated_entry():
     journal = new_journal()
+    post_opening_cash_balance(journal)
     late = JournalEntry(
         "late-backdated-cash", date(2026, 11, 6),
         datetime(2026, 12, 2, 9, tzinfo=timezone.utc), "USD",
@@ -1158,3 +1179,33 @@ def test_currency_translation_refuses_to_plug_an_unbalanced_source_trial_balance
     ]
     with pytest.raises(ValueError, match="Source functional-currency trial balance is unbalanced"):
         translate_trial_balance(unbalanced, policy, "USD")
+
+
+
+def test_bank_reconciliation_rejects_unverified_caller_supplied_opening_ledger_balance():
+    journal = new_journal()
+    now = datetime(2026, 11, 6, 9, tzinfo=timezone.utc)
+    sale = JournalEntry(
+        "sale-without-opening", date(2026, 11, 6), now, "USD",
+        (
+            JournalLine("cash-in", "cash", "DEBIT", Money("50", "USD"), Money("50", "USD"), "co1", "bank:in"),
+            JournalLine("rev", "revenue", "CREDIT", Money("50", "USD"), Money("50", "USD"), "co1", "sale:1"),
+        ),
+        "sale-without-opening-event", "sale-without-opening-idem", "Sale without ledger opening",
+    )
+    journal.post(sale)
+    period = EconomicPeriod("2026-11", date(2026, 11, 1), date(2026, 11, 30))
+    statement = BankStatement(
+        "stmt-unverified-opening", "cash", "USD", period,
+        Money("100", "USD"), Money("150", "USD"), Money("100", "USD"),
+        (BankStatementLine("bank-line", date(2026, 11, 6), Money("50", "USD"), "bank:1", "statement:1"),),
+    )
+    result = reconcile_bank_account(journal, statement, [
+        BankAllocation("allocation", "bank-line", "sale-without-opening", "cash-in",
+            Money("50", "USD"), "allocation:opening-test"),
+    ])
+    assert result["ledger_opening_balance"] == "0"
+    assert result["statement_asserted_opening_ledger_balance"] == "100"
+    assert result["opening_ledger_balance_difference"] == "100"
+    assert result["ledger_closing_balance"] == "50"
+    assert not result["fully_reconciled"]
