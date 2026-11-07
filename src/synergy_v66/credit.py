@@ -377,6 +377,58 @@ class CreditLedger:
         self.events.append({"day": day, "type": "customer_invoice_issued", "invoice_id": invoice_id, "seller": seller, "amount": float(amount), "due_day": int(due_day)})
         return {"authorized": True, "reason": None, "invoice_id": invoice_id}
 
+    def _resolve_payable_default(self, invoice: PayableInvoice, day: int) -> None:
+        """Resolve a matured default: use local reserve first, then write off residual."""
+        buyer = self.accounts[invoice.buyer]
+        remaining = invoice.remaining
+        if remaining <= EPS:
+            invoice.remaining = 0.0
+            invoice.status = "defaulted"
+            buyer.defaulted = True
+            return
+
+        guarantee = 0.0
+        seller = self.accounts[invoice.seller] if invoice.seller is not None else None
+        same_region = (
+            invoice.seller is not None
+            and CELL_BY_ID[invoice.buyer].region == CELL_BY_ID[invoice.seller].region
+        )
+        if same_region:
+            region = CELL_BY_ID[invoice.buyer].region
+            guarantee = min(remaining, self.regional_pool_reserve_by_region[region])
+            if guarantee > EPS:
+                self.regional_pool_reserve_by_region[region] -= guarantee
+                self.regional_pool_guarantee_paid_by_region[region] += guarantee
+                seller.cash += guarantee
+                self.events.append({
+                    "day": day, "type": "regional_pool_guarantee_paid",
+                    "invoice_id": invoice.invoice_id, "region": region,
+                    "seller": invoice.seller, "amount": guarantee,
+                })
+
+        uncovered = max(0.0, remaining - guarantee)
+        buyer.trade_payable -= remaining
+        if seller is not None:
+            seller.trade_receivable -= remaining
+            if same_region:
+                buyer.regional_credit_balance += remaining
+                seller.regional_credit_balance -= remaining
+            self.trade_bad_debt_by_cell[invoice.seller] += uncovered
+        else:
+            self.external_supplier_bad_debt += uncovered
+
+        invoice.guarantee_paid += guarantee
+        invoice.written_off += uncovered
+        invoice.remaining = 0.0
+        invoice.status = "defaulted"
+        buyer.defaulted = True
+        self.events.append({
+            "day": day, "type": "default_resolution",
+            "cell_id": invoice.buyer, "invoice_id": invoice.invoice_id,
+            "remaining_before_resolution": remaining,
+            "guarantee_paid": guarantee, "written_off": uncovered,
+        })
+
     def process_day(self, day: int) -> None:
         """Collect customer invoices first, then settle payables in stable ID order."""
         if not isinstance(day, int) or isinstance(day, bool) or day < self.current_day:
@@ -443,9 +495,7 @@ class CreditLedger:
             if invoice.remaining > EPS and day > invoice.due_day:
                 invoice.status = "overdue"
             if invoice.remaining > EPS and day >= invoice.due_day + self.grace_days:
-                invoice.status = "defaulted"
-                account.defaulted = True
-                self.events.append({"day": day, "type": "default", "cell_id": invoice.buyer, "invoice_id": invoice.invoice_id, "remaining": invoice.remaining})
+                self._resolve_payable_default(invoice, day)
 
     def snapshot(self) -> dict[str, Any]:
         cash = {cell: account.cash for cell, account in self.accounts.items()}
@@ -466,6 +516,11 @@ class CreditLedger:
                 for k, v in self.accounts.items()
             },
             "customer_bad_debt": self.customer_bad_debt,
+            "trade_bad_debt_by_cell": dict(self.trade_bad_debt_by_cell),
+            "external_supplier_bad_debt": self.external_supplier_bad_debt,
+            "regional_pool_reserve_initial_by_region": dict(self.regional_pool_reserve_initial_by_region),
+            "regional_pool_reserve_by_region": dict(self.regional_pool_reserve_by_region),
+            "regional_pool_guarantee_paid_by_region": dict(self.regional_pool_guarantee_paid_by_region),
             "defaulted_cells": sorted(k for k, v in self.accounts.items() if v.defaulted),
             "production_rejection_count": sum(e["type"] == "production_rejected" for e in self.events),
             "purchase_rejection_count": sum(e["type"] == "purchase_rejected" for e in self.events),
@@ -474,7 +529,7 @@ class CreditLedger:
                 e.get("reason") in {"regional_member_debit_limit", "regional_member_credit_limit", "regional_pool_limit"}
                 for e in self.events if e["type"] == "purchase_rejected"
             ),
-            "default_event_count": sum(e["type"] == "default" for e in self.events),
+            "default_event_count": sum(e["type"] == "default_resolution" for e in self.events),
             "customer_default_count": sum(e["type"] == "customer_default" for e in self.events),
             "bank_line_utilization_by_cell": {
                 k: (v.bank_debt / v.bank_limit if v.bank_limit > EPS else 0.0)
@@ -532,6 +587,6 @@ class CreditLedger:
             "internal_transfer_in": self.internal_transfer_in,
             "internal_transfer_out": self.internal_transfer_out,
             "internal_transfer_net": self.internal_transfer_in - self.internal_transfer_out,
-            "cash_conservation_error": sum(cash.values()) - expected_cash,
+            "cash_conservation_error": sum(cash.values()) + sum(self.regional_pool_reserve_by_region.values()) - expected_cash,
             "events": list(self.events),
         }
