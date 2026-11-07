@@ -48,3 +48,12 @@ This is a two-region synthetic accounting experiment, not a legally constituted 
 ## 5. Liquidity feedback from reserve funding
 
 Federation reserve contributions are debited from member opening cash, including the buyer and seller in a later default scenario unless an explicit contribution map exempts them. This can reduce the buyer's ability to settle its invoice before default and therefore increase the residual claim presented to the guarantee waterfall. The reserve's gross payout cannot be interpreted in isolation from this funding-side liquidity effect. A production design would need to test alternative contribution timing, exemptions, replenishment rules and liquidity floors without assuming that any one rule is fair.
+
+
+## 6. CI validation
+
+CI on code commit `633a7568978820a5176174c1d2dc74319230c327` completed successfully with **138 tests passed**. The targeted federation fixtures confirmed:
+- cross-region claim with a federation reserve: federation guarantee paid 5.0, seller write-off 5.75, cash-conservation residual 0.0;
+- same-region claim: local reserve paid 5.0, federation reserve paid 3.0, local member assessment paid 2.65, residual write-off 0.0, cash-conservation residual 0.0.
+
+The 5.75 cross-region residual is intentionally higher than the 5.5 no-federation baseline in the targeted fixture: the regional and federation reserves are both funded by member opening cash, so the defaulting buyer has less cash available to pay its invoice. This illustrates why reserve coverage and reserve-funding liquidity effects must be assessed together.
