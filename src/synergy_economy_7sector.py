@@ -32,6 +32,22 @@ def _arrays(cfg: dict[str, Any]) -> dict[str, np.ndarray]:
     }
 
 
+def _number(
+    value: Any, field: str, minimum: float | None = None,
+    maximum: float | None = None,
+) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field} must be a numeric value, not a boolean or string")
+    result = float(value)
+    if not np.isfinite(result):
+        raise ValueError(f"{field} must be finite")
+    if minimum is not None and result < minimum:
+        raise ValueError(f"{field} must be >= {minimum}")
+    if maximum is not None and result > maximum:
+        raise ValueError(f"{field} must be <= {maximum}")
+    return result
+
+
 def _validated_vector(
     cfg: dict[str, Any], field: str, length: int | None = None,
     minimum: float | None = None, maximum: float | None = None,
@@ -41,15 +57,12 @@ def _validated_vector(
         raise ValueError(f"{field} must be a numeric vector")
     if length is not None and len(raw) != length:
         raise ValueError(f"{field} length must match sector count")
-    if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in raw):
-        raise ValueError(f"{field} must contain only numeric values, not booleans or strings")
-    result = np.asarray(raw, dtype=float)
-    if result.ndim != 1 or not np.isfinite(result).all():
+    result = np.asarray([
+        _number(value, f"{field}[{index}]", minimum, maximum)
+        for index, value in enumerate(raw)
+    ], dtype=float)
+    if result.ndim != 1:
         raise ValueError(f"{field} must be a finite one-dimensional vector")
-    if minimum is not None and np.any(result < minimum):
-        raise ValueError(f"{field} values must be >= {minimum}")
-    if maximum is not None and np.any(result > maximum):
-        raise ValueError(f"{field} values must be <= {maximum}")
     return result
 
 
@@ -123,12 +136,10 @@ def solve_supply(
     critical = set(raw_critical)
     if any(i < 0 or i >= n for i in critical):
         raise ValueError("Critical sector indices must be valid integer indices")
-    raw_floor = cfg["critical_minimum_service_share"]
-    if isinstance(raw_floor, bool) or not isinstance(raw_floor, (int, float)):
-        raise ValueError("Critical minimum service share must be numeric")
-    floor = float(raw_floor)
-    if not np.isfinite(floor) or not 0.0 <= floor <= 1.0:
-        raise ValueError("Critical minimum service share must be between 0 and 1")
+    floor = _number(
+        cfg["critical_minimum_service_share"],
+        "critical_minimum_service_share", 0.0, 1.0,
+    )
     baseline_capacity = inverse @ np.ones(n)
     available_capacity = baseline_capacity * multipliers
     bounds = [
@@ -229,12 +240,10 @@ def reproduction_repair_results(cfg: dict[str, Any]) -> dict[str, Any]:
     portfolio_accounting(cfg)  # Validate all sector capital/yield/ownership vectors first.
     a = _arrays(cfg)
     plan = cfg["reproduction_repair_plan"]
-    uplift = float(plan["operating_cashflow_uplift_target"])
-    replacement_reduction = float(plan["replacement_cost_reduction_target"])
-    if not np.isfinite(uplift) or uplift < 0:
-        raise ValueError("operating_cashflow_uplift_target must be finite and non-negative")
-    if not np.isfinite(replacement_reduction) or not 0.0 <= replacement_reduction <= 1.0:
-        raise ValueError("replacement_cost_reduction_target must be between 0 and 1")
+    uplift = _number(plan["operating_cashflow_uplift_target"], "operating_cashflow_uplift_target", 0.0)
+    replacement_reduction = _number(
+        plan["replacement_cost_reduction_target"], "replacement_cost_reduction_target", 0.0, 1.0
+    )
     capital = a["capital"]
     gross = capital * a["yield"]
     replacement = capital * a["replacement"]
@@ -314,21 +323,16 @@ def productivity_results(cfg: dict[str, Any]) -> dict[str, Any]:
     employment = _validated_vector(cfg, "employment_share", n, minimum=0.0, maximum=1.0)
     if not np.isclose(basket.sum(), 1.0) or not np.isclose(employment.sum(), 1.0):
         raise ValueError("basket_share and employment_share must each sum to 1")
-    efficacy = float(cfg["automation_effectiveness"])
-    tech_cost = float(cfg["technology_cost_share_of_gross_labor_saving"])
-    rebound = float(cfg["rebound_share"])
-    supply_rebound = float(cfg["supply_chain_rebound_share"])
-    for name, value in (
-        ("automation_effectiveness", efficacy),
-        ("technology_cost_share_of_gross_labor_saving", tech_cost),
-        ("rebound_share", rebound),
-        ("supply_chain_rebound_share", supply_rebound),
-    ):
-        if not np.isfinite(value) or not 0.0 <= value <= 1.0:
-            raise ValueError(f"{name} must be between 0 and 1")
-    baseline_hours = float(cfg["baseline_weekly_hours"])
-    if not np.isfinite(baseline_hours) or baseline_hours <= 0:
-        raise ValueError("baseline_weekly_hours must be finite and positive")
+    efficacy = _number(cfg["automation_effectiveness"], "automation_effectiveness", 0.0, 1.0)
+    tech_cost = _number(
+        cfg["technology_cost_share_of_gross_labor_saving"],
+        "technology_cost_share_of_gross_labor_saving", 0.0, 1.0,
+    )
+    rebound = _number(cfg["rebound_share"], "rebound_share", 0.0, 1.0)
+    supply_rebound = _number(
+        cfg["supply_chain_rebound_share"], "supply_chain_rebound_share", 0.0, 1.0
+    )
+    baseline_hours = _number(cfg["baseline_weekly_hours"], "baseline_weekly_hours", 0.0)
 
     gross_basket_saving = float(np.sum(basket * labor * adoption * efficacy))
     net_basket_saving = gross_basket_saving * (1.0 - tech_cost)
@@ -364,24 +368,21 @@ def simulate_portfolio(
     account = portfolio_accounting(cfg)
     k = float(account["total_productive_capital_usd"])
     replacement_rate = float(account["weighted_replacement_rate"])
-    gross_yield = float(
-        cfg["target_gross_cash_yield"] if gross_yield is None else gross_yield
+    gross_yield = _number(
+        cfg["target_gross_cash_yield"] if gross_yield is None else gross_yield,
+        "gross_yield", 0.0,
     )
-    if not np.isfinite(gross_yield) or gross_yield < 0:
-        raise ValueError("gross_yield must be finite and non-negative")
-    reserve_share = float(cfg["initial_financial_reserve_share"])
-    if not np.isfinite(reserve_share) or not 0.0 <= reserve_share <= 1.0:
-        raise ValueError("initial_financial_reserve_share must be between 0 and 1")
+    reserve_share = _number(
+        cfg["initial_financial_reserve_share"], "initial_financial_reserve_share", 0.0, 1.0
+    )
     reserve = k * reserve_share
     initial_reserve = reserve
     allocation = cfg["surplus_allocation"]
-    shares = np.asarray(
-        [allocation["growth"], allocation["reserve"], allocation["dividends"]],
-        dtype=float,
-    )
-    if (shares.shape != (3,) or not np.isfinite(shares).all()
-            or np.any(shares < 0) or np.any(shares > 1)
-            or not np.isclose(shares.sum(), 1.0)):
+    shares = np.asarray([
+        _number(allocation[key], f"surplus_allocation.{key}", 0.0, 1.0)
+        for key in ("growth", "reserve", "dividends")
+    ], dtype=float)
+    if not np.isclose(shares.sum(), 1.0):
         raise ValueError("Surplus allocation shares must be finite, between 0 and 1, and sum to 1.")
 
     events = cfg["crisis_events"] if include_crises else {}
@@ -393,12 +394,14 @@ def simulate_portfolio(
 
     for year in range(1, years + 1):
         event = events.get(str(year), {})
-        physical_loss_share = float(event.get("physical_capital_loss_share", 0.0))
-        cash_multiplier = float(event.get("gross_cashflow_multiplier", 1.0))
-        if (not np.isfinite(physical_loss_share) or not 0.0 <= physical_loss_share <= 1.0):
-            raise ValueError(f"Year {year} physical_capital_loss_share must be between 0 and 1")
-        if not np.isfinite(cash_multiplier) or cash_multiplier < 0:
-            raise ValueError(f"Year {year} gross_cashflow_multiplier must be finite and non-negative")
+        physical_loss_share = _number(
+            event.get("physical_capital_loss_share", 0.0),
+            f"year {year} physical_capital_loss_share", 0.0, 1.0,
+        )
+        cash_multiplier = _number(
+            event.get("gross_cashflow_multiplier", 1.0),
+            f"year {year} gross_cashflow_multiplier", 0.0,
+        )
         physical_loss = k * physical_loss_share
         if physical_loss:
             k -= physical_loss
