@@ -49,3 +49,10 @@ Priority labels are not legal seniority. A real guarantee institution would need
 The operational ledger currently supports FCFS by default and opt-in batch pro-rata. The class-priority variants are deliberately limited to analysis until governance and legal rules are independently specified.
 
 All amounts and labels are synthetic. No real-world EAEU claim priority or guarantee policy is recommended.
+
+
+## 5. CI validation
+
+The CI allocation report ran all four rules on the three-claim, 60-unit batch with 25 units of reserve. Each rule allocated exactly 25 units, left zero reserve and 35 units uncovered. The targeted unit test verifies the distinct invoice-level payouts shown above, including the effect of priority overriding due-date order.
+
+The full EIIOM CI run on code commit `76cb2c4095a10fd906857a14b18a578fdca467e2` passed **169 pytest tests** and wrote `outputs/synergy_v66_federation_reserve_allocation_rules.json`. This validates the synthetic implementation and its accounting arithmetic, not the legitimacy of any real-world claim class.
