@@ -18,6 +18,61 @@ from .federation_authorization import AuthorizationDecision, FederationAuthoriza
 from .federation_identity import SignedEventEnvelope, TrustedKeyRegistry, _canonical, _event_hash, _utc
 
 
+class _HandlerCursor:
+    """Narrow cursor facade that never exposes the owning SQLite connection."""
+
+    __slots__ = ("__cursor",)
+
+    def __init__(self, cursor: sqlite3.Cursor) -> None:
+        self.__cursor = cursor
+
+    def fetchone(self):
+        return self.__cursor.fetchone()
+
+    def fetchmany(self, size: int | None = None):
+        return self.__cursor.fetchmany() if size is None else self.__cursor.fetchmany(size)
+
+    def fetchall(self):
+        return self.__cursor.fetchall()
+
+    @property
+    def rowcount(self) -> int:
+        return self.__cursor.rowcount
+
+    @property
+    def lastrowid(self):
+        return self.__cursor.lastrowid
+
+    @property
+    def description(self):
+        return self.__cursor.description
+
+    def __iter__(self):
+        return iter(self.__cursor)
+
+
+class _HandlerConnection:
+    """Expose SQL statements but not transaction or connection-management controls."""
+
+    __slots__ = ("__connection",)
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self.__connection = connection
+
+    def execute(self, sql: str, parameters=()):
+        return _HandlerCursor(self.__connection.execute(sql, parameters))
+
+    def executemany(self, sql: str, seq_of_parameters):
+        return _HandlerCursor(self.__connection.executemany(sql, seq_of_parameters))
+
+    def cursor(self):
+        return _HandlerCursor(self.__connection.cursor())
+
+    @property
+    def total_changes(self) -> int:
+        return self.__connection.total_changes
+
+
 @dataclass(frozen=True)
 class ExecutionResult:
     executed: bool
@@ -161,7 +216,7 @@ class AuthorizedActionExecutor:
         approvals: Any,
         policy: FederationAuthorizationPolicy,
         registry: TrustedKeyRegistry,
-        handler: Callable[[sqlite3.Connection, SignedEventEnvelope, AuthorizationDecision], Any],
+        handler: Callable[[_HandlerConnection, SignedEventEnvelope, AuthorizationDecision], Any],
         received_at: datetime | str | None = None,
     ) -> ExecutionResult:
         if not callable(handler):
@@ -275,7 +330,32 @@ class AuthorizedActionExecutor:
                             or current_hash != decision.policy_hash):
                         raise ValueError("authorization policy snapshot changed before execution")
 
-                result = handler(db, handler_request, decision)
+                # Handlers participate in the executor's transaction but cannot
+                # commit/rollback it, alter the append-only receipt/outbox controls,
+                # or remove the database triggers that protect those controls.
+                protected_tables = {"execution_receipts", "execution_outbox"}
+                def authorize_handler_sql(action, arg1, arg2, database_name, trigger_name):
+                    if action in (sqlite3.SQLITE_TRANSACTION, sqlite3.SQLITE_SAVEPOINT,
+                                  sqlite3.SQLITE_ATTACH, sqlite3.SQLITE_DETACH,
+                                  sqlite3.SQLITE_CREATE_TRIGGER, sqlite3.SQLITE_DROP_TRIGGER):
+                        return sqlite3.SQLITE_DENY
+                    if action == sqlite3.SQLITE_PRAGMA and str(arg1).lower() in {"writable_schema", "foreign_keys", "journal_mode"}:
+                        return sqlite3.SQLITE_DENY
+                    if action == sqlite3.SQLITE_DROP_TABLE and arg1 in protected_tables:
+                        return sqlite3.SQLITE_DENY
+                    if action == sqlite3.SQLITE_ALTER_TABLE and arg2 in protected_tables:
+                        return sqlite3.SQLITE_DENY
+                    if action == sqlite3.SQLITE_UPDATE and arg1 in protected_tables:
+                        return sqlite3.SQLITE_DENY
+                    if action == sqlite3.SQLITE_DELETE and arg1 in protected_tables:
+                        return sqlite3.SQLITE_DENY
+                    return sqlite3.SQLITE_OK
+
+                db.set_authorizer(authorize_handler_sql)
+                try:
+                    result = handler(_HandlerConnection(db), handler_request, decision)
+                finally:
+                    db.set_authorizer(None)
                 result_json = _canonical(result).decode("utf-8")
                 decision_document = {
                     "allowed": decision.allowed,
