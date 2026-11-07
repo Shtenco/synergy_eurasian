@@ -376,3 +376,12 @@ V6.6.2 adds a deterministic synthetic 20-cell / two-region network with three pr
 - [Settlement tests](tests/test_synergy_v66_settlement.py)
 
 V6.6.2-B adds dated internal invoices, customer receivables, external supplier payables, configurable payment terms, cell cash balances and explicit unfunded working-capital requirements. This is a replay overlay: negative cash is exposed but does not yet constrain production or shipment authorization. Synthetic prices, costs and payment terms are research parameters, not observed market data.
+
+
+### SYNERGY V6.6.3-A — mutual-credit authorization kernel
+
+- [Stateful mutual-credit kernel](src/synergy_v66/credit.py)
+- [Credit and liquidity kernel specification](docs/68_SYNERGY_V6_6_3A_MUTUAL_CREDIT_KERNEL.md)
+- [Credit kernel tests](tests/test_synergy_v66_credit.py)
+
+V6.6.3-A adds cell cash accounts, approved bank credit lines, trade-credit limits, internal AR/AP, customer receivables, dated settlement, overdue default/freeze rules and pre-authorization of modeled production costs. The kernel is currently a standalone control layer and is **not yet wired into the V6.6.2 physical production/dispatch loop**. It must pass its accounting and credit-boundary tests before physical integration. No implicit overdraft or unbacked credit is created.
