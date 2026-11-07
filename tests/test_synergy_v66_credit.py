@@ -311,6 +311,10 @@ def test_regional_pool_tracks_local_net_positions_and_reverses_on_partial_settle
     assert ledger.accounts["WEST-PR1"].regional_credit_balance == pytest.approx(-30.0)
     assert ledger.accounts["WEST-AG1"].regional_credit_balance == pytest.approx(30.0)
     assert ledger._regional_pool_outstanding("WEST") == pytest.approx(30.0)
+    balances = [a.regional_credit_balance for a in ledger.accounts.values() if a.regional_credit_balance]
+    assert sum(balances) == pytest.approx(0.0)
+    assert sum(max(0.0, x) for x in balances) == pytest.approx(30.0)
+    assert sum(max(0.0, -x) for x in balances) == pytest.approx(30.0)
     ledger.issue_customer_invoice("WEST-PR1", 10.0, 2, 0, "POOL-PAY-1")
     ledger.process_day(2)
     assert ledger.accounts["WEST-PR1"].regional_credit_balance == pytest.approx(-20.0)
