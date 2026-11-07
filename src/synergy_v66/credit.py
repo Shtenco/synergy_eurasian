@@ -134,6 +134,8 @@ class CreditLedger:
                     raise ValueError(
                         f"regional contributions for {region} must sum to regional_pool_reserve_per_region"
                     )
+        if any(contribution > float(initial_cash_per_cell) + EPS for contribution in reserve_contributions.values()):
+            raise ValueError("a member contribution cannot exceed its initial cash")
         if grace_days < 0:
             raise ValueError("grace_days must be >= 0")
         self.accounts = {
