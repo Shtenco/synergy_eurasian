@@ -425,7 +425,7 @@ def test_executor_can_require_scope_guard_inside_the_same_transaction(tmp_path):
         request, [approval], policy, registry, insert_effect, now(), scope_guard=scope_guard
     )
     assert result.executed
-    assert calls == [(request.event["event_id"], now())]
+    assert calls == [(request.event["event_id"], datetime.fromisoformat(now()))]
     with sqlite3.connect(tmp_path / "required-scope-guard.db") as db:
         assert db.execute(
             "SELECT COUNT(*) FROM authority_scope_reservation_events WHERE event_type='RESERVED'"
