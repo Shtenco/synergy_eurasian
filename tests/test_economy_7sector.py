@@ -175,3 +175,69 @@ def test_portfolio_simulation_rejects_invalid_horizon_yield_and_allocation():
         assert "between 0 and 1" in str(exc)
     else:
         raise AssertionError("Out-of-range allocation shares were accepted")
+
+
+
+def test_economic_model_rejects_invalid_portfolio_and_productivity_assumptions():
+    cfg = config()
+    bad_capital = copy.deepcopy(cfg)
+    bad_capital["capital_usd"][0] = float("nan")
+    try:
+        portfolio_accounting(bad_capital)
+    except ValueError as exc:
+        assert "finite" in str(exc)
+    else:
+        raise AssertionError("Non-finite productive capital was accepted")
+
+    bad_ownership = copy.deepcopy(cfg)
+    bad_ownership["public_ownership_share"][0] = 1.01
+    try:
+        portfolio_accounting(bad_ownership)
+    except ValueError as exc:
+        assert "public_ownership_share" in str(exc)
+    else:
+        raise AssertionError("Public ownership share above 100% was accepted")
+
+    bad_adoption = copy.deepcopy(cfg)
+    bad_adoption["automation_adoption"][0] = 1.1
+    try:
+        productivity_results(bad_adoption)
+    except ValueError as exc:
+        assert "automation_adoption" in str(exc)
+    else:
+        raise AssertionError("Automation adoption above 100% was accepted")
+
+    bad_basket = copy.deepcopy(cfg)
+    bad_basket["basket_share"][0] = 0.5
+    try:
+        productivity_results(bad_basket)
+    except ValueError as exc:
+        assert "must each sum to 1" in str(exc)
+    else:
+        raise AssertionError("Basket shares that do not sum to 1 were accepted")
+
+
+def test_supply_solver_rejects_boolean_controls_and_indices():
+    cfg = config()
+    for multipliers in ([True, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1]):
+        if multipliers[0] is True:
+            try:
+                solve_supply(cfg, multipliers)
+            except ValueError as exc:
+                assert "not booleans" in str(exc)
+            else:
+                raise AssertionError("Boolean capacity multiplier was accepted")
+    bad_indices = copy.deepcopy(cfg)
+    bad_indices["critical_sector_indices"] = [True, 1, 2]
+    try:
+        solve_supply(bad_indices, [1, 1, 1, 1, 1, 1, 1])
+    except ValueError as exc:
+        assert "not booleans" in str(exc)
+    else:
+        raise AssertionError("Boolean critical sector index was accepted")
+    try:
+        solve_supply(cfg, [1, 1, 1, 1, 1, 1, 1], enforce_critical_floor="false")
+    except ValueError as exc:
+        assert "must be a boolean" in str(exc)
+    else:
+        raise AssertionError("String critical-floor switch was accepted")
