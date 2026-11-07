@@ -97,6 +97,12 @@ def _waterfill(
     return allocation
 
 
+def _plan_fingerprint(plan: dict[str, Any]) -> str:
+    payload = {key: value for key, value in plan.items() if key != "plan_fingerprint"}
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def plan_reserve_recovery(
     ledger: CreditLedger,
     target_regional_by_region: dict[str, float],
@@ -164,7 +170,7 @@ def plan_reserve_recovery(
     funded_total = sum(regional_plan.values()) + sum(federation_plan.values())
     unfunded_total = max(0.0, requested_total - funded_total)
 
-    return {
+    plan = {
         "model_id": "SYNERGY_V6.6.4N_ADAPTIVE_MULTI_LEVEL_RESERVE_RECOVERY",
         "recovery_period_id": recovery_period_id,
         "ledger_day": ledger.current_day,
@@ -195,6 +201,8 @@ def plan_reserve_recovery(
             "allocation weights are policy assumptions, not empirically calibrated EAEU rules."
         ),
     }
+    plan["plan_fingerprint"] = _plan_fingerprint(plan)
+    return plan
 
 
 def execute_reserve_recovery(
@@ -207,6 +215,8 @@ def execute_reserve_recovery(
     if not isinstance(plan, dict) or plan.get("model_id") != "SYNERGY_V6.6.4N_ADAPTIVE_MULTI_LEVEL_RESERVE_RECOVERY":
         raise ValueError("unsupported reserve recovery plan")
     period_id = plan.get("recovery_period_id")
+    if plan.get("plan_fingerprint") != _plan_fingerprint(plan):
+        raise ValueError("recovery plan was modified after planning")
     if day != ledger.current_day or day != plan.get("ledger_day"):
         raise ValueError("ledger day changed; advance ledger and create a fresh recovery plan")
     if plan.get("state_fingerprint") != _state_fingerprint(ledger, period_id):
