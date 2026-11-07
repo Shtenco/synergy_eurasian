@@ -946,3 +946,41 @@ def test_inventory_gl_bridge_rejects_semantically_invalid_offset_accounts():
     with pytest.raises(ValueError, match="issue offset"):
         ledger.post_to_journal(issue.movement_id, journal, "inventory", "grni", "co1",
             datetime(2026, 11, 3, tzinfo=timezone.utc))
+
+
+
+def test_calendar_date_contracts_reject_datetime_subclasses():
+    from datetime import datetime, timezone
+    instant = datetime(2026, 11, 6, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="calendar date"):
+        EconomicPeriod("bad", instant, date(2026, 11, 30))
+    with pytest.raises(ValueError, match="calendar date"):
+        EconomicPeriod("bad", date(2026, 11, 1), instant)
+    period = EconomicPeriod("good", date(2026, 11, 1), date(2026, 11, 30))
+    with pytest.raises(ValueError, match="calendar date"):
+        period.contains(instant)
+    with pytest.raises(ValueError, match="calendar date"):
+        EvidenceRecord("e-date", "source", EvidenceStatus.OBSERVED, instant,
+            instant, None)
+
+
+def test_inventory_fifo_cannot_consume_a_future_receipt():
+    ledger = InventoryLedger("USD", entity_id="co1")
+    ledger.receive("future", "future-lot", "steel", "factory",
+        Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 7), "receipt:future")
+    with pytest.raises(ValueError, match="Insufficient inventory"):
+        ledger.issue("early-issue", "steel", "factory", Quantity("1", "kg"),
+            date(2026, 11, 6), "production:early")
+    assert ledger.summary()["pools"][0]["quantity"] == "10"
+    assert ledger.movements[0].movement_id == "future"
+
+
+def test_inventory_transfer_cannot_move_a_future_receipt_back_in_time():
+    ledger = InventoryLedger("USD", entity_id="co1")
+    ledger.receive("future-transfer-source", "future-source-lot", "copper", "warehouse-a",
+        Quantity("5", "kg"), Money("50", "USD"), date(2026, 11, 7), "receipt:future-copper")
+    with pytest.raises(ValueError, match="Insufficient inventory"):
+        ledger.transfer("early-transfer", "copper", "warehouse-a", "warehouse-b",
+            Quantity("1", "kg"), date(2026, 11, 6), "transfer:early")
+    assert len(ledger.movements) == 1
+    assert ledger.summary()["pools"][0]["location_id"] == "warehouse-a"
