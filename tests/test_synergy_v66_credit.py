@@ -104,3 +104,13 @@ def test_days_cannot_move_backwards():
     ledger.process_day(4)
     with pytest.raises(ValueError):
         ledger.process_day(3)
+
+
+def test_non_finite_amounts_and_limits_are_rejected():
+    with pytest.raises(ValueError):
+        CreditLedger(initial_cash_per_cell=float("nan"))
+    ledger = CreditLedger()
+    with pytest.raises(ValueError):
+        ledger.authorize_production("WEST-MF1", float("inf"), day=0)
+    with pytest.raises(ValueError):
+        ledger.authorize_purchase("WEST-PR1", "WEST-AG1", float("nan"), 2, 0, "PO-NAN")
