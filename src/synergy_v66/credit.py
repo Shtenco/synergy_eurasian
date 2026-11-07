@@ -863,8 +863,8 @@ class CreditLedger:
             raise ValueError("beneficiary must belong to the claim region")
         if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(float(amount)) or amount <= 0:
             raise ValueError("claim amount must be finite and > 0")
-        if not isinstance(day, int) or isinstance(day, bool) or day < self.current_day:
-            raise ValueError("claim day must be an integer not earlier than current_day")
+        if not isinstance(day, int) or isinstance(day, bool) or day < 0 or day < self.current_day:
+            raise ValueError("claim day must be a non-negative integer not earlier than current_day")
         if self.accounts[beneficiary_cell].defaulted:
             raise ValueError("defaulted beneficiary cannot receive a stress claim")
         if day > self.current_day:
@@ -910,8 +910,8 @@ class CreditLedger:
         contribution_limit_by_cell: dict[str, float] | None = None,
     ) -> dict[str, Any]:
         """Atomically transfer member cash into regional and federation reserves."""
-        if not isinstance(day, int) or isinstance(day, bool) or day < self.current_day:
-            raise ValueError("replenishment day must be an integer not earlier than current_day")
+        if not isinstance(day, int) or isinstance(day, bool) or day < 0 or day < self.current_day:
+            raise ValueError("replenishment day must be a non-negative integer not earlier than current_day")
         if not isinstance(replenishment_id, str) or not replenishment_id.strip():
             raise ValueError("replenishment_id must be a non-empty string")
         if replenishment_id in self.federation_replenishment_ids:
