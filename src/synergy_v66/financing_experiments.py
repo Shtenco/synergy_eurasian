@@ -150,6 +150,9 @@ def compare_financing_modes(
                     mode_config["regional_pool_reserve_per_region"] = config.get(
                         "regional_pool_reserve_per_region", 20.0
                     )
+                else:
+                    mode_config.pop("regional_pool_reserve_per_region", None)
+                    mode_config.pop("regional_reserve_contributions_by_cell", None)
                 result = simulate(environment, credit_config=mode_config)
             hashes[mode] = result["environment_hash"]
             metrics = _metrics(result)
