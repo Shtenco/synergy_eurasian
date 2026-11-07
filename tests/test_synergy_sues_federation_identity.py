@@ -188,3 +188,30 @@ def test_historical_signature_remains_verifiable_after_later_key_revocation(tmp_
     assert registry.verify_historical(
         signed, verified_at="2026-11-06T10:01:00+00:00"
     ).identity_id == "org:a"
+
+
+
+def test_sqlite_trust_registry_detects_direct_key_state_tampering(tmp_path):
+    path = str(tmp_path / "tampered-trust.db")
+    private, public = generate_ed25519_keypair()
+    registry = SQLiteTrustedKeyRegistry(path)
+    registry.register_identity(FederationIdentity("org:state", "tenant:state", "ORGANIZATION"))
+    registry.register_key(TrustedSigningKey(
+        "org:state", "tenant:state", "key-1", ALGORITHM, public,
+        "2026-01-01T00:00:00+00:00",
+    ))
+    signed = sign_event(
+        event(tmp_path, "state-event.db"), "org:state", "tenant:state",
+        "key-1", private, "2026-11-06T10:00:00+00:00",
+    )
+    assert registry.verify_audit()
+    _, replacement_public = generate_ed25519_keypair()
+    with sqlite3.connect(path) as db:
+        db.execute("DROP TRIGGER trust_keys_no_update")
+        db.execute(
+            "UPDATE trust_keys SET public_key_b64=? WHERE identity_id=? AND key_id=?",
+            (replacement_public, "org:state", "key-1"),
+        )
+    assert not registry.verify_audit()
+    with pytest.raises(ValueError, match="state/audit"):
+        registry.verify(signed, "2026-11-06T10:01:00+00:00")
