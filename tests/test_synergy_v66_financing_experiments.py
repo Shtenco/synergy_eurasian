@@ -600,3 +600,55 @@ def test_reserve_sizing_can_apply_absolute_cash_floor_without_fractional_cap():
     )
     for cell_id, contribution in report["sensitivity_reports"][0]["contributions_by_cell"].items():
         assert cash[cell_id] - contribution >= 79.0 - 1e-9
+
+
+def test_federation_reserve_allocator_respects_absolute_floor_after_local_contribution():
+    from synergy_v66.financing_experiments import build_liquidity_capped_federation_contributions
+    from synergy_v66.network_topology import CELLS
+
+    cash = {cell.cell_id: 80.0 for cell in CELLS}
+    regional = {cell.cell_id: 0.5 for cell in CELLS}
+    federal = build_liquidity_capped_federation_contributions(
+        reserve_total=10.0,
+        initial_cash_by_cell=cash,
+        max_combined_contribution_fraction=0.10,
+        scheme="equal_all_members",
+        regional_contributions_by_cell=regional,
+        minimum_post_contribution_cash=79.0,
+    )
+    for cell in CELLS:
+        combined = regional[cell.cell_id] + federal[cell.cell_id]
+        assert combined <= 1.0 + 1e-9
+        assert cash[cell.cell_id] - combined >= 79.0 - 1e-9
+    assert sum(federal.values()) == pytest.approx(10.0)
+
+
+def test_federation_liquidity_capped_experiment_enforces_absolute_member_cash_floor():
+    from synergy_v66.financing_experiments import (
+        compare_liquidity_capped_federation_contributions,
+        make_synthetic_heterogeneous_cash_fixture,
+    )
+
+    cash = make_synthetic_heterogeneous_cash_fixture()
+    regional = {cell_id: 0.5 for cell_id in cash}
+    report = compare_liquidity_capped_federation_contributions(
+        seeds=[111],
+        initial_cash_by_cell=cash,
+        reserve_total=10.0,
+        max_combined_contribution_fraction=0.10,
+        scheme="production_capacity_weighted",
+        days=5,
+        base_config={
+            "regional_pool_reserve_per_region": 5.0,
+            "regional_reserve_contributions_by_cell": regional,
+        },
+        minimum_post_contribution_cash=75.0,
+    )
+    assert report["minimum_post_contribution_cash"] == pytest.approx(75.0)
+    for cell_id, federal in report["federation_contributions_by_cell"].items():
+        combined = federal + regional[cell_id]
+        assert cash[cell_id] - combined >= 75.0 - 1e-9
+    for mode in ("mutual_credit", "hybrid"):
+        for row in report["comparison"]["observations"][mode]:
+            assert min(row["cash_by_cell"].values()) >= 75.0 - 1e-9
+            assert row["cash_conservation_error"] < 1e-6
