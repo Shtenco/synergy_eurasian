@@ -73,8 +73,8 @@ Tests:
 python -m pytest -q tests/test_synergy_v66_credit.py
 ```
 
-## 6. Boundary of this increment
+## 6. Relationship to V6.6.3-B
 
-The credit kernel is not yet called by `network.simulate`. Thus it does not yet change simulated production quantities, procurement dispatch, inventory, delivery or unmet demand. No claim that V6.6.3 is already a fully integrated cash-constrained economy is made.
+This document specifies the standalone kernel introduced in V6.6.3-A. The subsequent V6.6.3-B increment integrates it into `network.simulate` when a `credit_config` is supplied. Production authorization now occurs before recipe inputs are consumed or output is created; procurement authorization occurs before supplier stock is consumed or a shipment is created. Omitting `credit_config` preserves the unconstrained V6.6.2 baseline. See [V6.6.3-B integration specification](69_SYNERGY_V6_6_3B_CASH_CONSTRAINED_PHYSICAL_NETWORK.md).
 
-Next: integrate authorization at the point of each production batch and supplier dispatch, ensuring denied operations do not consume inputs, create shipments or generate output. Then add partial payments, credit repayment, arrears restructuring and multi-cell default propagation.
+The kernel remains a research primitive rather than a complete credit institution. Partial payments, interest, collateral, guarantees, legal recovery, automatic debt-service sweeps and multi-cell default contagion remain future increments.
