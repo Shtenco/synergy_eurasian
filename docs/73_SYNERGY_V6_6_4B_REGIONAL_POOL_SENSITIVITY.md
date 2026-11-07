@@ -56,7 +56,7 @@ The repository CI runs a compact severe-regime sample with three seeds, two regi
 
 ## 6. Earlier CI smoke-sample observation
 
-The table below was generated before the member-funded guarantee reserve was added to mutual-credit and hybrid modes. It demonstrates pool/member cap interaction, but is not directly comparable to subsequent runs with the reserve enabled. The current CI run regenerates the sensitivity output with the reserve included.
+The current CI configuration includes a member-funded reserve of 20 synthetic currency units per region in mutual-credit and hybrid modes. The reserve is deducted equally from member opening cash and is not extra system capital.
 
 ## 7. Earlier cap interaction results
 
@@ -64,11 +64,11 @@ A three-seed, 20-day severe-regime CI sample produced the following mean outcome
 
 | Regional pool cap | Member cap | Mutual-credit pool rejections / run | Hybrid pool rejections / run | Mutual-credit service level | Hybrid service level |
 |---:|---:|---:|---:|---:|---:|
-| 5 | 2 | 4.33 | 1.33 | 70.03% | 70.14% |
-| 5 | 80 | 2.00 | 1.33 | 69.98% | 70.14% |
-| 150 | 2 | 4.33 | 1.33 | 70.03% | 70.14% |
-| 150 | 80 | 0.00 | 0.00 | 69.98% | 70.86% |
+| 5 | 2 | 4.67 | 2.00 | 70.03% | 70.63% |
+| 5 | 80 | 2.33 | 1.33 | 69.97% | 70.63% |
+| 150 | 2 | 4.67 | 2.00 | 70.03% | 70.63% |
+| 150 | 80 | 0.00 | 0.00 | 69.98% | 70.53% |
 
 The equal rejection rates at member cap 2, despite changing the pool cap from 5 to 150, indicate that the individual member limit is binding in that case. At member cap 80, reducing the regional ceiling to 5 produces rejections. The hybrid mode can substitute bank funding for some blocked mutual-credit purchases, but not all.
 
-The sample is too small to rank policies. It demonstrates that the two limits operate as distinct controls and that their interaction should be studied over longer horizons and larger seed sets.
+The sample is too small to rank policies. It demonstrates that the two limits operate as distinct controls and that their interaction should be studied over longer horizons and larger seed sets. The reserve may cover part of a default, but uncovered trade debt remains with the seller; inspect guarantee-paid and seller bad-debt metrics alongside service level.
