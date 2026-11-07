@@ -461,4 +461,4 @@ The federation reserve is also tested under multiple cross-region defaults: clai
 
 - [V6.6.4-J federation reserve allocation rules](docs/80_SYNERGY_V6_6_4J_FEDERATION_RESERVE_ALLOCATION_RULES.md)
 
-The research CLI compares current deterministic first-come-first-served reserve drawdown with a separate batch pro-rata allocation function on the same three-claim fixture. The ledger itself remains FCFS; the pro-rata rule is not yet an operational settlement policy.
+The credit ledger now supports an opt-in `batch_pro_rata` federation-reserve allocation rule for claims from buyers defaulting on the same processing day. FCFS remains the default; local regional reserves retain first-loss priority.
