@@ -421,3 +421,23 @@ def test_rejected_policy_change_fails_closed_when_audit_persistence_fails(tmp_pa
     with pytest.raises(PolicyAuditPersistenceError, match="audit could not be persisted"):
         store.apply_change(request, approvals[:1], registry, "2026-11-06T10:02:00+00:00")
     assert store.snapshot("tenant:one").version == 0
+
+
+
+def test_policy_store_uses_verified_snapshots_when_caller_mutates_request(tmp_path):
+    store, registry, keys = setup(tmp_path)
+    request, approvals = make_change(tmp_path, keys, suffix="snapshot")
+    real_verify = registry.verify
+
+    def mutate_original_after_verification(envelope, received_at=None):
+        identity = real_verify(envelope, received_at)
+        request.event["payload"]["operation"] = "REVOKE_ALL"
+        return identity
+
+    registry.verify = mutate_original_after_verification
+    result = store.apply_change(
+        request, approvals, registry, "2026-11-06T10:02:00+00:00",
+    )
+    assert result.applied is True
+    assert store.snapshot("tenant:one").version == 1
+    assert request.event["payload"]["operation"] == "REVOKE_ALL"
