@@ -108,7 +108,7 @@ def plan_reserve_recovery(
     target_regional_by_region: dict[str, float],
     target_federation: float,
     allocation_rule: str = "adaptive_liquidity",
-    contribution_fraction_per_period: float = 0.10,
+    contribution_fraction_per_period: float | None = None,
     recovery_period_id: str | None = None,
 ) -> dict[str, Any]:
     """Build a non-mutating recovery plan with local reserves funded first."""
@@ -118,8 +118,18 @@ def plan_reserve_recovery(
         raise ValueError("target_regional_by_region must contain every known region exactly once")
     if isinstance(target_federation, bool) or not isinstance(target_federation, (int, float)) or not math.isfinite(float(target_federation)) or target_federation < 0:
         raise ValueError("target_federation must be finite and non-negative")
-    if isinstance(contribution_fraction_per_period, bool) or not isinstance(contribution_fraction_per_period, (int, float)) or not math.isfinite(float(contribution_fraction_per_period)) or not 0 <= contribution_fraction_per_period <= 1:
-        raise ValueError("contribution_fraction_per_period must be between 0 and 1")
+    fraction = (
+        ledger.reserve_recovery_contribution_fraction
+        if contribution_fraction_per_period is None
+        else contribution_fraction_per_period
+    )
+    if (
+        isinstance(fraction, bool)
+        or not isinstance(fraction, (int, float))
+        or not math.isfinite(float(fraction))
+        or not 0 <= fraction <= ledger.reserve_recovery_contribution_fraction
+    ):
+        raise ValueError("contribution_fraction_per_period cannot exceed the ledger policy cap")
     expected_period_id = f"day-window-{ledger.current_day // RECOVERY_PERIOD_DAYS}"
     if recovery_period_id is not None and recovery_period_id != expected_period_id:
         raise ValueError(f"recovery_period_id must be the ledger-defined {expected_period_id}")
@@ -136,7 +146,7 @@ def plan_reserve_recovery(
     period_limits: dict[str, float] = {}
     for cell_id in CELL_BY_ID:
         opening = float(ledger.initial_cash_by_cell[cell_id])
-        period_limit = opening * float(contribution_fraction_per_period)
+        period_limit = opening * float(fraction)
         period_limits[cell_id] = period_limit
         remaining_period_limit = max(0.0, period_limit - period_used[cell_id])
         cash_after_floor = max(
@@ -177,7 +187,7 @@ def plan_reserve_recovery(
         "recovery_period_id": recovery_period_id,
         "ledger_day": ledger.current_day,
         "allocation_rule": allocation_rule,
-        "contribution_fraction_per_period": float(contribution_fraction_per_period),
+        "contribution_fraction_per_period": float(fraction),
         "target_regional_by_region": targets,
         "target_federation": float(target_federation),
         "current_regional_by_region": dict(ledger.regional_pool_reserve_by_region),
