@@ -7,7 +7,7 @@ FX rate reference and functional-currency valuation.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Iterable
@@ -102,6 +102,8 @@ class JournalEntry:
             raise ValueError("Journal entry identity, source, idempotency key and description are required")
         _calendar_date(self.effective_date, "journal effective_date")
         _aware(self.recorded_at, "recorded_at")
+        if self.effective_date > self.recorded_at.astimezone(timezone.utc).date():
+            raise ValueError("Journal effective_date cannot be later than recorded_at")
         if not isinstance(self.lines, tuple):
             object.__setattr__(self, "lines", tuple(self.lines))
         if len(self.lines) < 2:
