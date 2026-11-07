@@ -690,3 +690,28 @@ def test_fifo_inventory_movements_post_to_balanced_journal():
     assert journal.trial_balance()["balanced"]
     assert journal.trial_balance()["total_debits"] == journal.trial_balance()["total_credits"] == "140"
     assert [x.movement_type for x in ledger.movements].count(InventoryMovementType.TRANSFER_OUT) == 1
+
+
+def test_calendar_date_contracts_reject_datetime_subclasses():
+    timestamp = datetime(2026, 11, 6, 12, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="calendar date"):
+        EconomicPeriod("bad-period", timestamp, date(2026, 11, 30))
+    with pytest.raises(ValueError, match="calendar date"):
+        EconomicPeriod("bad-period-value", date(2026, 11, 1), date(2026, 11, 30)).contains(timestamp)
+    with pytest.raises(ValueError, match="calendar date"):
+        BankStatementLine("bad-bank-line", timestamp, Money("1", "USD"), "bank:1", "statement:1")
+
+
+def test_fifo_inventory_never_consumes_lots_received_after_issue_date():
+    ledger = InventoryLedger("USD")
+    ledger.receive("future-receipt", "future-lot", "steel", "warehouse",
+        Quantity("10", "kg"), Money("100", "USD"), date(2026, 11, 5), "receipt:future")
+    with pytest.raises(ValueError, match="Insufficient inventory"):
+        ledger.issue("premature-issue", "steel", "warehouse", Quantity("1", "kg"),
+            date(2026, 11, 4), "production:premature")
+    # The rejected historical issue must not consume the later receipt.
+    assert ledger.summary()["pools"][0]["quantity"] == "10"
+    issue = ledger.issue("valid-issue", "steel", "warehouse", Quantity("1", "kg"),
+        date(2026, 11, 6), "production:valid")
+    assert issue.cost == Money("10", "USD")
+    assert ledger.summary()["pools"][0]["quantity"] == "9"
