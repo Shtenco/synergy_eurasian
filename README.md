@@ -394,3 +394,5 @@ V6.6.3-A adds cell cash accounts, approved bank credit lines, trade-credit limit
 - [Credit and physical integration tests](tests/test_synergy_v66_network.py)
 
 When `credit_config` is supplied, cash and credit authorization now gate harvest, energy generation, intermediate/final production and supplier dispatch before physical stock is consumed or output/shipment is created. The unconstrained V6.6.2 path remains the default when no credit configuration is supplied. The model is still synthetic and has explicit limits: no partial invoice payments, external customer default, bank capital constraints, interest, collateral or empirical calibration.
+
+Cash-first procurement funding is supported: own cash is used first, then unused trade credit, then an approved bank line for immediate payment; an order is rejected without partial cash loss if no permitted source can cover it.
