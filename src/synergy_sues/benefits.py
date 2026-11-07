@@ -102,7 +102,10 @@ class BenefitAttributionRegistry:
         self._claims[claim.claim_id] = claim
 
     def summary(self) -> dict:
-        by_project: dict[tuple[str, str], Decimal] = {}
+        # Keep the compatibility aggregate strictly VERIFIED. All other
+        # evidence classes remain visible in a separate status-dimensional view.
+        verified_by_project: dict[tuple[str, str], Decimal] = {}
+        by_project_status: dict[tuple[str, str, str], Decimal] = {}
         by_status: dict[str, dict[str, Decimal]] = {}
         event_rows = []
         for event_id, event in self._events.items():
@@ -112,8 +115,16 @@ class BenefitAttributionRegistry:
             status_bucket = by_status.setdefault(status, {})
             status_bucket[event.amount.currency] = status_bucket.get(event.amount.currency, Decimal("0")) + event.amount.amount
             for claim in claims:
-                key = (claim.project_id, event.amount.currency)
-                by_project[key] = by_project.get(key, Decimal("0")) + event.amount.amount * claim.attribution_weight
+                allocated_amount = event.amount.amount * claim.attribution_weight
+                status_key = (claim.project_id, event.amount.currency, status)
+                by_project_status[status_key] = (
+                    by_project_status.get(status_key, Decimal("0")) + allocated_amount
+                )
+                if event.evidence_status == EvidenceStatus.VERIFIED:
+                    verified_key = (claim.project_id, event.amount.currency)
+                    verified_by_project[verified_key] = (
+                        verified_by_project.get(verified_key, Decimal("0")) + allocated_amount
+                    )
             event_rows.append({
                 "benefit_event_id": event_id,
                 "measurement_id": event.measurement_id,
@@ -128,8 +139,22 @@ class BenefitAttributionRegistry:
             "events": event_rows,
             "attributed_amount_by_project_currency": [
                 {"project_id": project, "currency": currency, "amount": str(amount)}
-                for (project, currency), amount in sorted(by_project.items())
+                for (project, currency), amount in sorted(verified_by_project.items())
             ],
+            "verified_attributed_amount_by_project_currency": [
+                {"project_id": project, "currency": currency, "amount": str(amount)}
+                for (project, currency), amount in sorted(verified_by_project.items())
+            ],
+            "attributed_amount_by_project_currency_and_status": [
+                {
+                    "project_id": project,
+                    "currency": currency,
+                    "evidence_status": status,
+                    "amount": str(amount),
+                }
+                for (project, currency, status), amount in sorted(by_project_status.items())
+            ],
+            "scenario_amounts_are_excluded_from_verified_project_totals": True,
             "gross_amount_by_evidence_status_currency": {
                 status: {currency: str(amount) for currency, amount in values.items()}
                 for status, values in by_status.items()
