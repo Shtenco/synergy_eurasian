@@ -8,7 +8,7 @@ from hashlib import sha256
 from enum import Enum
 from typing import Iterable
 
-from .contracts import Money, _aware
+from .contracts import Money, _aware, _calendar_date
 from .journal import AccountType, Journal, JournalEntry, JournalLine, NormalBalance, PostingSide
 
 
@@ -232,6 +232,8 @@ def post_intercompany_eliminations(
                     raise ValueError(f"One explicit credit account_id is required for {category}")
                 if period_id not in effective_dates_by_period:
                     raise ValueError(f"Missing effective date for intercompany period: {period_id}")
+                effective_date = effective_dates_by_period[period_id]
+                _calendar_date(effective_date, f"effective date for period {period_id}")
                 debit_account = account_map.get(next(iter(debit_accounts)))
                 credit_account = account_map.get(next(iter(credit_accounts)))
                 if debit_account is None or credit_account is None:
@@ -255,7 +257,7 @@ def post_intercompany_eliminations(
                 money = Money(amount, currency)
                 entry = JournalEntry(
                     entry_id=entry_id,
-                    effective_date=effective_dates_by_period[period_id],
+                    effective_date=effective_date,
                     recorded_at=recorded_at,
                     functional_currency=journal.functional_currency,
                     lines=(
