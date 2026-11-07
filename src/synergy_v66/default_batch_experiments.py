@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import random
 from statistics import mean, median
 from typing import Any, Iterable
@@ -246,6 +245,8 @@ def _run_one(
         "recovery_rule": recovery_rule,
         "paired_path_fingerprint": path_fingerprint,
         "invoice_count": len(invoices),
+        "borrower_count": len(buyers),
+        "seller_count": len(sellers),
         "default_resolution_invoice_count": len(default_events),
         "defaulted_buyer_count": defaulted_buyers,
         "defaulted_seller_count": defaulted_sellers,
@@ -271,6 +272,7 @@ def _run_one(
             if recovery_requested > EPS else 1.0
         ),
         "total_member_contributions": total_contributions,
+        "member_contributions_by_cell": contributions,
         "contribution_gini": _gini(contribution_values),
         "top_20_percent_contribution_share": top_share,
         "max_contribution_opening_cash_ratio": max(
@@ -339,6 +341,8 @@ def run_paired_production_default_batch_experiment(
 
     scalar_metrics = (
         "invoice_count",
+        "borrower_count",
+        "seller_count",
         "default_resolution_invoice_count",
         "defaulted_buyer_count",
         "defaulted_seller_count",
@@ -382,8 +386,15 @@ def run_paired_production_default_batch_experiment(
     }
     all_rows = [row for rows in observations.values() for row in rows]
     invariants = {
-        "all_borrower_cohorts_defaulted": all(row["defaulted_buyer_count"] > 0 for row in all_rows),
+        "all_borrower_cohorts_defaulted": all(row["defaulted_buyer_count"] == row["borrower_count"] for row in all_rows),
         "no_seller_defaults": all(row["defaulted_seller_count"] == 0 for row in all_rows),
+        "defaulted_members_do_not_replenish": all(
+            all(row["member_contributions_by_cell"][cell_id] <= EPS for cell_id in row["defaulted_cells"])
+            for row in all_rows
+        ),
+        "reserve_payout_does_not_exceed_claims": all(
+            row["total_claim_paid"] <= row["total_claim_requested"] + 1e-8 for row in all_rows
+        ),
         "all_claims_reconciled": all(row["claim_reconciliation_error"] <= 1e-8 for row in all_rows),
         "cash_conserved": all(row["max_cash_conservation_error"] <= 1e-8 for row in all_rows),
         "zero_bank_draws": all(row["bank_draws"] <= EPS for row in all_rows),
@@ -394,7 +405,7 @@ def run_paired_production_default_batch_experiment(
     }
     return {
         "model_id": "SYNERGY_V6.6.4P_PRODUCTION_DEFAULT_BATCH",
-        "invoice_cohort_size": INVOICE_COUNT_PER_BUYER * (len(CELLS) // 2),
+        "invoice_cohort_size": INVOICE_COUNT_PER_BUYER * sum(\n            sum(cell.region == region for cell in CELLS) // 2 for region in REGIONS\n        ),
         "seeds": seed_list,
         "clearing_rules": clear_list,
         "recovery_rules": recovery_list,
