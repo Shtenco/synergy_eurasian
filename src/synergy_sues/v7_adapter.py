@@ -12,7 +12,7 @@ from hashlib import sha256
 import json
 from typing import Any, Callable, Iterable, Mapping
 
-from .contracts import EvidenceStatus, Money
+from .contracts import EvidenceStatus, Money, _decimal
 
 
 _EVENT_FIELDS = (
@@ -268,10 +268,16 @@ def adapt_v7_realization_chain(
             raise ValueError(f"{record_type} source_ref is required")
         evidence = tuple(str(data[x]) for x in evidence_fields if data.get(x))
         related_ids = tuple(str(data[x]) for x in related if data.get(x))
-        quantity = Decimal(str(data[quantity_field])) if quantity_field and data.get(quantity_field) is not None else None
-        if quantity is not None and (not quantity.is_finite() or quantity <= 0):
+        quantity = (
+            _decimal(data[quantity_field], f"{record_type} quantity")
+            if quantity_field and data.get(quantity_field) is not None else None
+        )
+        if quantity is not None and quantity <= 0:
             raise ValueError(f"{record_type} quantity must be finite and positive")
-        amount = Money(Decimal(str(data[amount_field])), str(data[currency_field])) if amount_field and data.get(amount_field) is not None else None
+        amount = (
+            Money(_decimal(data[amount_field], f"{record_type} amount"), str(data[currency_field]))
+            if amount_field and data.get(amount_field) is not None else None
+        )
         if amount is not None and amount.amount <= 0:
             raise ValueError(f"{record_type} amount must be positive")
         status = _source_class(data.get(status_field)) if status_field else None
