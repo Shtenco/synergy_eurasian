@@ -288,31 +288,49 @@ def simulate_portfolio(
     gross_yield: float | None = None,
     include_crises: bool = True,
 ) -> dict[str, Any]:
+    if isinstance(years, bool) or not isinstance(years, int) or years < 1:
+        raise ValueError("years must be a positive integer")
+    if not isinstance(include_crises, bool):
+        raise ValueError("include_crises must be a boolean")
     account = portfolio_accounting(cfg)
     k = float(account["total_productive_capital_usd"])
     replacement_rate = float(account["weighted_replacement_rate"])
     gross_yield = float(
         cfg["target_gross_cash_yield"] if gross_yield is None else gross_yield
     )
-    reserve = k * float(cfg["initial_financial_reserve_share"])
+    if not np.isfinite(gross_yield) or gross_yield < 0:
+        raise ValueError("gross_yield must be finite and non-negative")
+    reserve_share = float(cfg["initial_financial_reserve_share"])
+    if not np.isfinite(reserve_share) or not 0.0 <= reserve_share <= 1.0:
+        raise ValueError("initial_financial_reserve_share must be between 0 and 1")
+    reserve = k * reserve_share
     initial_reserve = reserve
     allocation = cfg["surplus_allocation"]
     shares = np.asarray(
         [allocation["growth"], allocation["reserve"], allocation["dividends"]],
         dtype=float,
     )
-    if not np.isclose(shares.sum(), 1.0):
-        raise ValueError("Surplus allocation shares must sum to 1.")
+    if (shares.shape != (3,) or not np.isfinite(shares).all()
+            or np.any(shares < 0) or np.any(shares > 1)
+            or not np.isclose(shares.sum(), 1.0)):
+        raise ValueError("Surplus allocation shares must be finite, between 0 and 1, and sum to 1.")
 
     events = cfg["crisis_events"] if include_crises else {}
     cumulative_dividends = 0.0
     cumulative_reserve_contributions = 0.0
     cumulative_reserve_draws = 0.0
+    cumulative_unfunded_renewal_gap = 0.0
     rows = []
 
     for year in range(1, years + 1):
         event = events.get(str(year), {})
-        physical_loss = k * float(event.get("physical_capital_loss_share", 0.0))
+        physical_loss_share = float(event.get("physical_capital_loss_share", 0.0))
+        cash_multiplier = float(event.get("gross_cashflow_multiplier", 1.0))
+        if (not np.isfinite(physical_loss_share) or not 0.0 <= physical_loss_share <= 1.0):
+            raise ValueError(f"Year {year} physical_capital_loss_share must be between 0 and 1")
+        if not np.isfinite(cash_multiplier) or cash_multiplier < 0:
+            raise ValueError(f"Year {year} gross_cashflow_multiplier must be finite and non-negative")
+        physical_loss = k * physical_loss_share
         if physical_loss:
             k -= physical_loss
             repair = min(reserve, physical_loss)
@@ -320,19 +338,23 @@ def simulate_portfolio(
             k += repair
             cumulative_reserve_draws += repair
 
-        cash_multiplier = float(event.get("gross_cashflow_multiplier", 1.0))
         gross_cashflow = k * gross_yield * cash_multiplier
         replacement_capex = k * replacement_rate
         surplus = gross_cashflow - replacement_capex
 
+        unfunded_renewal_gap = 0.0
         if surplus < 0:
             shortfall = -surplus
             reserve_used = min(reserve, shortfall)
             reserve -= reserve_used
             cumulative_reserve_draws += reserve_used
             unfunded = shortfall - reserve_used
-            # Unfunded renewal is represented as productive-capital erosion.
-            k -= unfunded
+            # Unfunded renewal erodes productive capital, but productive capital
+            # cannot become negative. Any residual remains an explicit unmet gap.
+            capital_erosion = min(k, unfunded)
+            k -= capital_erosion
+            unfunded_renewal_gap = unfunded - capital_erosion
+            cumulative_unfunded_renewal_gap += unfunded_renewal_gap
             surplus = 0.0
 
         growth_investment = shares[0] * surplus
@@ -356,6 +378,8 @@ def simulate_portfolio(
             "cumulative_dividends_usd": cumulative_dividends,
             "cumulative_reserve_contributions_usd": cumulative_reserve_contributions,
             "cumulative_reserve_draws_usd": cumulative_reserve_draws,
+            "unfunded_renewal_gap_usd": unfunded_renewal_gap,
+            "cumulative_unfunded_renewal_gap_usd": cumulative_unfunded_renewal_gap,
         })
 
     return {
@@ -369,6 +393,7 @@ def simulate_portfolio(
         "cumulative_dividends_usd": cumulative_dividends,
         "cumulative_reserve_contributions_usd": cumulative_reserve_contributions,
         "cumulative_reserve_draws_usd": cumulative_reserve_draws,
+        "cumulative_unfunded_renewal_gap_usd": cumulative_unfunded_renewal_gap,
         "include_crises": include_crises,
         "annual": rows,
     }
