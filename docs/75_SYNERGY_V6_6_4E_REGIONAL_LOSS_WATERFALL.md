@@ -52,3 +52,5 @@ No fairness or policy superiority claim follows from the existence of this mecha
 
 
 The audit trail records each assessment attempt, requested loss amount, eligible member assessment capacity and amount actually paid. A zero assessment payment can therefore be distinguished from a zero eligible capacity or from a case where no assessment was required.
+
+The credit snapshot identifies this implementation as `SYNERGY_V6.6.4E_REGIONAL_LOSS_WATERFALL_LEDGER`.
