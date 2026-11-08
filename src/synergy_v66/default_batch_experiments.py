@@ -8,6 +8,7 @@ not 100 sequential independent borrower defaults.
 from __future__ import annotations
 
 import hashlib
+import math
 import json
 import random
 from statistics import mean, median
