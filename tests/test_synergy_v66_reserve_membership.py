@@ -191,3 +191,33 @@ def test_independent_membership_plan_executes_through_atomic_ledger_settlement()
     assert ledger.accounts["WEST-AG1"].cash == pytest.approx(90.0)
     assert ledger.accounts["EAST-AG1"].cash == pytest.approx(90.0)
     assert ledger.snapshot()["cash_conservation_error"] == pytest.approx(0.0)
+
+
+def test_initial_regional_reserve_funding_rejects_nonmember():
+    regional = {cell.cell_id: 0.0 for cell in CELLS}
+    federation = {cell.cell_id: 0.0 for cell in CELLS}
+    regional["WEST-AG1"] = 1.0
+    regional["WEST-PR1"] = 19.0
+    federation["WEST-AG1"] = 0.0
+    federation["EAST-AG1"] = 0.0
+    with pytest.raises(ValueError, match="initial regional reserve contribution from non-member"):
+        CreditLedger(
+            regional_pool_reserve_per_region=20.0,
+            regional_reserve_contributions_by_cell=regional,
+            regional_reserve_members_by_region={
+                "WEST": ("WEST-PR1",), "EAST": tuple(
+                    cell.cell_id for cell in CELLS if cell.region == "EAST"
+                )
+            },
+        )
+
+
+def test_initial_federation_reserve_funding_rejects_nonmember():
+    federation = {cell.cell_id: 0.0 for cell in CELLS}
+    federation["WEST-AG1"] = 1.0
+    with pytest.raises(ValueError, match="initial federation reserve contribution from non-member"):
+        CreditLedger(
+            federation_pool_reserve_total=1.0,
+            federation_reserve_contributions_by_cell=federation,
+            federation_reserve_members=("WEST-PR1",),
+        )
