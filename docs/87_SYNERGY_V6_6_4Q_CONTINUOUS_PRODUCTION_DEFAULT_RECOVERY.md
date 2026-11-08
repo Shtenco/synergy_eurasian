@@ -83,3 +83,25 @@ Focused tests have been added for:
 - isolation of the canonical physical topology from custom stress fixtures.
 
 **Validation status:** implementation and tests are committed to the research branch, but the focused tests and full EIIOM CI have not yet been confirmed on the exact branch head. The continuous 100-cycle production-default engine is not implemented by this increment. Do not treat Q1 as evidence of a completed multi-cycle stress experiment.
+
+## 12. Q2 implementation — independent reserve-funding membership
+
+The credit ledger now accepts independent, immutable-by-default membership sets:
+- `regional_reserve_members_by_region`: each region's own eligible funding members;
+- `federation_reserve_members`: the independently selected federation-fund members.
+
+When omitted, both memberships preserve the legacy behavior: every cell may contribute to its own region's fund and to the federation fund. Explicit regional membership rejects unknown IDs, duplicate IDs, and cells belonging to another region. Explicit federation membership rejects unknown and duplicate IDs.
+
+The recovery planner now allocates regional deficits only across the relevant regional member set and the federation deficit only across federation members. Regional funding remains first. A cell belonging to both funds consumes one combined cash-floor capacity and one shared ledger-owned 30-day contribution cap. The ledger independently validates membership during direct settlement, so a caller cannot bypass planner authorization by submitting hand-built contribution maps. Membership sets are included in the recovery state fingerprint, invalidating plans after membership changes.
+
+Focused regression coverage was added for legacy defaults, independent memberships, cross-region/unknown/duplicate rejection, local-only and federation-only planner eligibility, direct unauthorized settlement rejection with atomicity, defaulted-member exclusion, shared cash/cap limits, and stale-plan rejection after membership changes.
+
+**Validation status:** implementation and focused tests are committed to the research branch. Full EIIOM CI on the exact resulting branch head must be checked before treating this increment as validated.
+
+The separate Q2 synthetic sensitivity report remains in `docs/88_SYNERGY_V6_6_4Q2_RESERVE_MEMBERSHIP_STRESS.md`, with reproducible code and outputs. It is not a production-ledger run and must not be conflated with the Q3 multi-cycle production-default experiment.
+
+## 13. Remaining Q3 gate — repeated production-default engine
+
+The next required increment must run sequential, distinct borrower cohorts through the same continuous `CreditLedger`, with actual invoice authorization, cash-first settlement, due-date processing, permanent cross-default, local-first and federation-second reserve payouts, seller loss reconciliation, and reserve recovery. It must advance actual ledger days and preserve member cash, reserve balances, default state, and the 30-day contribution windows across cycles.
+
+The current V6.6.4-P experiment is a single correlated 100-invoice due-day batch. It is not 100 independent sequential defaults. The Q2 membership stress fixture is a standalone funding-capacity model. Neither satisfies the Q3 gate.
