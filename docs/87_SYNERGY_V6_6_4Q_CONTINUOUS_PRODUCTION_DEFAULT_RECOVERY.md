@@ -100,8 +100,16 @@ Focused regression coverage was added for legacy defaults, independent membershi
 
 The separate Q2 synthetic sensitivity report remains in `docs/88_SYNERGY_V6_6_4Q2_RESERVE_MEMBERSHIP_STRESS.md`, with reproducible code and outputs. It is not a production-ledger run and must not be conflated with the Q3 multi-cycle production-default experiment.
 
-## 13. Remaining Q3 gate — repeated production-default engine
+## 13. Q3 implementation — continuous 100-cycle production defaults
 
-The next required increment must run sequential, distinct borrower cohorts through the same continuous `CreditLedger`, with actual invoice authorization, cash-first settlement, due-date processing, permanent cross-default, local-first and federation-second reserve payouts, seller loss reconciliation, and reserve recovery. It must advance actual ledger days and preserve member cash, reserve balances, default state, and the 30-day contribution windows across cycles.
+Added `src/synergy_v66/continuous_default_experiments.py` and CLI `scripts/run_synergy_v664q3_continuous_defaults.py`. Each path uses one parameterized `CreditLedger`, 100 unique borrowers, 100 sellers and 10 reserve members. Every cycle authorizes a real payable invoice, cash-settles the buyer's available 10 units, carries the remaining 90 as trade credit, advances the ledger to its due date and resolves the buyer through the production default waterfall. Borrowers are never reused or restored.
 
-The current V6.6.4-P experiment is a single correlated 100-invoice due-day batch. It is not 100 independent sequential defaults. The Q2 membership stress fixture is a standalone funding-capacity model. Neither satisfies the Q3 gate.
+Five paired recovery policies are configured: no replenishment, equal, production-capacity, opening-cash and adaptive-liquidity. The regional/federation member sets are independent; local reserve deficits are recovered first, then federation deficits, using one shared per-member cash floor and ledger-owned 30-day contribution cap. The path fingerprint is identical across recovery policies for each seed.
+
+The cycle report records claims, local/federation/member-assessment payments, seller write-offs, reserve balances, recovery funding, member cash, system cash conservation, cap usage and defaults. The runner enforces 12 path-level invariants and exits non-zero on any failed invariant. CI is configured to run three seeds (15 policy paths / 1,500 production default cycles) and upload the raw JSON report as a workflow artifact.
+
+**Validation status:** Q3 implementation, CLI, tests and CI step are committed to the research branch. Exact-head GitHub Actions results and the generated artifact still require confirmation and review. No economic result or production-readiness claim is made before that gate passes.
+
+Detailed assumptions and interpretation boundaries: `docs/89_SYNERGY_V6_6_4Q3_CONTINUOUS_PRODUCTION_DEFAULTS.md`.
+
+V6.6.4-P remains one correlated 100-invoice batch; Q2 remains a separate membership/funding-capacity sensitivity fixture. Q3 is the first increment designed to meet the continuous actual-default path requirement.
