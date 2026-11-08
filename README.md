@@ -13,13 +13,15 @@
 ![Status](https://img.shields.io/badge/EIIOM--v2-RESEARCH%20SOLVER-25d7bc?style=for-the-badge)
 ![Status](https://img.shields.io/badge/EIIOM--v4-SPEC%20READY-57bfff?style=for-the-badge)
 ![Status](https://img.shields.io/badge/DATASET--v4-CALIBRATION%20PENDING-f9c873?style=for-the-badge)
+![Research](https://img.shields.io/badge/ECONOMY--6.3-EXECUTABLE%20SCENARIOS-57bfff?style=for-the-badge)
+![CI](https://img.shields.io/badge/MAIN%20CI-FAILING%20(2026--11--07)-d85361?style=for-the-badge)
 ![License](https://img.shields.io/badge/LICENSE-PROPRIETARY-a2aec8?style=for-the-badge)
 
-[Архитектура](#архитектура-системы) · [Страны ЕАЭС](#пять-стран-одна-производственная-сеть) · [EIIOM](#оптимизатор-eiiom-экономический-компилятор) · [Project Factory](#project-factory-проектный-конвейер) · [Финансы](#финансовая-архитектура-и-капитал) · [Доказательность](#научный-статус-и-границы-достоверности) · [Запуск](#быстрый-запуск)
+[Архитектура](#архитектура-системы) · [EIIOM](#оптимизатор-eiiom-экономический-компилятор) · [Исполняемые модели](#реализованные-исследовательские-движки) · [V6.6](#v66-федеративная-экономика-и-взаимный-кредит) · [Ветки и CI](#состояние-веток-и-ci) · [Аудит](docs/REPOSITORY_AUDIT_2026-11-09.md) · [Запуск](#быстрый-запуск)
 
 </div>
 
-> **Статус проекта.** EIIOM-v2 — исполняемый исследовательский LP-оптимизатор. EIIOM-v4 — подробно определённая архитектура пространственной стохастической оптимизации, для которой ещё требуются данные, реализация и независимые испытания. Численные результаты ниже относятся к **сценарию**, а не к построенным активам, привлечённым инвестициям или заработанной прибыли.
+> **Статус на 9 ноября 2026 года.** В `main` находятся исполняемые исследовательские EIIOM-v2, seven-sector Economy 6.3, Productivity Flywheel V1–V3, секторный LP V4 и статический аудит федерации. EIIOM-v4 Stochastic Spatial MILP и DATASET-v4 остаются спецификациями/этапами калибровки. Большие линии V6.4–V7, SUES и V6.6 развиваются в отдельных PR и **не являются интегрированным релизом `main`**. Последний проверенный CI на кодовом срезе `main` `6013b717` не прошёл сбор тестов; CI ветки V6.6 `2c4b8f3e`: 226 passed / 6 failed. См. [аудит с доказательствами](docs/REPOSITORY_AUDIT_2026-11-09.md). Все количественные результаты — сценарии, не реальные активы, привлечённый капитал, эмиссия или прибыль.
 
 ---
 
@@ -27,7 +29,7 @@
 
 **SYNERGY EURASIAN / Real Economy OS** — исследовательская архитектура экономического планирования и проектного управления в пространстве пяти стран ЕАЭС: **России, Казахстана, Беларуси, Армении и Кыргызстана**. Система задумывается как связующее звено между спросом, реальными ресурсами, производственными цепочками, инвестиционными решениями, подтверждёнными результатами и повторным накоплением капитала.
 
-Её задача — не объявить отдельные отрасли приоритетными, а вычислить, **какие проекты, в каком месте, в какой последовательности и при каких ограничениях** могут создавать проверяемый экономический результат. Подход объединяет промышленную и инфраструктурную экономику, вычислительные мощности, агробиотехнологии, цифровые сервисы, кадровый потенциал и финансовую дисциплину.
+Её задача — не объявить отдельные отрасли приоритетными, а вычислить, **какие проекты, в каком месте, в какой последовательности и при каких ограничениях** могут создавать проверяемый экономический результат. Помимо пространственной линии EIIOM репозиторий содержит независимые модели семи секторов, производительности, резервов и распределения капитала; их нельзя считать единой откалиброванной системой без сквозной интеграции. Подход объединяет промышленную и инфраструктурную экономику, вычислительные мощности, агробиотехнологии, цифровые сервисы, кадровый потенциал и финансовую дисциплину.
 
 <img src="assets/readme/economy-loop.svg" width="100%" alt="Замкнутый цикл от спроса и ресурсов через EIIOM и проекты к реальным активам, расчётам и повторным инвестициям" />
 
@@ -159,6 +161,43 @@ HH_INVEST[h,p,t] — допустимые инвестиции семей
 
 ---
 
+## Реализованные исследовательские движки
+
+Этот слой появился в дополнение к исходному мастер-плану EIIOM. **Все перечисленные ниже модули существуют в исходном дереве `main`**, но наличие исходников не означает достаточности данных, успешного exact-head CI или промышленной эксплуатации. Нумерация разных семейств независима: **Sector Optimizer V4 — не то же самое, что EIIOM-v4 Stochastic Spatial MILP**.
+
+| Семейство | Файлы и методы | Что проверяется | Статус |
+|:--|:--|:--|:--|
+| **SYNERGY Economy 6.3 / 7S-V1** | [код](src/synergy_economy_7sector.py), [коэффициенты](data/synergy_economy_7sector_v1_assumptions.json), [модель](docs/38_SYNERGY_ECONOMY_6_3_CONSOLIDATED.md) | Семь отраслей, Leontief/input-output, LP предложения, cashflow после замещения фондов, балансы публичного и частного капитала, 30-летние иллюстративные сценарии | Исполняемая сценарная модель |
+| **Productivity Flywheel V1** | [код](src/synergy_productivity_flywheel.py), [описание](docs/39_SYNERGY_PRODUCTIVITY_FLYWHEEL_V1.md) | Статическая чувствительность остатка к автоматизации, AI и затратам на R&D | Исполняемая sensitivity-модель |
+| **Productivity Flywheel Dynamic V2** | [код](src/synergy_productivity_flywheel_dynamic_v2.py), [сценарии](data/synergy_productivity_flywheel_dynamic_v2.json), [описание](docs/40_SYNERGY_PRODUCTIVITY_FLYWHEEL_DYNAMIC_V2.md) | Десятилетние когорты, задержки внедрения, конечный срок эффекта, резервы, replacement gap и break-even | Исполняемая детерминированная модель |
+| **Productivity Flywheel Monte Carlo V3** | [код](src/synergy_productivity_flywheel_monte_carlo_v3.py), [параметры](data/synergy_productivity_flywheel_monte_carlo_v3.json), [описание](docs/41_SYNERGY_PRODUCTIVITY_FLYWHEEL_MONTE_CARLO_V3.md) | Коррелированные шоки, вариативность продуктивности, риск исчерпания буфера, квантили результатов | Исполняемый синтетический stress test |
+| **Sector Capital Optimizer V4** | [код](src/synergy_sector_optimizer_v4.py), [сценарий](data/synergy_sector_optimizer_v4.json), [описание](docs/42_SYNERGY_SECTOR_CAPITAL_OPTIMIZER_V4.md) | LP-аллокация бюджета с секторными минимумами, концентрацией и сетевыми spillovers | Исполняемый отраслевой LP, не пространственный MILP |
+| **Federation V4 audit** | [код](src/federation_audit.py), [роли](config/federation_v4.json) | Статическая согласованность ролей и запрещённых полномочий 46 каталогизированных репозиториев | Статический аудит, не runtime IAM |
+
+### Экономическая логика: что именно считается
+
+**Выручка, валовой денежный приток, свободный денежный поток, физический выпуск и добавленная стоимость — разные величины.** Сначала рассчитываются потоки ресурсов и необходимые расходы на воспроизводство основных средств. Только оставшийся после обязательств ресурс может стать источником резервов, производственных вложений и R&D. Внутрисистемное перераспределение уже существующих денег не создаёт добавленную стоимость.
+
+```text
+Физический выпуск + реальные входы → валовые денежные поступления
+                                           ↓
+                               OPEX + налоги + обязательства
+                                           ↓
+                            воспроизводство / replacement CAPEX
+                                           ↓
+                           подтверждённый свободный остаток
+                                  ↙                 ↘
+                         резерв ликвидности    CAPEX / R&D
+                                  ↘                 ↙
+                         проверяемый будущий результат
+```
+
+В модели Economy 6.3 используется **семисекторная иллюстративная экономика**, а не фактический производственный баланс пяти стран ЕАЭС. В Dynamic V2 приводится стартовый исследовательский пример: cashflow до воспроизводства **$1 068 012,50/год**, annual replacement **$1 045 920**, остаток **$22 092,50** и условный капитал **$32,9 млн**. Эти значения заданы допущениями и **не являются отчётностью предприятий, доходом проекта либо прогнозом доходности**. Monte Carlo V3 оценивает только неопределённость *внутри заданных синтетических распределений*.
+
+**Научный критерий прогресса:** не максимальная сумма «созданного капитала» в симуляции, а повторяемые балансы, отсутствие двойного счёта, снижение gaps, фактическое финансирование обновления фондов и качество прогноза на независимых данных. Обобщающая карта: [Productivity & Resilience System](docs/45_SYNERGY_PRODUCTIVITY_RESILIENCE_SYSTEM_MASTER.md).
+
+---
+
 ## Project Factory: проектный конвейер
 
 Модель создания крупных экономических активов начинается с отсева неподтверждённых идей, а не с максимизации выдачи кредита. Из 1 000 потенциальных инициатив зрелая проектная фабрика *планирует* получать 20–30 решений об инвестиционной готовности за год. Это **проектное целевое значение**, не операционная статистика.
@@ -205,6 +244,30 @@ ProjectProposal → техническая проверка → EvidencePackage
 
 ---
 
+## V6.6: федеративная экономика и взаимный кредит
+
+**Важно:** основная реализация V6.6 находится в [исследовательском PR #16](https://github.com/Shtenco/synergy_eurasian/pull/16), а **не в собранном релизе `main`**. В `main` на контрольном коммите оказались отдельные `src/synergy_v66/reserve_cycle_experiments.py` и `tests/test_synergy_v66_reserve_recovery.py`, но отсутствуют необходимые импорты `synergy_v66.credit`, `network_topology` и `reserve_recovery`. Это известная причина красного CI.
+
+Цель V6.6 — исследовать координацию самостоятельных экономических ячеек: как ограниченная ликвидность, реальное производство, взаимный кредит и двухуровневые резервы влияют на исполнение обязательств. В отличие от эмиссионной схемы, **взнос в фонд переводит уже существующие средства участника; фонд не создаёт деньги**.
+
+| Исследовательский этап | Предмет проверки | Чего нельзя заключать |
+|:--|:--|:--|
+| **V6.6.1** | Детерминированное сопоставление семи ячеек и контрактного состояния | Не доказана совместимость всех реальных подсистем |
+| **V6.6.2 / 2B** | 20 синтетических ячеек, два региона, трёхэтапные рецептуры, партии/склады/FIFO, lead time и датированные расчёты | Не установлен оптимальный дизайн экономики ЕАЭС |
+| **V6.6.3 A–D** | Cash-first расчёты, bank lines, trade credit, receivable exposure, grace periods, просрочки, correlated shocks | Не реализована действующая банковская или кредитная система |
+| **V6.6.4 A–N** | Региональные и федеративные фонды, лимиты взносов, waterfall, очередность требований и восстановление резервов | Не доказана достаточность гарантий или законная исполнимость требований |
+| **V6.6.4 O** | 100 циклов **экзогенных** требований к резервам при одинаковых путях для пяти политик | Это **не** 100 производственных дефолтов по реальным invoice contracts |
+| **V6.6.4 P** | 100 модельных инвойсов в **одном** коррелированном due-day batch; production default waterfall | Это **не** 100 последовательных независимых дефолтов |
+| **V6.6.4 Q2** | Влияние членства в фондах, cash floor и потоков replenishment в отдельном fixture | Standalone fixture **не** равен production `CreditLedger` |
+| **V6.6.4 Q3** | Непрерывные 100 циклов на одном ledger с invoice default, permanent default state и recovery | Exact-head CI **не пройден**, результаты требуют повторной валидации |
+| **Q4.2, отдельный local stress** | 243 synthetic cases: gross settlement против multilateral netting, 20/50/100 участников, разные топологии и дефолты | Юридическая enforceability multilateral set-off и интеграция в production ledger **не доказаны** |
+
+**Проверяемая граница:** [дерево PR #16](https://github.com/Shtenco/synergy_eurasian/tree/research/synergy-v6.6-foundation) содержит `src/synergy_v66/credit.py`, `network_topology.py`, `reserve_recovery.py`, `continuous_default_experiments.py` и отдельные CLI. На коммите `2c4b8f3e` GitHub Actions сообщил **226 passed / 6 failed**: все шесть ошибок связаны с защитой минимального cash balance после суммарных региональных и федеративных взносов. [Протокол CI](https://github.com/Shtenco/synergy_eurasian/actions/runs/42505841842) · [Q3](https://github.com/Shtenco/synergy_eurasian/blob/research/synergy-v6.6-foundation/docs/89_SYNERGY_V6_6_4Q3_CONTINUOUS_PRODUCTION_DEFAULTS.md) · [Q4.2](https://github.com/Shtenco/synergy_eurasian/blob/research/synergy-v6.6-foundation/research/local_stress/2026-11-08/synergy_q4_2_report.md).
+
+Не смешивайте `simulated reserve payout`, `trade-credit authorization`, `invoice nominal`, `uncovered claim`, `cash transfer` и `economic output` в одном показателе стоимости. Все V6.6 суммы относятся к синтетическим денежным единицам, пока отдельно не указана эмпирическая база.
+
+---
+
 ## Федерация технологий SYNERGY
 
 EURASIAN задумывается не как монолит: спрос может приходить от Business OS, научные технологии — из NEXUS, расчётные разрешения — из Financial OS, платёжные подтверждения — из MetaPay. Каждая подсистема имеет чётко описанные **права на факты и действия**.
@@ -237,13 +300,48 @@ EURASIAN задумывается не как монолит: спрос мож�
 
 ---
 
+## Состояние веток и CI
+
+Сводка зафиксирована **9 ноября 2026 года** по реальным деревьям и журналам. CI и mergeability относятся к конкретным SHAs и могут измениться после новых коммитов. **Не складывайте тесты разных веток в одну общую статистику.**
+
+| Линия | GitHub | Содержание | Интеграционный статус |
+|:--|:--|:--|:--|
+| **`main`** | [кодовый срез `6013b717`](https://github.com/Shtenco/synergy_eurasian/tree/6013b7176cb67911146e3534f3588d18d5bf2a7c) | EIIOM, 7S, Flywheel, sector LP, federation и неполный V6.6 импорт | [CI failed](https://github.com/Shtenco/synergy_eurasian/actions/runs/42409926294): `ModuleNotFoundError: synergy_v66.credit` |
+| **V6.4–V6.5.6** | [PR #9](https://github.com/Shtenco/synergy_eurasian/pull/9) | Coordination, credit/liquidity, resilience, self-healing, recovery | Отдельная ветка, не часть `main` |
+| **V7 economic graph** | [PR #10](https://github.com/Shtenco/synergy_eurasian/pull/10) | Event-sourced graph, production/finance evidence, MILP scheduling, resilience | Отдельная ветка, не часть `main` |
+| **SUES** | [PR #11](https://github.com/Shtenco/synergy_eurasian/pull/11), [#13](https://github.com/Shtenco/synergy_eurasian/pull/13), [#14](https://github.com/Shtenco/synergy_eurasian/pull/14) | Accounting, inventory, procurement, V7 bridge, signed authorization, execution safety | Исследовательский набор PR; hardening PR привязаны к SUES branch |
+| **V6.6 research** | [PR #16](https://github.com/Shtenco/synergy_eurasian/pull/16) | Cell network, mutual credit, reserve membership, O/P/Q2/Q3, отдельный Q4 local | [CI: 226 passed / 6 failed](https://github.com/Shtenco/synergy_eurasian/actions/runs/42505841842); PR не mergeable на проверенном срезе |
+
+**Главная техническая проблема `main`:** `pytest` останавливается **на сборе тестов**. Это не означает, что остальные модули непригодны, но означает отсутствие подтверждённого полного прогона всей основной ветки. В PR #16 тесты выполняются и выявляют конкретное противоречие между исходным финансированием резервов и minimum post-contribution cash, которое нельзя «исправлять» простым отключением защитной проверки.
+
+Полная матрица наблюдений, причин, рисков и критериев закрытия: **[технический аудит 2026-11-09](docs/REPOSITORY_AUDIT_2026-11-09.md)**.
+
+### Граница платформенной готовности
+
+| Уровень | Что установлено | Что нужно для следующего уровня |
+|:--|:--|:--|
+| **Спецификация** | Документы EIIOM-v4, DATASET-v4, Project Factory и политики федерации | Версионированные данные, интерфейсы, независимый review |
+| **Исполняемая модель** | Несколько LP, семисекторных и стресс-моделей | Green CI **на актуальном коде**, воспроизводимые сценарии |
+| **Связанная система** | Архитектурные интерфейсы и раздельные исследовательские ветки | Тестируемое end-to-end движение фактов и прав между EIIOM, V7, SUES и расчётами |
+| **Операционный сервис** | **Не подтверждён данным аудитом** | Durable ledger, external settlement, real evidence, access control, monitoring, backup/restore, legal approvals |
+| **Научно подтверждённая эффективность** | **Не установлена по синтетическим тестам** | Наблюдаемые данные, базовые сравнения, holdout/out-of-sample, независимая репликация |
+
+Наличие 46 репозиториев в реестре, большого количества спецификаций или тысяч тестовых прогонов **не заменяет** эти gates.
+
+---
+
 ## Научный статус и границы достоверности
 
 <img src="assets/readme/safeguards.svg" width="100%" alt="Шесть защитных принципов системы: физика, бухгалтерия, человек, закон, данные, риски" />
 
 | Подсистема | Текущий проверяемый статус |
 |:--|:--|
-| EIIOM-v2 / SciPy LP | Исполняемый исследовательский код и тесты в репозитории |
+| EIIOM-v2 / SciPy LP | Исполняемый исследовательский код и тесты в репозитории; полный CI `main` на `6013b717` не прошёл сбор тестов |
+| Economy 6.3 / seven-sector | Исполняемая демонстрационная модель с семью абстрактными секторами; не национальные счета |
+| Productivity Flywheel V1–V3 | Исполняемые static/dynamic/Monte Carlo модели с синтетическими допущениями |
+| Sector Capital Optimizer V4 | Отдельный исполняемый LP, не EIIOM-v4 MILP |
+| V6.6 / credit & reserves | Крупная реализация в PR #16; 226 тестов прошли, 6 упали на exact-head CI |
+| V7 / SUES | Исследовательские PR; сквозная интеграция в `main` не подтверждена |
 | Референсная модель 2026–2045 | Сценарий с опубликованными параметрами и solver snapshot |
 | EIIOM-v4 / пространственный MILP | Архитектурная спецификация; не готовый калиброванный runtime |
 | DATASET-v4 и промышленная статистика | Схемы и план калибровки; полноценная панель ещё не собрана |
@@ -281,9 +379,26 @@ EURASIAN задумывается не как монолит: спрос мож�
 
 ---
 
+## Приоритеты стабилизации и интеграции
+
+В отличие от долгосрочной экономической стратегии, эти задачи относятся к **ближайшей инженерной последовательности** и должны закрываться до любых заявлений о production-ready системе.
+
+| Приоритет | Задача | Жёсткий критерий завершения |
+|:--|:--|:--|
+| **P0 / MAIN** | Удалить неполный V6.6 импорт либо перенести взаимозависимые модули корректно и атомарно | `python -m pytest -q` проходит сбор и все проверки на едином HEAD |
+| **P0 / V6.6** | Разобрать cash-floor нарушение при начальном резервировании Q3 | Все 6 упавших тестов исправлены без ослабления финансовых инвариантов |
+| **P0 / PR** | Разрешить конфликты с `main` и обеспечить согласованную интеграцию PR #16 | GitHub сообщает mergeable, затем зелёный CI на итоговом merge candidate |
+| **P1 / CORE** | Согласовать V6.4–V7–SUES и типы объектов, полномочия, источники фактов | End-to-end scenario: физический факт → invoice → settlement evidence → ledger receipt |
+| **P1 / RESEARCH** | Point-in-time dataset, независимые сравнительные эксперименты и оценка ошибок | Воспроизводимый out-of-sample benchmark, фиксированные seed/data provenance |
+| **P2 / OPERATIONS** | Наблюдаемость, отказоустойчивое хранилище, юридическая проверка netting/credits, идентификация, секреты | Отдельный security/accounting/legal gate и протокол испытаний |
+
+Подробное обоснование и план последовательных шагов — в [аудите репозитория](docs/REPOSITORY_AUDIT_2026-11-09.md).
+
+---
+
 ## Быстрый запуск
 
-Требуются **Python 3.10+**, `numpy`, `scipy`, `pytest`, `jsonschema` (смотрите [`requirements.txt`](requirements.txt)). Команды запускаются из корня репозитория.
+Требуются **Python 3.10+** (в GitHub Actions используется **3.12**), `numpy`, `scipy`, `pytest`, `jsonschema` (см. [`requirements.txt`](requirements.txt)). Команды запускаются из корня репозитория. **Внимание:** полный `pytest` на проверенном срезе `main` прерывается при импорте отсутствующего модуля V6.6; это известный P0-блокер, а не штатное ожидаемое поведение.
 
 ```bash
 git clone https://github.com/Shtenco/synergy_eurasian.git
@@ -312,6 +427,58 @@ python src/eiiom_optimizer.py --config config/base_scenario.json --output output
 | [`config/scenarios_v4.json`](config/scenarios_v4.json) | Матрица стресс-сценариев для следующего поколения |
 | [`tests/`](tests/) | Проверки схем, интеграционных контрактов и инвариантов |
 
+### Отдельный запуск исследовательских сценариев `main`
+
+Команды ниже предназначены для получения **модельных** отчётов в локальной копии с доступными правами. Они не заменяют полный CI и не доказывают достоверность результатов. Для парсинга и сохранения отчётов используйте JSON, а не снимки экранов или округлённые числа из презентаций.
+
+```bash
+# EIIOM: JSON summary и CSV allocation
+python src/eiiom_optimizer.py --config config/base_scenario.json --output outputs/base
+
+# Seven-sector Economy 6.3: воспроизводимый JSON
+python src/synergy_economy_7sector.py --output outputs/synergy_economy_7sector_v1.json
+
+# Конкретные тесты отдельных основных моделей (не полный green CI)
+python -m pytest -q tests/test_economy_7sector.py tests/test_productivity_flywheel.py tests/test_productivity_flywheel_dynamic_v2.py tests/test_productivity_flywheel_monte_carlo_v3.py tests/test_synergy_sector_optimizer_v4.py
+
+# Статическая проверка ролей федерации
+python src/federation_audit.py --config config/federation_v4.json
+
+# Локальная проверка ссылок/иллюстраций README
+python scripts/check_readme_media.py
+```
+
+Для Dynamic V2, Monte Carlo V3 и Sector Optimizer V4 в CI используются **Python API**, а не отдельные готовые серверы. Минимальный пример из корня репозитория:
+
+```python
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "src")
+from synergy_productivity_flywheel_dynamic_v2 import build_report as dynamic, load_config as dynamic_cfg
+from synergy_productivity_flywheel_monte_carlo_v3 import build_report as monte_carlo, load_config as monte_carlo_cfg
+from synergy_sector_optimizer_v4 import build_report as sector, load_config as sector_cfg
+
+reports = {
+    "flywheel_dynamic_v2": dynamic(dynamic_cfg()),
+    "flywheel_monte_carlo_v3": monte_carlo(monte_carlo_cfg()),
+    "sector_optimizer_v4": sector(sector_cfg()),
+}
+Path("outputs").mkdir(exist_ok=True)
+for name, report in reports.items():
+    Path(f"outputs/{name}.json").write_text(
+        json.dumps(report, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+```
+
+Запуск: сохраните этот фрагмент в локальный Python-файл и вызовите `python <имя_файла>.py`. Для исследовательской V6.6 нужно явно переключиться на её отдельную ветку, установить зависимости и использовать CLI в `scripts/run_synergy_v66*.py`; **на проверенном SHA её CI красный**, поэтому публикация итоговых Q3 результатов до исправления тестов некорректна.
+
+### Критерии воспроизводимости
+
+Зафиксируйте commit SHA, версии Python/Numpy/SciPy, входной JSON, seed/правила сценария, промежуточные агрегаты, решения solver, инварианты и выходной хеш. Не заменяйте отсутствующие наблюдения искусственно «реалистичными» числами без маркировки. Оценки 2026–2045, доходность, эмиссия и прогнозы требуют отдельной верификации источников и независимого финансового аудита.
+
 ---
 
 ## Документация и навигация по репозиторию
@@ -330,6 +497,11 @@ python src/eiiom_optimizer.py --config config/base_scenario.json --output output
 | Реальная статистика, ограничения | [`docs/27_REALITY_BASELINE_2026.md`](docs/27_REALITY_BASELINE_2026.md), [`docs/35_DATASET_V4.md`](docs/35_DATASET_V4.md) |
 | Экономическая стратегия | [`docs/36_GRAND_STRATEGY_2045.md`](docs/36_GRAND_STRATEGY_2045.md), [`docs/37_COUNTRY_PORTFOLIOS.md`](docs/37_COUNTRY_PORTFOLIOS.md) |
 | **SYNERGY Economy 6.3 / семь отраслей** | [Консолидированная модель](docs/38_SYNERGY_ECONOMY_6_3_CONSOLIDATED.md), [исполняемый расчёт](src/synergy_economy_7sector.py), [допущения](data/synergy_economy_7sector_v1_assumptions.json), [тесты](tests/test_economy_7sector.py) |
+| **Productivity Flywheel V1–V3** | [static V1](docs/39_SYNERGY_PRODUCTIVITY_FLYWHEEL_V1.md), [dynamic V2](docs/40_SYNERGY_PRODUCTIVITY_FLYWHEEL_DYNAMIC_V2.md), [Monte Carlo V3](docs/41_SYNERGY_PRODUCTIVITY_FLYWHEEL_MONTE_CARLO_V3.md) |
+| **Отраслевой LP V4** | [модель и ограничения](docs/42_SYNERGY_SECTOR_CAPITAL_OPTIMIZER_V4.md), [исполняемый код](src/synergy_sector_optimizer_v4.py) |
+| **Сводная исследовательская система** | [Master map V1–V6](docs/45_SYNERGY_PRODUCTIVITY_RESILIENCE_SYSTEM_MASTER.md), [интерфейсы и границы федерации](docs/72_SYNERGY_SUES_FEDERATION_AUTHORIZATION_POLICY_V1.md) |
+| **V6.4–V7 / SUES / V6.6: ещё не слито в main** | [PR #9](https://github.com/Shtenco/synergy_eurasian/pull/9), [#10](https://github.com/Shtenco/synergy_eurasian/pull/10), [#11](https://github.com/Shtenco/synergy_eurasian/pull/11), [#16](https://github.com/Shtenco/synergy_eurasian/pull/16) |
+| **Аудит и технические риски** | [Срез 9 ноября 2026](docs/REPOSITORY_AUDIT_2026-11-09.md), [безопасность](SECURITY.md) |
 | Прежняя полная версия главного README | [`docs/README_FULL_PRE_REDESIGN_2026.md`](docs/README_FULL_PRE_REDESIGN_2026.md) |
 | Дизайн-ассеты | [`assets/readme/`](assets/readme/) |
 
