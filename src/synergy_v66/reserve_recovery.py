@@ -40,6 +40,11 @@ def _state_fingerprint(ledger: CreditLedger, period_id: str) -> str:
         "cash": {key: ledger.accounts[key].cash for key in sorted(ledger.accounts)},
         "initial_cash_by_cell": {key: ledger.initial_cash_by_cell[key] for key in sorted(ledger.initial_cash_by_cell)},
         "defaulted": {key: ledger.accounts[key].defaulted for key in sorted(ledger.accounts)},
+        "regional_reserve_members_by_region": {
+            region: sorted(ledger.regional_reserve_members_by_region[region])
+            for region in ledger.regions
+        },
+        "federation_reserve_members": sorted(ledger.federation_reserve_members),
         "regional_reserves": {key: ledger.regional_pool_reserve_by_region[key] for key in ledger.regions},
         "federation_reserve": ledger.federation_pool_reserve_balance,
         "reserve_recovery_contribution_fraction": ledger.reserve_recovery_contribution_fraction,
@@ -172,7 +177,7 @@ def plan_reserve_recovery(
     }
     regional_allocated: dict[str, float] = {}
     for region in ledger.regions:
-        members = [cell.cell_id for cell in ledger.cells if cell.region == region]
+        members = sorted(ledger.regional_reserve_members_by_region[region])
         caps = {cell_id: remaining_capacity[cell_id] for cell_id in members}
         region_weights = {cell_id: weights[cell_id] for cell_id in members}
         allocated = _waterfill(regional_deficits[region], caps, region_weights)
@@ -182,7 +187,12 @@ def plan_reserve_recovery(
             remaining_capacity[cell_id] = max(0.0, remaining_capacity[cell_id] - amount)
 
     federation_deficit = max(0.0, float(target_federation) - ledger.federation_pool_reserve_balance)
-    federation_plan = _waterfill(federation_deficit, remaining_capacity, weights)
+    federation_caps = {
+        cell_id: remaining_capacity[cell_id]
+        for cell_id in sorted(ledger.federation_reserve_members)
+    }
+    federation_weights = {cell_id: weights[cell_id] for cell_id in federation_caps}
+    federation_plan = _waterfill(federation_deficit, federation_caps, federation_weights)
     requested_total = sum(regional_deficits.values()) + federation_deficit
     funded_total = sum(regional_plan.values()) + sum(federation_plan.values())
     unfunded_total = max(0.0, requested_total - funded_total)
