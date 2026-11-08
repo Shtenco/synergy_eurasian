@@ -52,3 +52,12 @@ python -m pytest -q synergy_q4_local.py
 python synergy_q4_1_settlement_semantics.py
 python -m pytest -q synergy_q4_1_settlement_semantics.py
 ```
+
+## Q4.2 — scalable network netting and reserve-capital stress
+
+- Added `synergy_q4_2_network_netting.py`, a standalone synthetic model comparing gross snapshot settlement with full-cohort multilateral netting.
+- 243 paired cases: 20/50/100 cells; ring, sparse mesh and hub topologies; random, regional-cluster and largest-debtor defaults; 5%/10%/20% reserve ratios; three deterministic seeds.
+- Nine local pytest tests passed, including full-grid cash reconciliation. Local results: mean theoretical netting efficiency 74.43% (range 42.12%–92.82%); aggregate uncovered claims fell in 218/243 cases, were equal in 25, and were worse in none under the stated assumptions.
+- Summary: `synergy_q4_2_summary.csv`; interpretation and limitations: `synergy_q4_2_report.md`.
+- Critical assumption: full-cohort multilateral set-off is treated as legally enforceable even for defaulted participants. This is not an established SYNERGY legal property. Defaulted cash is an explicit external pre-settlement burn; same-day receipts are not reusable.
+- Maximum system cash reconciliation residual: approximately 1.46e-11. Synthetic results only; not production CreditLedger tests, empirical EAEU estimates, capital adequacy conclusions or policy recommendations.
