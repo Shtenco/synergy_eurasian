@@ -1,0 +1,352 @@
+{
+  "metadata": {
+    "model": "SYNERGY EURASIAN V6.6.4-Q2 local research fixture",
+    "classification": "synthetic deterministic scenario; not production ledger output",
+    "cycles": 100,
+    "cycle_length_days": 30,
+    "opening_cash_per_cell": 1000,
+    "cash_floor_per_cell": 900,
+    "contribution_rate": 0.1,
+    "contribution_cap_per_30d": 80,
+    "regional_need_per_cycle": {
+      "WEST": 200,
+      "EAST": 200
+    },
+    "federation_need_per_cycle": 300,
+    "default_events": {
+      "1": [
+        "W0"
+      ],
+      "25": [
+        "W1"
+      ],
+      "50": [
+        "E0"
+      ]
+    },
+    "federation_members": [
+      "E2",
+      "E3",
+      "E4",
+      "E5",
+      "W2",
+      "W3",
+      "W4",
+      "W5"
+    ],
+    "base_regional_members": {
+      "WEST": [
+        "W0",
+        "W1",
+        "W2"
+      ],
+      "EAST": [
+        "E0",
+        "E1",
+        "E2"
+      ]
+    },
+    "expanded_regional_members": {
+      "WEST": [
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4"
+      ],
+      "EAST": [
+        "E0",
+        "E1",
+        "E2"
+      ]
+    },
+    "inflow_assumption": "Per-cycle external operating inflow is paid equally to each solvent cell; defaulted cells receive no inflow.",
+    "priority": "regional funds first, federation second; shared contributor capacity",
+    "allocation_methods": [
+      "pro_rata",
+      "fcfs"
+    ]
+  },
+  "results": [
+    {
+      "method": "pro_rata",
+      "membership_case": "baseline_membership",
+      "inflow_per_solvent_cell": 0,
+      "total_contributions": 1100,
+      "total_unfunded": 68900,
+      "west_unfunded": 19800,
+      "east_unfunded": 19708.10810811,
+      "federation_unfunded": 29391.89189189,
+      "contributor_gini": 0.45,
+      "top20_contribution_share": 0.36363636,
+      "max_member_contribution": 100,
+      "minimum_final_cash": 900
+    },
+    {
+      "method": "fcfs",
+      "membership_case": "baseline_membership",
+      "inflow_per_solvent_cell": 0,
+      "total_contributions": 1100,
+      "total_unfunded": 68900,
+      "west_unfunded": 19800,
+      "east_unfunded": 19740,
+      "federation_unfunded": 29360,
+      "contributor_gini": 0.45,
+      "top20_contribution_share": 0.36363636,
+      "max_member_contribution": 100,
+      "minimum_final_cash": 900
+    },
+    {
+      "method": "pro_rata",
+      "membership_case": "expanded_west_membership",
+      "inflow_per_solvent_cell": 0,
+      "total_contributions": 1100,
+      "total_unfunded": 68900,
+      "west_unfunded": 19663.77952756,
+      "east_unfunded": 19709.4488189,
+      "federation_unfunded": 29526.77165354,
+      "contributor_gini": 0.45,
+      "top20_contribution_share": 0.36363636,
+      "max_member_contribution": 100,
+      "minimum_final_cash": 900
+    },
+    {
+      "method": "fcfs",
+      "membership_case": "expanded_west_membership",
+      "inflow_per_solvent_cell": 0,
+      "total_contributions": 1100,
+      "total_unfunded": 68900,
+      "west_unfunded": 19620,
+      "east_unfunded": 19740,
+      "federation_unfunded": 29540,
+      "contributor_gini": 0.45,
+      "top20_contribution_share": 0.36363636,
+      "max_member_contribution": 100,
+      "minimum_final_cash": 900
+    },
+    {
+      "method": "pro_rata",
+      "membership_case": "baseline_membership",
+      "inflow_per_solvent_cell": 40,
+      "total_contributions": 40020,
+      "total_unfunded": 29980,
+      "west_unfunded": 14840,
+      "east_unfunded": 9761.92361271,
+      "federation_unfunded": 5378.07638729,
+      "contributor_gini": 0.50837081,
+      "top20_contribution_share": 0.4097951,
+      "max_member_contribution": 4100,
+      "minimum_final_cash": 900
+    },
+    {
+      "method": "fcfs",
+      "membership_case": "baseline_membership",
+      "inflow_per_solvent_cell": 40,
+      "total_contributions": 40020,
+      "total_unfunded": 29980,
+      "west_unfunded": 14840,
+      "east_unfunded": 9820,
+      "federation_unfunded": 5320,
+      "contributor_gini": 0.50837081,
+      "top20_contribution_share": 0.4097951,
+      "max_member_contribution": 4100,
+      "minimum_final_cash": 900
+    },
+    {
+      "method": "pro_rata",
+      "membership_case": "expanded_west_membership",
+      "inflow_per_solvent_cell": 40,
+      "total_contributions": 40020,
+      "total_unfunded": 29980,
+      "west_unfunded": 6841.5418731,
+      "east_unfunded": 9764.91509757,
+      "federation_unfunded": 13373.54302933,
+      "contributor_gini": 0.50837081,
+      "top20_contribution_share": 0.4097951,
+      "max_member_contribution": 4100,
+      "minimum_final_cash": 900
+    },
+    {
+      "method": "fcfs",
+      "membership_case": "expanded_west_membership",
+      "inflow_per_solvent_cell": 40,
+      "total_contributions": 40020,
+      "total_unfunded": 29980,
+      "west_unfunded": 6780,
+      "east_unfunded": 9820,
+      "federation_unfunded": 13380,
+      "contributor_gini": 0.50837081,
+      "top20_contribution_share": 0.4097951,
+      "max_member_contribution": 4100,
+      "minimum_final_cash": 900
+    },
+    {
+      "method": "pro_rata",
+      "membership_case": "baseline_membership",
+      "inflow_per_solvent_cell": 60,
+      "total_contributions": 52811.01528014,
+      "total_unfunded": 17188.98471986,
+      "west_unfunded": 12360,
+      "east_unfunded": 4828.98471986,
+      "federation_unfunded": 0,
+      "contributor_gini": 0.5226638,
+      "top20_contribution_share": 0.44097813,
+      "max_member_contribution": 6100,
+      "minimum_final_cash": 900
+    },
+    {
+      "method": "fcfs",
+      "membership_case": "baseline_membership",
+      "inflow_per_solvent_cell": 60,
+      "total_contributions": 52680,
+      "total_unfunded": 17320,
+      "west_unfunded": 12360,
+      "east_unfunded": 4960,
+      "federation_unfunded": 0,
+      "contributor_gini": 0.5626044,
+      "top20_contribution_share": 0.46317388,
+      "max_member_contribution": 6100,
+      "minimum_final_cash": 900
+    },
+    {
+      "method": "pro_rata",
+      "membership_case": "expanded_west_membership",
+      "inflow_per_solvent_cell": 60,
+      "total_contributions": 59285.98610012,
+      "total_unfunded": 10714.01389988,
+      "west_unfunded": 1510.98754455,
+      "east_unfunded": 4836.32797256,
+      "federation_unfunded": 4366.69838278,
+      "contributor_gini": 0.5107396,
+      "top20_contribution_share": 0.41156438,
+      "max_member_contribution": 6100,
+      "minimum_final_cash": 900
+    },
+    {
+      "method": "fcfs",
+      "membership_case": "expanded_west_membership",
+      "inflow_per_solvent_cell": 60,
+      "total_contributions": 59480,
+      "total_unfunded": 10520,
+      "west_unfunded": 1500,
+      "east_unfunded": 4960,
+      "federation_unfunded": 4060,
+      "contributor_gini": 0.50891056,
+      "top20_contribution_share": 0.41022192,
+      "max_member_contribution": 6100,
+      "minimum_final_cash": 900
+    },
+    {
+      "method": "pro_rata",
+      "membership_case": "baseline_membership",
+      "inflow_per_solvent_cell": 80,
+      "total_contributions": 57880,
+      "total_unfunded": 12120,
+      "west_unfunded": 10080,
+      "east_unfunded": 2040,
+      "federation_unfunded": 0,
+      "contributor_gini": 0.54597069,
+      "top20_contribution_share": 0.48418131,
+      "max_member_contribution": 8000,
+      "minimum_final_cash": 1000
+    },
+    {
+      "method": "fcfs",
+      "membership_case": "baseline_membership",
+      "inflow_per_solvent_cell": 80,
+      "total_contributions": 57880,
+      "total_unfunded": 12120,
+      "west_unfunded": 10080,
+      "east_unfunded": 2040,
+      "federation_unfunded": 0,
+      "contributor_gini": 0.62684865,
+      "top20_contribution_share": 0.552868,
+      "max_member_contribution": 8000,
+      "minimum_final_cash": 1000
+    },
+    {
+      "method": "pro_rata",
+      "membership_case": "expanded_west_membership",
+      "inflow_per_solvent_cell": 80,
+      "total_contributions": 67960,
+      "total_unfunded": 2040,
+      "west_unfunded": 0,
+      "east_unfunded": 2040,
+      "federation_unfunded": 0,
+      "contributor_gini": 0.53502455,
+      "top20_contribution_share": 0.45137692,
+      "max_member_contribution": 7841.29546307,
+      "minimum_final_cash": 1000
+    },
+    {
+      "method": "fcfs",
+      "membership_case": "expanded_west_membership",
+      "inflow_per_solvent_cell": 80,
+      "total_contributions": 67960,
+      "total_unfunded": 2040,
+      "west_unfunded": 0,
+      "east_unfunded": 2040,
+      "federation_unfunded": 0,
+      "contributor_gini": 0.56297822,
+      "top20_contribution_share": 0.47086521,
+      "max_member_contribution": 8000,
+      "minimum_final_cash": 1000
+    },
+    {
+      "method": "pro_rata",
+      "membership_case": "baseline_membership",
+      "inflow_per_solvent_cell": 100,
+      "total_contributions": 57880,
+      "total_unfunded": 12120,
+      "west_unfunded": 10080,
+      "east_unfunded": 2040,
+      "federation_unfunded": 0,
+      "contributor_gini": 0.54597069,
+      "top20_contribution_share": 0.48418131,
+      "max_member_contribution": 8000,
+      "minimum_final_cash": 1000
+    },
+    {
+      "method": "fcfs",
+      "membership_case": "baseline_membership",
+      "inflow_per_solvent_cell": 100,
+      "total_contributions": 57880,
+      "total_unfunded": 12120,
+      "west_unfunded": 10080,
+      "east_unfunded": 2040,
+      "federation_unfunded": 0,
+      "contributor_gini": 0.62684865,
+      "top20_contribution_share": 0.552868,
+      "max_member_contribution": 8000,
+      "minimum_final_cash": 1000
+    },
+    {
+      "method": "pro_rata",
+      "membership_case": "expanded_west_membership",
+      "inflow_per_solvent_cell": 100,
+      "total_contributions": 67960,
+      "total_unfunded": 2040,
+      "west_unfunded": 0,
+      "east_unfunded": 2040,
+      "federation_unfunded": 0,
+      "contributor_gini": 0.53502455,
+      "top20_contribution_share": 0.45137692,
+      "max_member_contribution": 7841.29546307,
+      "minimum_final_cash": 1000
+    },
+    {
+      "method": "fcfs",
+      "membership_case": "expanded_west_membership",
+      "inflow_per_solvent_cell": 100,
+      "total_contributions": 67960,
+      "total_unfunded": 2040,
+      "west_unfunded": 0,
+      "east_unfunded": 2040,
+      "federation_unfunded": 0,
+      "contributor_gini": 0.56297822,
+      "top20_contribution_share": 0.47086521,
+      "max_member_contribution": 8000,
+      "minimum_final_cash": 1000
+    }
+  ]
+}
