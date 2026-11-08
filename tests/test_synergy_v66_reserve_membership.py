@@ -172,3 +172,22 @@ def test_recovery_fingerprint_binds_membership_configuration():
     }
     with pytest.raises(ValueError, match="ledger state changed"):
         execute_reserve_recovery(ledger, plan, "MEMBERSHIP-CHANGED", day=0)
+
+def test_independent_membership_plan_executes_through_atomic_ledger_settlement():
+    ledger = _ledger()
+    ledger.process_day(0)
+    plan = plan_reserve_recovery(
+        ledger,
+        target_regional_by_region={"WEST": 10.0, "EAST": 0.0},
+        target_federation=20.0,
+        allocation_rule="equal",
+    )
+    assert plan["regional_contributions_by_cell"]["WEST-PR1"] == pytest.approx(10.0)
+    assert plan["federation_contributions_by_cell"]["WEST-AG1"] == pytest.approx(10.0)
+    assert plan["federation_contributions_by_cell"]["EAST-AG1"] == pytest.approx(10.0)
+    result = execute_reserve_recovery(ledger, plan, "INDEPENDENT-MEMBERS-SETTLEMENT", day=0)
+    assert result["total_amount"] == pytest.approx(30.0)
+    assert ledger.accounts["WEST-PR1"].cash == pytest.approx(90.0)
+    assert ledger.accounts["WEST-AG1"].cash == pytest.approx(90.0)
+    assert ledger.accounts["EAST-AG1"].cash == pytest.approx(90.0)
+    assert ledger.snapshot()["cash_conservation_error"] == pytest.approx(0.0)
