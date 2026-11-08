@@ -103,3 +103,16 @@ After exact-head CI passes and the raw artifact is reviewed:
 - compare all scenarios using the same invoice and shock paths.
 
 Do not merge to `main` or label any policy production-ready until the exact branch head passes CI, the output artifact is reconciled independently, and the base-branch divergence is deliberately resolved.
+
+## 9. Deterministic no-replenishment baseline (test oracle)
+
+Before running the engine, the no-replenishment path has an exact accounting oracle:
+- Each invoice is 100 units; 10 units are cash-settled at authorization.
+- The remaining payable claim at default is 90 units.
+- 100 unique borrowers therefore create 9,000 units of production-default claims.
+- Initial reserves are 45 × 2 regional funds + 500 federation = 590 units.
+- With no reserve replenishment and no other guarantee/assessment source, maximum aggregate guarantee payout is 590 units.
+- Expected uncovered loss is 9,000 − 590 = 8,410 units.
+- Expected claim coverage is 590 / 9,000 = 6.5556%.
+
+This is a deterministic arithmetic expectation encoded as a regression-test oracle. It is not yet a measured GitHub Actions result. The Q3 runner must reproduce it before any replenishment-policy comparison is interpreted.
