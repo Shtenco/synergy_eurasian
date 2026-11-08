@@ -998,3 +998,2318 @@
           },
           "system_cash_end": 14350.0,
           "uncovered": 7.105427357601002e-15,
+          "wave": 2
+        },
+        {
+          "buyer_cash_paid": 264.11,
+          "buyer_unpaid_claims": {
+            "E4": 208.5,
+            "W4": 168.19
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 640.8,
+          "cumulative_defaults": 10,
+          "eligible_recovery_members": 10,
+          "expected_system_cash": 12790.0,
+          "external_operating_burn": 1560.0,
+          "federation_paid": 376.69,
+          "federation_recovery_shortfall": 136.461,
+          "federation_reserve_end": 363.539,
+          "local_paid": 0.0,
+          "member_cash_end": 12426.461,
+          "member_contributions": {
+            "E5": 129.879,
+            "W5": 110.35
+          },
+          "minimum_nondefaulted_member_cash": 993.15,
+          "new_defaults": 2,
+          "recovery_contributions": 240.22899999999998,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 12790.0,
+          "uncovered": 0.0,
+          "wave": 3
+        }
+      ]
+    },
+    "moderate/fcfs/fcfs": {
+      "buyer_cash_paid": 1917.71,
+      "cash_burn_per_default": 780.0,
+      "cash_conservation_residual": 0.0,
+      "cash_nav_proxy_change": -7800.0,
+      "cash_nav_proxy_end": 12790.0,
+      "cash_nav_proxy_start": 20590.0,
+      "claim_multiplier": 0.9,
+      "claim_reconciliation_residual": -4.547473508864641e-13,
+      "defaulted_members": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4"
+      ],
+      "ending_federation_reserve": 363.539,
+      "ending_member_cash": 12426.461,
+      "ending_regional_reserves": {
+        "EAST": 0.0,
+        "WEST": 0.0
+      },
+      "ending_system_cash": 12790.0,
+      "ending_total_reserves": 363.539,
+      "external_operating_burn": 7800.0,
+      "federation_clearing": "fcfs",
+      "federation_reserve_paid": 720.0899999999999,
+      "initial_system_cash": 20590.0,
+      "local_reserve_paid": {
+        "EAST": 90.0,
+        "WEST": 65.80000000000001
+      },
+      "max_abs_cash_conservation_residual": 3.637978807091713e-12,
+      "member_contributions": {
+        "E2": 85.60000000000002,
+        "E4": 100.0,
+        "E5": 256.789,
+        "W2": 20.80000000000001,
+        "W4": 75.89000000000001,
+        "W5": 110.35
+      },
+      "nav_scope": "cash-only consolidated proxy; excludes internal claims and physical assets/liabilities",
+      "recovery_contributions": 649.4290000000001,
+      "recovery_rule": "fcfs",
+      "seller_bad_debt": {},
+      "seller_receipts": {
+        "E5": 425.70000000000005,
+        "E6": 268.20000000000005,
+        "E7": 432.90000000000003,
+        "E8": 127.8,
+        "E9": 142.20000000000002,
+        "W5": 103.5,
+        "W6": 111.60000000000001,
+        "W7": 261.0,
+        "W8": 606.6,
+        "W9": 314.1
+      },
+      "total_claims": 2793.6000000000004,
+      "total_reserve_paid": 875.8899999999999,
+      "uncovered_internal_claims": 0.0,
+      "waves": [
+        {
+          "buyer_cash_paid": 880.0,
+          "buyer_unpaid_claims": {
+            "E0": 34.7,
+            "E1": 50.89999999999999,
+            "W0": 2.299999999999997,
+            "W1": 18.500000000000014
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 986.4,
+          "cumulative_defaults": 4,
+          "eligible_recovery_members": 16,
+          "expected_system_cash": 17470.0,
+          "external_operating_burn": 3120.0,
+          "federation_paid": 40.599999999999994,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.0,
+          "local_paid": 65.80000000000001,
+          "member_cash_end": 16880.0,
+          "member_contributions": {
+            "E2": 85.60000000000002,
+            "W2": 20.80000000000001
+          },
+          "minimum_nondefaulted_member_cash": 914.4,
+          "new_defaults": 4,
+          "recovery_contributions": 106.40000000000003,
+          "regional_recovery": {
+            "EAST": 45.0,
+            "WEST": 20.80000000000001
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "regional_reserves_end": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "system_cash_end": 17470.0,
+          "uncovered": 0.0,
+          "wave": 1
+        },
+        {
+          "buyer_cash_paid": 773.6,
+          "buyer_unpaid_claims": {
+            "E2": 165.30000000000004,
+            "E3": 95.9,
+            "W2": 68.09999999999997,
+            "W3": 63.5
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1166.4,
+          "cumulative_defaults": 8,
+          "eligible_recovery_members": 12,
+          "expected_system_cash": 14350.0,
+          "external_operating_burn": 3120.0,
+          "federation_paid": 302.8,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.0,
+          "local_paid": 90.0,
+          "member_cash_end": 13850.0,
+          "member_contributions": {
+            "E4": 100.0,
+            "E5": 126.91,
+            "W4": 75.89000000000001
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 302.8,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 14350.0,
+          "uncovered": 0.0,
+          "wave": 2
+        },
+        {
+          "buyer_cash_paid": 264.11,
+          "buyer_unpaid_claims": {
+            "E4": 208.5,
+            "W4": 168.19
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 640.8,
+          "cumulative_defaults": 10,
+          "eligible_recovery_members": 10,
+          "expected_system_cash": 12790.0,
+          "external_operating_burn": 1560.0,
+          "federation_paid": 376.69,
+          "federation_recovery_shortfall": 136.461,
+          "federation_reserve_end": 363.539,
+          "local_paid": 0.0,
+          "member_cash_end": 12426.461,
+          "member_contributions": {
+            "E5": 129.879,
+            "W5": 110.35
+          },
+          "minimum_nondefaulted_member_cash": 993.15,
+          "new_defaults": 2,
+          "recovery_contributions": 240.22899999999998,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 12790.0,
+          "uncovered": 0.0,
+          "wave": 3
+        }
+      ]
+    },
+    "moderate/pro_rata/batch_pro_rata": {
+      "buyer_cash_paid": 1980.871597981369,
+      "cash_burn_per_default": 780.0,
+      "cash_conservation_residual": 0.0,
+      "cash_nav_proxy_change": -7800.0,
+      "cash_nav_proxy_end": 12790.0,
+      "cash_nav_proxy_start": 20590.0,
+      "claim_multiplier": 0.9,
+      "claim_reconciliation_residual": -4.547473508864641e-13,
+      "defaulted_members": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4"
+      ],
+      "ending_federation_reserve": 399.98825585307605,
+      "ending_member_cash": 12390.011744146925,
+      "ending_regional_reserves": {
+        "EAST": 0.0,
+        "WEST": 0.0
+      },
+      "ending_system_cash": 12790.0,
+      "ending_total_reserves": 399.98825585307605,
+      "external_operating_burn": 7800.0,
+      "federation_clearing": "batch_pro_rata",
+      "federation_reserve_paid": 656.928402018631,
+      "initial_system_cash": 20590.0,
+      "local_reserve_paid": {
+        "EAST": 90.0,
+        "WEST": 65.80000000000001
+      },
+      "max_abs_cash_conservation_residual": 3.637978807091713e-12,
+      "member_contributions": {
+        "E2": 47.952024642068665,
+        "E3": 5.367317531033939,
+        "E4": 67.6954134149578,
+        "E5": 222.84677232342483,
+        "W2": 25.050915484578887,
+        "W3": 5.367317531033939,
+        "W4": 67.6954134149578,
+        "W5": 180.74148352965102
+      },
+      "nav_scope": "cash-only consolidated proxy; excludes internal claims and physical assets/liabilities",
+      "recovery_contributions": 622.716657871707,
+      "recovery_rule": "pro_rata",
+      "seller_bad_debt": {},
+      "seller_receipts": {
+        "E5": 425.70000000000005,
+        "E6": 268.20000000000005,
+        "E7": 432.90000000000003,
+        "E8": 127.8,
+        "E9": 142.20000000000002,
+        "W5": 103.5,
+        "W6": 111.60000000000001,
+        "W7": 261.0,
+        "W8": 606.6,
+        "W9": 314.1
+      },
+      "total_claims": 2793.6000000000004,
+      "total_reserve_paid": 812.728402018631,
+      "uncovered_internal_claims": 0.0,
+      "waves": [
+        {
+          "buyer_cash_paid": 880.0,
+          "buyer_unpaid_claims": {
+            "E0": 34.7,
+            "E1": 50.89999999999999,
+            "W0": 2.299999999999997,
+            "W1": 18.500000000000014
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 986.4,
+          "cumulative_defaults": 4,
+          "eligible_recovery_members": 16,
+          "expected_system_cash": 17470.0,
+          "external_operating_burn": 3120.0,
+          "federation_paid": 40.599999999999994,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.0000000000001,
+          "local_paid": 65.80000000000001,
+          "member_cash_end": 16880.0,
+          "member_contributions": {
+            "E2": 47.952024642068665,
+            "E3": 5.367317531033939,
+            "E4": 5.367317531033939,
+            "E5": 6.004954853720771,
+            "W2": 25.050915484578887,
+            "W3": 5.367317531033939,
+            "W4": 5.367317531033939,
+            "W5": 5.922834895495952
+          },
+          "minimum_nondefaulted_member_cash": 952.0479753579314,
+          "new_defaults": 4,
+          "recovery_contributions": 106.40000000000003,
+          "regional_recovery": {
+            "EAST": 45.0,
+            "WEST": 20.800000000000008
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "regional_reserves_end": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "system_cash_end": 17470.0,
+          "uncovered": 0.0,
+          "wave": 1
+        },
+        {
+          "buyer_cash_paid": 796.2624248112846,
+          "buyer_unpaid_claims": {
+            "E2": 127.65202464206865,
+            "E3": 101.26731753103391,
+            "W2": 72.35091548457893,
+            "W3": 68.8673175310339
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1166.4,
+          "cumulative_defaults": 8,
+          "eligible_recovery_members": 12,
+          "expected_system_cash": 14350.0,
+          "external_operating_burn": 3120.0,
+          "federation_paid": 280.1375751887154,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.00000000000006,
+          "local_paid": 90.0,
+          "member_cash_end": 13850.0,
+          "member_contributions": {
+            "E4": 62.328095883923865,
+            "E5": 83.1914588389735,
+            "W4": 62.328095883923865,
+            "W5": 72.28992458189406
+          },
+          "minimum_nondefaulted_member_cash": 932.3045865850422,
+          "new_defaults": 4,
+          "recovery_contributions": 280.1375751887153,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 14350.0,
+          "uncovered": 0.0,
+          "wave": 2
+        },
+        {
+          "buyer_cash_paid": 304.60917317008443,
+          "buyer_unpaid_claims": {
+            "E4": 176.19541341495778,
+            "W4": 159.9954134149578
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 640.8,
+          "cumulative_defaults": 10,
+          "eligible_recovery_members": 10,
+          "expected_system_cash": 12790.0,
+          "external_operating_burn": 1560.0,
+          "federation_paid": 336.1908268299156,
+          "federation_recovery_shortfall": 100.01174414692395,
+          "federation_reserve_end": 399.98825585307605,
+          "local_paid": 0.0,
+          "member_cash_end": 12390.011744146925,
+          "member_contributions": {
+            "E5": 133.65035863073055,
+            "W5": 102.52872405226101
+          },
+          "minimum_nondefaulted_member_cash": 922.758516470349,
+          "new_defaults": 2,
+          "recovery_contributions": 236.17908268299158,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 12790.0,
+          "uncovered": 0.0,
+          "wave": 3
+        }
+      ]
+    },
+    "moderate/pro_rata/fcfs": {
+      "buyer_cash_paid": 1980.871597981369,
+      "cash_burn_per_default": 780.0,
+      "cash_conservation_residual": 0.0,
+      "cash_nav_proxy_change": -7800.0,
+      "cash_nav_proxy_end": 12790.0,
+      "cash_nav_proxy_start": 20590.0,
+      "claim_multiplier": 0.9,
+      "claim_reconciliation_residual": -4.547473508864641e-13,
+      "defaulted_members": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4"
+      ],
+      "ending_federation_reserve": 399.98825585307605,
+      "ending_member_cash": 12390.011744146925,
+      "ending_regional_reserves": {
+        "EAST": 0.0,
+        "WEST": 0.0
+      },
+      "ending_system_cash": 12790.0,
+      "ending_total_reserves": 399.98825585307605,
+      "external_operating_burn": 7800.0,
+      "federation_clearing": "fcfs",
+      "federation_reserve_paid": 656.928402018631,
+      "initial_system_cash": 20590.0,
+      "local_reserve_paid": {
+        "EAST": 90.0,
+        "WEST": 65.80000000000001
+      },
+      "max_abs_cash_conservation_residual": 3.637978807091713e-12,
+      "member_contributions": {
+        "E2": 47.952024642068665,
+        "E3": 5.367317531033939,
+        "E4": 67.6954134149578,
+        "E5": 222.84677232342483,
+        "W2": 25.050915484578887,
+        "W3": 5.367317531033939,
+        "W4": 67.6954134149578,
+        "W5": 180.74148352965102
+      },
+      "nav_scope": "cash-only consolidated proxy; excludes internal claims and physical assets/liabilities",
+      "recovery_contributions": 622.716657871707,
+      "recovery_rule": "pro_rata",
+      "seller_bad_debt": {},
+      "seller_receipts": {
+        "E5": 425.70000000000005,
+        "E6": 268.20000000000005,
+        "E7": 432.90000000000003,
+        "E8": 127.8,
+        "E9": 142.20000000000002,
+        "W5": 103.5,
+        "W6": 111.60000000000001,
+        "W7": 261.0,
+        "W8": 606.6,
+        "W9": 314.1
+      },
+      "total_claims": 2793.6000000000004,
+      "total_reserve_paid": 812.728402018631,
+      "uncovered_internal_claims": 0.0,
+      "waves": [
+        {
+          "buyer_cash_paid": 880.0,
+          "buyer_unpaid_claims": {
+            "E0": 34.7,
+            "E1": 50.89999999999999,
+            "W0": 2.299999999999997,
+            "W1": 18.500000000000014
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 986.4,
+          "cumulative_defaults": 4,
+          "eligible_recovery_members": 16,
+          "expected_system_cash": 17470.0,
+          "external_operating_burn": 3120.0,
+          "federation_paid": 40.599999999999994,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.0000000000001,
+          "local_paid": 65.80000000000001,
+          "member_cash_end": 16880.0,
+          "member_contributions": {
+            "E2": 47.952024642068665,
+            "E3": 5.367317531033939,
+            "E4": 5.367317531033939,
+            "E5": 6.004954853720771,
+            "W2": 25.050915484578887,
+            "W3": 5.367317531033939,
+            "W4": 5.367317531033939,
+            "W5": 5.922834895495952
+          },
+          "minimum_nondefaulted_member_cash": 952.0479753579314,
+          "new_defaults": 4,
+          "recovery_contributions": 106.40000000000003,
+          "regional_recovery": {
+            "EAST": 45.0,
+            "WEST": 20.800000000000008
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "regional_reserves_end": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "system_cash_end": 17470.0,
+          "uncovered": 0.0,
+          "wave": 1
+        },
+        {
+          "buyer_cash_paid": 796.2624248112846,
+          "buyer_unpaid_claims": {
+            "E2": 127.65202464206865,
+            "E3": 101.26731753103391,
+            "W2": 72.35091548457893,
+            "W3": 68.8673175310339
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1166.4,
+          "cumulative_defaults": 8,
+          "eligible_recovery_members": 12,
+          "expected_system_cash": 14350.0,
+          "external_operating_burn": 3120.0,
+          "federation_paid": 280.1375751887154,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.00000000000006,
+          "local_paid": 90.0,
+          "member_cash_end": 13850.0,
+          "member_contributions": {
+            "E4": 62.328095883923865,
+            "E5": 83.1914588389735,
+            "W4": 62.328095883923865,
+            "W5": 72.28992458189406
+          },
+          "minimum_nondefaulted_member_cash": 932.3045865850422,
+          "new_defaults": 4,
+          "recovery_contributions": 280.1375751887153,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 14350.0,
+          "uncovered": 0.0,
+          "wave": 2
+        },
+        {
+          "buyer_cash_paid": 304.60917317008443,
+          "buyer_unpaid_claims": {
+            "E4": 176.19541341495778,
+            "W4": 159.9954134149578
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 640.8,
+          "cumulative_defaults": 10,
+          "eligible_recovery_members": 10,
+          "expected_system_cash": 12790.0,
+          "external_operating_burn": 1560.0,
+          "federation_paid": 336.1908268299156,
+          "federation_recovery_shortfall": 100.01174414692395,
+          "federation_reserve_end": 399.98825585307605,
+          "local_paid": 0.0,
+          "member_cash_end": 12390.011744146925,
+          "member_contributions": {
+            "E5": 133.65035863073055,
+            "W5": 102.52872405226101
+          },
+          "minimum_nondefaulted_member_cash": 922.758516470349,
+          "new_defaults": 2,
+          "recovery_contributions": 236.17908268299158,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 12790.0,
+          "uncovered": 0.0,
+          "wave": 3
+        }
+      ]
+    },
+    "severe/fcfs/batch_pro_rata": {
+      "buyer_cash_paid": 923.4889705882354,
+      "cash_burn_per_default": 850.0,
+      "cash_conservation_residual": 0.0,
+      "cash_nav_proxy_change": -8500.0,
+      "cash_nav_proxy_end": 12090.0,
+      "cash_nav_proxy_start": 20590.0,
+      "claim_multiplier": 1.25,
+      "claim_reconciliation_residual": 0.0,
+      "defaulted_members": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4"
+      ],
+      "ending_federation_reserve": 216.7771191904377,
+      "ending_member_cash": 11873.222880809562,
+      "ending_regional_reserves": {
+        "EAST": 0.0,
+        "WEST": 0.0
+      },
+      "ending_system_cash": 12090.0,
+      "ending_total_reserves": 216.7771191904377,
+      "external_operating_burn": 8500.0,
+      "federation_clearing": "batch_pro_rata",
+      "federation_reserve_paid": 1327.59041451109,
+      "initial_system_cash": 20590.0,
+      "local_reserve_paid": {
+        "EAST": 90.0,
+        "WEST": 90.0
+      },
+      "max_abs_cash_conservation_residual": 0.0,
+      "member_contributions": {
+        "E2": 100.0,
+        "E3": 100.0,
+        "E4": 100.0,
+        "E5": 340.54400428976305,
+        "W2": 100.0,
+        "W3": 76.5110294117647,
+        "W4": 100.0,
+        "W5": 217.3125
+      },
+      "nav_scope": "cash-only consolidated proxy; excludes internal claims and physical assets/liabilities",
+      "recovery_contributions": 1134.367533701528,
+      "recovery_rule": "fcfs",
+      "seller_bad_debt": {
+        "E5": 226.1494229962975,
+        "E6": 167.79980277860403,
+        "E7": 261.25228531212406,
+        "E8": 7.279411764705884,
+        "E9": 63.27338893719521,
+        "W6": 1.323529411764706,
+        "W7": 91.4061672623159,
+        "W8": 396.9997026095205,
+        "W9": 233.43690382814688
+      },
+      "seller_receipts": {
+        "E5": 365.1005770037025,
+        "E6": 204.70019722139597,
+        "E7": 339.99771468787594,
+        "E8": 170.22058823529412,
+        "E9": 134.2266110628048,
+        "W5": 143.75,
+        "W6": 153.6764705882353,
+        "W7": 271.0938327376841,
+        "W8": 445.5002973904795,
+        "W9": 202.81309617185315
+      },
+      "total_claims": 3880.0,
+      "total_reserve_paid": 1507.59041451109,
+      "uncovered_internal_claims": 1448.9206149006745,
+      "waves": [
+        {
+          "buyer_cash_paid": 600.0,
+          "buyer_unpaid_claims": {
+            "E0": 203.75,
+            "E1": 226.25,
+            "W0": 158.75,
+            "W1": 181.25
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1370.0,
+          "cumulative_defaults": 4,
+          "eligible_recovery_members": 16,
+          "expected_system_cash": 17190.0,
+          "external_operating_burn": 3400.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.0,
+          "local_paid": 90.0,
+          "member_cash_end": 16600.0,
+          "member_contributions": {
+            "E2": 100.0,
+            "E3": 100.0,
+            "E4": 100.0,
+            "E5": 113.4889705882353,
+            "W2": 100.0,
+            "W3": 76.5110294117647
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 590.0,
+          "regional_recovery": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "regional_reserves_end": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "system_cash_end": 17190.0,
+          "uncovered": 180.0,
+          "wave": 1
+        },
+        {
+          "buyer_cash_paid": 223.48897058823536,
+          "buyer_unpaid_claims": {
+            "E2": 366.25,
+            "E3": 388.75,
+            "W2": 321.25,
+            "W3": 320.26102941176464
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1620.0,
+          "cumulative_defaults": 8,
+          "eligible_recovery_members": 11,
+          "expected_system_cash": 13790.0,
+          "external_operating_burn": 3400.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 172.40958548890995,
+          "federation_reserve_end": 327.59041451109005,
+          "local_paid": 90.0,
+          "member_cash_end": 13462.40958548891,
+          "member_contributions": {
+            "E5": 113.21541451109006,
+            "W4": 100.0,
+            "W5": 114.375
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 327.59041451109005,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 13790.0,
+          "uncovered": 806.5110294117646,
+          "wave": 2
+        },
+        {
+          "buyer_cash_paid": 100.0,
+          "buyer_unpaid_claims": {
+            "E4": 406.25,
+            "W4": 383.75
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 890.0,
+          "cumulative_defaults": 10,
+          "eligible_recovery_members": 10,
+          "expected_system_cash": 12090.0,
+          "external_operating_burn": 1700.0,
+          "federation_paid": 327.59041451109005,
+          "federation_recovery_shortfall": 283.2228808095623,
+          "federation_reserve_end": 216.7771191904377,
+          "local_paid": 0.0,
+          "member_cash_end": 11873.222880809562,
+          "member_contributions": {
+            "E5": 113.8396191904377,
+            "W5": 102.9375
+          },
+          "minimum_nondefaulted_member_cash": 926.4375,
+          "new_defaults": 2,
+          "recovery_contributions": 216.7771191904377,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 12090.0,
+          "uncovered": 462.40958548890995,
+          "wave": 3
+        }
+      ]
+    },
+    "severe/fcfs/fcfs": {
+      "buyer_cash_paid": 926.5,
+      "cash_burn_per_default": 850.0,
+      "cash_conservation_residual": 0.0,
+      "cash_nav_proxy_change": -8500.0,
+      "cash_nav_proxy_end": 12090.0,
+      "cash_nav_proxy_start": 20590.0,
+      "claim_multiplier": 1.25,
+      "claim_reconciliation_residual": 0.0,
+      "defaulted_members": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4"
+      ],
+      "ending_federation_reserve": 237.84,
+      "ending_member_cash": 11852.16,
+      "ending_regional_reserves": {
+        "EAST": 0.0,
+        "WEST": 0.0
+      },
+      "ending_system_cash": 12090.0,
+      "ending_total_reserves": 237.84,
+      "external_operating_burn": 8500.0,
+      "federation_clearing": "fcfs",
+      "federation_reserve_paid": 1340.1,
+      "initial_system_cash": 20590.0,
+      "local_reserve_paid": {
+        "EAST": 90.0,
+        "WEST": 90.0
+      },
+      "max_abs_cash_conservation_residual": 0.0,
+      "member_contributions": {
+        "E2": 100.0,
+        "E3": 100.0,
+        "E4": 100.0,
+        "E5": 377.12750000000005,
+        "W2": 100.0,
+        "W3": 73.5,
+        "W4": 100.0,
+        "W5": 217.3125
+      },
+      "nav_scope": "cash-only consolidated proxy; excludes internal claims and physical assets/liabilities",
+      "recovery_contributions": 1167.94,
+      "recovery_rule": "fcfs",
+      "seller_bad_debt": {
+        "E6": 372.5,
+        "E7": 435.0,
+        "W6": 3.75,
+        "W7": 80.0,
+        "W8": 175.89999999999998,
+        "W9": 366.25
+      },
+      "seller_receipts": {
+        "E5": 591.25,
+        "E7": 166.25,
+        "E8": 177.5,
+        "E9": 197.5,
+        "W5": 143.75,
+        "W6": 151.25,
+        "W7": 282.5,
+        "W8": 666.6,
+        "W9": 70.0
+      },
+      "total_claims": 3880.0,
+      "total_reserve_paid": 1520.1,
+      "uncovered_internal_claims": 1433.4,
+      "waves": [
+        {
+          "buyer_cash_paid": 600.0,
+          "buyer_unpaid_claims": {
+            "E0": 203.75,
+            "E1": 226.25,
+            "W0": 158.75,
+            "W1": 181.25
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1370.0,
+          "cumulative_defaults": 4,
+          "eligible_recovery_members": 16,
+          "expected_system_cash": 17190.0,
+          "external_operating_burn": 3400.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.0,
+          "local_paid": 90.0,
+          "member_cash_end": 16600.0,
+          "member_contributions": {
+            "E2": 100.0,
+            "E3": 100.0,
+            "E4": 100.0,
+            "E5": 116.5,
+            "W2": 100.0,
+            "W3": 73.5
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 590.0,
+          "regional_recovery": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "regional_reserves_end": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "system_cash_end": 17190.0,
+          "uncovered": 180.0,
+          "wave": 1
+        },
+        {
+          "buyer_cash_paid": 226.5,
+          "buyer_unpaid_claims": {
+            "E2": 366.25,
+            "E3": 388.75,
+            "W2": 321.25,
+            "W3": 317.25
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1620.0,
+          "cumulative_defaults": 8,
+          "eligible_recovery_members": 11,
+          "expected_system_cash": 13790.0,
+          "external_operating_burn": 3400.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 159.89999999999998,
+          "federation_reserve_end": 340.1,
+          "local_paid": 90.0,
+          "member_cash_end": 13449.9,
+          "member_contributions": {
+            "E5": 125.72500000000001,
+            "W4": 100.0,
+            "W5": 114.375
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 340.1,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 13790.0,
+          "uncovered": 803.5,
+          "wave": 2
+        },
+        {
+          "buyer_cash_paid": 100.0,
+          "buyer_unpaid_claims": {
+            "E4": 406.25,
+            "W4": 383.75
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 890.0,
+          "cumulative_defaults": 10,
+          "eligible_recovery_members": 10,
+          "expected_system_cash": 12090.0,
+          "external_operating_burn": 1700.0,
+          "federation_paid": 340.1,
+          "federation_recovery_shortfall": 262.15999999999997,
+          "federation_reserve_end": 237.84,
+          "local_paid": 0.0,
+          "member_cash_end": 11852.16,
+          "member_contributions": {
+            "E5": 134.9025,
+            "W5": 102.9375
+          },
+          "minimum_nondefaulted_member_cash": 926.4375,
+          "new_defaults": 2,
+          "recovery_contributions": 237.84,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 12090.0,
+          "uncovered": 449.9,
+          "wave": 3
+        }
+      ]
+    },
+    "severe/pro_rata/batch_pro_rata": {
+      "buyer_cash_paid": 999.9341800407576,
+      "cash_burn_per_default": 850.0,
+      "cash_conservation_residual": 1.8189894035458565e-12,
+      "cash_nav_proxy_change": -8500.0,
+      "cash_nav_proxy_end": 12090.000000000002,
+      "cash_nav_proxy_start": 20590.0,
+      "claim_multiplier": 1.25,
+      "claim_reconciliation_residual": 0.0,
+      "defaulted_members": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4"
+      ],
+      "ending_federation_reserve": 178.02393751169194,
+      "ending_member_cash": 11911.97606248831,
+      "ending_regional_reserves": {
+        "EAST": 0.0,
+        "WEST": 0.0
+      },
+      "ending_system_cash": 12090.000000000002,
+      "ending_total_reserves": 178.02393751169194,
+      "external_operating_burn": 8500.0,
+      "federation_clearing": "batch_pro_rata",
+      "federation_reserve_paid": 1290.2630704075082,
+      "initial_system_cash": 20590.0,
+      "local_reserve_paid": {
+        "EAST": 90.0,
+        "WEST": 90.0
+      },
+      "max_abs_cash_conservation_residual": 1.8189894035458565e-12,
+      "member_contributions": {
+        "E2": 82.26974225083333,
+        "E3": 67.76316772878788,
+        "E4": 100.00000000000004,
+        "E5": 314.47118795995766,
+        "W2": 82.26974225083333,
+        "W3": 67.76316772878788,
+        "W4": 100.00000000000004,
+        "W5": 243.74999999999997
+      },
+      "nav_scope": "cash-only consolidated proxy; excludes internal claims and physical assets/liabilities",
+      "recovery_contributions": 1058.2870079192,
+      "recovery_rule": "pro_rata",
+      "seller_bad_debt": {
+        "E5": 211.15497740742543,
+        "E6": 163.13225778090418,
+        "E7": 267.066504146449,
+        "E8": 7.279411764705884,
+        "E9": 50.31234132344146,
+        "W6": 1.323529411764706,
+        "W7": 78.98025219606913,
+        "W8": 395.2040338457314,
+        "W9": 235.34944167524307
+      },
+      "seller_receipts": {
+        "E5": 380.0950225925746,
+        "E6": 209.36774221909582,
+        "E7": 334.183495853551,
+        "E8": 170.22058823529412,
+        "E9": 147.18765867655856,
+        "W5": 143.75,
+        "W6": 153.6764705882353,
+        "W7": 283.51974780393084,
+        "W8": 447.2959661542686,
+        "W9": 200.90055832475696
+      },
+      "total_claims": 3880.0,
+      "total_reserve_paid": 1470.2630704075082,
+      "uncovered_internal_claims": 1409.8027495517342,
+      "waves": [
+        {
+          "buyer_cash_paid": 600.0,
+          "buyer_unpaid_claims": {
+            "E0": 203.75,
+            "E1": 226.25,
+            "W0": 158.75,
+            "W1": 181.25
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1370.0,
+          "cumulative_defaults": 4,
+          "eligible_recovery_members": 16,
+          "expected_system_cash": 17190.0,
+          "external_operating_burn": 3400.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.0,
+          "local_paid": 90.0,
+          "member_cash_end": 16600.0,
+          "member_contributions": {
+            "E2": 82.26974225083333,
+            "E3": 67.76316772878788,
+            "E4": 67.76316772878788,
+            "E5": 76.90372149338063,
+            "W2": 82.26974225083333,
+            "W3": 67.76316772878788,
+            "W4": 67.76316772878788,
+            "W5": 77.50412308980114
+          },
+          "minimum_nondefaulted_member_cash": 917.7302577491666,
+          "new_defaults": 4,
+          "recovery_contributions": 590.0,
+          "regional_recovery": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "regional_reserves_end": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "system_cash_end": 17190.0,
+          "uncovered": 180.0,
+          "wave": 1
+        },
+        {
+          "buyer_cash_paid": 299.9341800407576,
+          "buyer_unpaid_claims": {
+            "E2": 348.51974225083336,
+            "E3": 356.51316772878783,
+            "W2": 303.51974225083336,
+            "W3": 311.51316772878783
+          },
+          "cash_conservation_residual": 1.8189894035458565e-12,
+          "claims": 1620.0,
+          "cumulative_defaults": 8,
+          "eligible_recovery_members": 12,
+          "expected_system_cash": 13790.0,
+          "external_operating_burn": 3400.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 209.73692959249178,
+          "federation_reserve_end": 290.2630704075082,
+          "local_paid": 90.0,
+          "member_cash_end": 13499.736929592493,
+          "member_contributions": {
+            "E4": 32.236832271212165,
+            "E5": 119.16481817406401,
+            "W4": 32.236832271212165,
+            "W5": 106.62458769101988
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 290.2630704075082,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 13790.000000000002,
+          "uncovered": 730.0658199592424,
+          "wave": 2
+        },
+        {
+          "buyer_cash_paid": 100.0,
+          "buyer_unpaid_claims": {
+            "E4": 406.25,
+            "W4": 383.75
+          },
+          "cash_conservation_residual": 1.8189894035458565e-12,
+          "claims": 890.0,
+          "cumulative_defaults": 10,
+          "eligible_recovery_members": 10,
+          "expected_system_cash": 12090.0,
+          "external_operating_burn": 1700.0,
+          "federation_paid": 290.2630704075082,
+          "federation_recovery_shortfall": 321.97606248830806,
+          "federation_reserve_end": 178.02393751169194,
+          "local_paid": 0.0,
+          "member_cash_end": 11911.97606248831,
+          "member_contributions": {
+            "E5": 118.40264829251299,
+            "W5": 59.62128921917895
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 2,
+          "recovery_contributions": 178.02393751169194,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 12090.000000000002,
+          "uncovered": 499.73692959249183,
+          "wave": 3
+        }
+      ]
+    },
+    "severe/pro_rata/fcfs": {
+      "buyer_cash_paid": 1000.7879196895562,
+      "cash_burn_per_default": 850.0,
+      "cash_conservation_residual": 0.0,
+      "cash_nav_proxy_change": -8500.0,
+      "cash_nav_proxy_end": 12090.0,
+      "cash_nav_proxy_start": 20590.0,
+      "claim_multiplier": 1.25,
+      "claim_reconciliation_residual": 0.0,
+      "defaulted_members": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4"
+      ],
+      "ending_federation_reserve": 198.21618651931826,
+      "ending_member_cash": 11891.783813480683,
+      "ending_regional_reserves": {
+        "EAST": 0.0,
+        "WEST": 0.0
+      },
+      "ending_system_cash": 12090.0,
+      "ending_total_reserves": 198.21618651931826,
+      "external_operating_burn": 8500.0,
+      "federation_clearing": "fcfs",
+      "federation_reserve_paid": 1301.193225915303,
+      "initial_system_cash": 20590.0,
+      "local_reserve_paid": {
+        "EAST": 90.0,
+        "WEST": 90.0
+      },
+      "max_abs_cash_conservation_residual": 0.0,
+      "member_contributions": {
+        "E2": 82.11827231314325,
+        "E3": 67.48776784207863,
+        "E4": 100.00000000000003,
+        "E5": 346.4473321241775,
+        "W2": 82.11827231314325,
+        "W3": 67.48776784207863,
+        "W4": 100.00000000000003,
+        "W5": 243.74999999999991
+      },
+      "nav_scope": "cash-only consolidated proxy; excludes internal claims and physical assets/liabilities",
+      "recovery_contributions": 1089.4094124346211,
+      "recovery_rule": "pro_rata",
+      "seller_bad_debt": {
+        "E6": 372.5,
+        "E7": 435.0,
+        "W6": 3.75,
+        "W7": 62.11827231314328,
+        "W8": 208.7945419267757,
+        "W9": 315.8560401552219
+      },
+      "seller_receipts": {
+        "E5": 591.25,
+        "E7": 166.25,
+        "E8": 177.5,
+        "E9": 197.5,
+        "W5": 143.75,
+        "W6": 151.25,
+        "W7": 300.3817276868567,
+        "W8": 633.7054580732242,
+        "W9": 120.39395984477812
+      },
+      "total_claims": 3880.0,
+      "total_reserve_paid": 1481.193225915303,
+      "uncovered_internal_claims": 1398.0188543951408,
+      "waves": [
+        {
+          "buyer_cash_paid": 600.0,
+          "buyer_unpaid_claims": {
+            "E0": 203.75,
+            "E1": 226.25,
+            "W0": 158.75,
+            "W1": 181.25
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1370.0,
+          "cumulative_defaults": 4,
+          "eligible_recovery_members": 16,
+          "expected_system_cash": 17190.0,
+          "external_operating_burn": 3400.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.0,
+          "local_paid": 90.0,
+          "member_cash_end": 16600.0,
+          "member_contributions": {
+            "E2": 82.11827231314325,
+            "E3": 67.48776784207863,
+            "E4": 67.48776784207863,
+            "E5": 78.62324953602159,
+            "W2": 82.11827231314325,
+            "W3": 67.48776784207863,
+            "W4": 67.48776784207863,
+            "W5": 77.18913446937742
+          },
+          "minimum_nondefaulted_member_cash": 917.8817276868567,
+          "new_defaults": 4,
+          "recovery_contributions": 590.0,
+          "regional_recovery": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "regional_reserves_end": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "system_cash_end": 17190.0,
+          "uncovered": 180.0,
+          "wave": 1
+        },
+        {
+          "buyer_cash_paid": 300.78791968955625,
+          "buyer_unpaid_claims": {
+            "E2": 348.3682723131433,
+            "E3": 356.2377678420786,
+            "W2": 303.3682723131433,
+            "W3": 311.2377678420786
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1620.0,
+          "cumulative_defaults": 8,
+          "eligible_recovery_members": 12,
+          "expected_system_cash": 13790.0,
+          "external_operating_burn": 3400.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 198.8067740846971,
+          "federation_reserve_end": 301.1932259153029,
+          "local_paid": 90.0,
+          "member_cash_end": 13488.806774084696,
+          "member_contributions": {
+            "E4": 32.5122321579214,
+            "E5": 129.51267504639782,
+            "W4": 32.5122321579214,
+            "W5": 106.65608655306227
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 301.1932259153029,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 13790.0,
+          "uncovered": 729.2120803104438,
+          "wave": 2
+        },
+        {
+          "buyer_cash_paid": 100.0,
+          "buyer_unpaid_claims": {
+            "E4": 406.25,
+            "W4": 383.75
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 890.0,
+          "cumulative_defaults": 10,
+          "eligible_recovery_members": 10,
+          "expected_system_cash": 12090.0,
+          "external_operating_burn": 1700.0,
+          "federation_paid": 301.1932259153029,
+          "federation_recovery_shortfall": 301.7838134806817,
+          "federation_reserve_end": 198.21618651931826,
+          "local_paid": 0.0,
+          "member_cash_end": 11891.783813480683,
+          "member_contributions": {
+            "E5": 138.31140754175803,
+            "W5": 59.90477897756023
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 2,
+          "recovery_contributions": 198.21618651931826,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 12090.0,
+          "uncovered": 488.8067740846971,
+          "wave": 3
+        }
+      ]
+    },
+    "systemic/fcfs/batch_pro_rata": {
+      "buyer_cash_paid": 418.578856152513,
+      "cash_burn_per_default": 900.0,
+      "cash_conservation_residual": 0.0,
+      "cash_nav_proxy_change": -9000.0,
+      "cash_nav_proxy_end": 11590.0,
+      "cash_nav_proxy_start": 20590.0,
+      "claim_multiplier": 1.5,
+      "claim_reconciliation_residual": 0.0,
+      "defaulted_members": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4"
+      ],
+      "ending_federation_reserve": 206.0388776999481,
+      "ending_member_cash": 11383.961122300052,
+      "ending_regional_reserves": {
+        "EAST": 0.0,
+        "WEST": 0.0
+      },
+      "ending_system_cash": 11590.0,
+      "ending_total_reserves": 206.0388776999481,
+      "external_operating_burn": 9000.0,
+      "federation_clearing": "batch_pro_rata",
+      "federation_reserve_paid": 1320.2365252542738,
+      "initial_system_cash": 20590.0,
+      "local_reserve_paid": {
+        "EAST": 90.0,
+        "WEST": 90.0
+      },
+      "max_abs_cash_conservation_residual": 0.0,
+      "member_contributions": {
+        "E2": 100.0,
+        "E3": 100.0,
+        "E4": 100.0,
+        "E5": 315.0403942887108,
+        "W2": 100.0,
+        "W3": 81.42114384748697,
+        "W4": 100.0,
+        "W5": 219.81386481802423
+      },
+      "nav_scope": "cash-only consolidated proxy; excludes internal claims and physical assets/liabilities",
+      "recovery_contributions": 1116.275402954222,
+      "recovery_rule": "fcfs",
+      "seller_bad_debt": {
+        "E5": 477.2109195833332,
+        "E6": 291.2080048299156,
+        "E7": 403.19642526974053,
+        "E8": 64.03986135181975,
+        "E9": 139.69592781373285,
+        "W5": 15.584922010398614,
+        "W6": 48.73830155979203,
+        "W7": 247.5641862318244,
+        "W8": 675.8452898156893,
+        "W9": 374.1007801269668
+      },
+      "seller_receipts": {
+        "E5": 232.28908041666682,
+        "E6": 155.79199517008442,
+        "E7": 318.30357473025947,
+        "E8": 148.96013864818025,
+        "E9": 97.30407218626716,
+        "W5": 156.9150779896014,
+        "W6": 137.26169844020797,
+        "W7": 187.4358137681756,
+        "W8": 335.1547101843107,
+        "W9": 149.3992198730332
+      },
+      "total_claims": 4656.0,
+      "total_reserve_paid": 1500.2365252542738,
+      "uncovered_internal_claims": 2737.184618593213,
+      "waves": [
+        {
+          "buyer_cash_paid": 400.0,
+          "buyer_unpaid_claims": {
+            "E0": 324.5,
+            "E1": 351.5,
+            "W0": 270.5,
+            "W1": 297.5
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1644.0,
+          "cumulative_defaults": 4,
+          "eligible_recovery_members": 16,
+          "expected_system_cash": 16990.0,
+          "external_operating_burn": 3600.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.0,
+          "local_paid": 90.0,
+          "member_cash_end": 16400.0,
+          "member_contributions": {
+            "E2": 100.0,
+            "E3": 100.0,
+            "E4": 100.0,
+            "E5": 108.57885615251301,
+            "W2": 100.0,
+            "W3": 81.42114384748697
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 590.0,
+          "regional_recovery": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "regional_reserves_end": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "system_cash_end": 16990.0,
+          "uncovered": 654.0,
+          "wave": 1
+        },
+        {
+          "buyer_cash_paid": 18.578856152513026,
+          "buyer_unpaid_claims": {
+            "E2": 499.5,
+            "E3": 526.5,
+            "W2": 445.5,
+            "W3": 453.921143847487
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1944.0,
+          "cumulative_defaults": 8,
+          "eligible_recovery_members": 11,
+          "expected_system_cash": 13390.0,
+          "external_operating_burn": 3600.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 179.7634747457261,
+          "federation_reserve_end": 320.2365252542739,
+          "local_paid": 90.0,
+          "member_cash_end": 13069.763474745727,
+          "member_contributions": {
+            "E5": 104.54501745531375,
+            "W4": 100.0,
+            "W5": 115.69150779896012
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 320.2365252542739,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 13390.0,
+          "uncovered": 1335.421143847487,
+          "wave": 2
+        },
+        {
+          "buyer_cash_paid": 0.0,
+          "buyer_unpaid_claims": {
+            "E4": 547.5,
+            "W4": 520.5
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1068.0,
+          "cumulative_defaults": 10,
+          "eligible_recovery_members": 10,
+          "expected_system_cash": 11590.0,
+          "external_operating_burn": 1800.0,
+          "federation_paid": 320.2365252542739,
+          "federation_recovery_shortfall": 293.9611223000519,
+          "federation_reserve_end": 206.0388776999481,
+          "local_paid": 0.0,
+          "member_cash_end": 11383.961122300052,
+          "member_contributions": {
+            "E5": 101.916520680884,
+            "W5": 104.1223570190641
+          },
+          "minimum_nondefaulted_member_cash": 917.248686127956,
+          "new_defaults": 2,
+          "recovery_contributions": 206.0388776999481,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 11590.0,
+          "uncovered": 747.7634747457261,
+          "wave": 3
+        }
+      ]
+    },
+    "systemic/fcfs/fcfs": {
+      "buyer_cash_paid": 410.0,
+      "cash_burn_per_default": 900.0,
+      "cash_conservation_residual": 0.0,
+      "cash_nav_proxy_change": -9000.0,
+      "cash_nav_proxy_end": 11590.0,
+      "cash_nav_proxy_start": 20590.0,
+      "claim_multiplier": 1.5,
+      "claim_reconciliation_residual": 0.0,
+      "defaulted_members": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4"
+      ],
+      "ending_federation_reserve": 219.05,
+      "ending_member_cash": 11370.95,
+      "ending_regional_reserves": {
+        "EAST": 0.0,
+        "WEST": 0.0
+      },
+      "ending_system_cash": 11590.0,
+      "ending_total_reserves": 219.05,
+      "external_operating_burn": 9000.0,
+      "federation_clearing": "fcfs",
+      "federation_reserve_paid": 1260.0,
+      "initial_system_cash": 20590.0,
+      "local_reserve_paid": {
+        "EAST": 90.0,
+        "WEST": 90.0
+      },
+      "max_abs_cash_conservation_residual": 0.0,
+      "member_contributions": {
+        "E2": 100.0,
+        "E3": 100.0,
+        "E4": 100.0,
+        "E5": 261.5,
+        "W2": 100.0,
+        "W3": 90.0,
+        "W4": 100.0,
+        "W5": 217.55
+      },
+      "nav_scope": "cash-only consolidated proxy; excludes internal claims and physical assets/liabilities",
+      "recovery_contributions": 1069.05,
+      "recovery_rule": "fcfs",
+      "seller_bad_debt": {
+        "E5": 404.0,
+        "E6": 447.0,
+        "E7": 522.0,
+        "W5": 27.5,
+        "W6": 86.0,
+        "W7": 165.0,
+        "W8": 631.0,
+        "W9": 523.5
+      },
+      "seller_receipts": {
+        "E5": 305.5,
+        "E7": 199.5,
+        "E8": 213.0,
+        "E9": 237.0,
+        "W5": 145.0,
+        "W6": 100.0,
+        "W7": 270.0,
+        "W8": 380.0
+      },
+      "total_claims": 4656.0,
+      "total_reserve_paid": 1440.0,
+      "uncovered_internal_claims": 2806.0,
+      "waves": [
+        {
+          "buyer_cash_paid": 400.0,
+          "buyer_unpaid_claims": {
+            "E0": 324.5,
+            "E1": 351.5,
+            "W0": 270.5,
+            "W1": 297.5
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1644.0,
+          "cumulative_defaults": 4,
+          "eligible_recovery_members": 16,
+          "expected_system_cash": 16990.0,
+          "external_operating_burn": 3600.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.0,
+          "local_paid": 90.0,
+          "member_cash_end": 16400.0,
+          "member_contributions": {
+            "E2": 100.0,
+            "E3": 100.0,
+            "E4": 100.0,
+            "E5": 100.0,
+            "W2": 100.0,
+            "W3": 90.0
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 590.0,
+          "regional_recovery": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "regional_reserves_end": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "system_cash_end": 16990.0,
+          "uncovered": 654.0,
+          "wave": 1
+        },
+        {
+          "buyer_cash_paid": 10.0,
+          "buyer_unpaid_claims": {
+            "E2": 499.5,
+            "E3": 526.5,
+            "W2": 445.5,
+            "W3": 462.5
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1944.0,
+          "cumulative_defaults": 8,
+          "eligible_recovery_members": 11,
+          "expected_system_cash": 13390.0,
+          "external_operating_burn": 3600.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 240.0,
+          "federation_reserve_end": 260.0,
+          "local_paid": 90.0,
+          "member_cash_end": 13130.0,
+          "member_contributions": {
+            "E5": 45.5,
+            "W4": 100.0,
+            "W5": 114.5
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 260.0,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 13390.0,
+          "uncovered": 1344.0,
+          "wave": 2
+        },
+        {
+          "buyer_cash_paid": 0.0,
+          "buyer_unpaid_claims": {
+            "E4": 547.5,
+            "W4": 520.5
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1068.0,
+          "cumulative_defaults": 10,
+          "eligible_recovery_members": 10,
+          "expected_system_cash": 11590.0,
+          "external_operating_burn": 1800.0,
+          "federation_paid": 260.0,
+          "federation_recovery_shortfall": 280.95,
+          "federation_reserve_end": 219.05,
+          "local_paid": 0.0,
+          "member_cash_end": 11370.95,
+          "member_contributions": {
+            "E5": 116.0,
+            "W5": 103.05000000000001
+          },
+          "minimum_nondefaulted_member_cash": 927.45,
+          "new_defaults": 2,
+          "recovery_contributions": 219.05,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 11590.0,
+          "uncovered": 808.0,
+          "wave": 3
+        }
+      ]
+    },
+    "systemic/pro_rata/batch_pro_rata": {
+      "buyer_cash_paid": 498.9060928921765,
+      "cash_burn_per_default": 900.0,
+      "cash_conservation_residual": 0.0,
+      "cash_nav_proxy_change": -9000.0,
+      "cash_nav_proxy_end": 11590.0,
+      "cash_nav_proxy_start": 20590.0,
+      "claim_multiplier": 1.5,
+      "claim_reconciliation_residual": 0.0,
+      "defaulted_members": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4"
+      ],
+      "ending_federation_reserve": 176.7616143700856,
+      "ending_member_cash": 11413.238385629915,
+      "ending_regional_reserves": {
+        "EAST": 0.0,
+        "WEST": 0.0
+      },
+      "ending_system_cash": 11590.0,
+      "ending_total_reserves": 176.7616143700856,
+      "external_operating_burn": 9000.0,
+      "federation_clearing": "batch_pro_rata",
+      "federation_reserve_paid": 1282.2270571568583,
+      "initial_system_cash": 20590.0,
+      "local_reserve_paid": {
+        "EAST": 90.0,
+        "WEST": 90.0
+      },
+      "max_abs_cash_conservation_residual": 0.0,
+      "member_contributions": {
+        "E2": 82.45214480945255,
+        "E3": 68.09480874445917,
+        "E4": 99.99999999999996,
+        "E5": 290.97968642951923,
+        "W2": 82.45214480945255,
+        "W3": 68.09480874445917,
+        "W4": 99.99999999999996,
+        "W5": 256.9150779896012
+      },
+      "nav_scope": "cash-only consolidated proxy; excludes internal claims and physical assets/liabilities",
+      "recovery_contributions": 1048.9886715269438,
+      "recovery_rule": "pro_rata",
+      "seller_bad_debt": {
+        "E5": 460.5606371042883,
+        "E6": 288.2717911731521,
+        "E7": 409.80779699463295,
+        "E8": 64.03986135181975,
+        "E9": 124.75333835158955,
+        "W5": 15.584922010398614,
+        "W6": 48.73830155979203,
+        "W7": 232.95823273032914,
+        "W8": 670.6839822186619,
+        "W9": 379.467986456301
+      },
+      "seller_receipts": {
+        "E5": 248.93936289571175,
+        "E6": 158.72820882684786,
+        "E7": 311.69220300536705,
+        "E8": 148.96013864818025,
+        "E9": 112.24666164841045,
+        "W5": 156.9150779896014,
+        "W6": 137.26169844020797,
+        "W7": 202.04176726967086,
+        "W8": 340.31601778133813,
+        "W9": 144.032013543699
+      },
+      "total_claims": 4656.0,
+      "total_reserve_paid": 1462.2270571568583,
+      "uncovered_internal_claims": 2694.8668499509654,
+      "waves": [
+        {
+          "buyer_cash_paid": 400.0,
+          "buyer_unpaid_claims": {
+            "E0": 324.5,
+            "E1": 351.5,
+            "W0": 270.5,
+            "W1": 297.5
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1644.0,
+          "cumulative_defaults": 4,
+          "eligible_recovery_members": 16,
+          "expected_system_cash": 16990.0,
+          "external_operating_burn": 3600.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 499.99999999999994,
+          "local_paid": 90.0,
+          "member_cash_end": 16400.0,
+          "member_contributions": {
+            "E2": 82.45214480945255,
+            "E3": 68.09480874445917,
+            "E4": 68.09480874445917,
+            "E5": 73.93656443397518,
+            "W2": 82.45214480945255,
+            "W3": 68.09480874445917,
+            "W4": 68.09480874445917,
+            "W5": 78.77991096928297
+          },
+          "minimum_nondefaulted_member_cash": 917.5478551905475,
+          "new_defaults": 4,
+          "recovery_contributions": 589.9999999999999,
+          "regional_recovery": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "regional_reserves_end": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "system_cash_end": 16990.0,
+          "uncovered": 654.0,
+          "wave": 1
+        },
+        {
+          "buyer_cash_paid": 98.9060928921765,
+          "buyer_unpaid_claims": {
+            "E2": 481.95214480945253,
+            "E3": 494.5948087444592,
+            "W2": 427.95214480945253,
+            "W3": 440.5948087444592
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1944.0,
+          "cumulative_defaults": 8,
+          "eligible_recovery_members": 12,
+          "expected_system_cash": 13390.0,
+          "external_operating_burn": 3600.0,
+          "federation_paid": 499.99999999999994,
+          "federation_recovery_shortfall": 217.77294284314178,
+          "federation_reserve_end": 282.2270571568582,
+          "local_paid": 90.0,
+          "member_cash_end": 13107.772942843141,
+          "member_contributions": {
+            "E4": 31.90519125554078,
+            "E5": 110.60315794374483,
+            "W4": 31.90519125554078,
+            "W5": 107.81351670203183
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 282.2270571568582,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 13390.0,
+          "uncovered": 1255.0939071078235,
+          "wave": 2
+        },
+        {
+          "buyer_cash_paid": 0.0,
+          "buyer_unpaid_claims": {
+            "E4": 547.5,
+            "W4": 520.5
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1068.0,
+          "cumulative_defaults": 10,
+          "eligible_recovery_members": 10,
+          "expected_system_cash": 11590.0,
+          "external_operating_burn": 1800.0,
+          "federation_paid": 282.2270571568582,
+          "federation_recovery_shortfall": 323.23838562991443,
+          "federation_reserve_end": 176.7616143700856,
+          "local_paid": 0.0,
+          "member_cash_end": 11413.238385629915,
+          "member_contributions": {
+            "E5": 106.4399640517992,
+            "W5": 70.3216503182864
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 2,
+          "recovery_contributions": 176.7616143700856,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 11590.0,
+          "uncovered": 785.7729428431418,
+          "wave": 3
+        }
+      ]
+    },
+    "systemic/pro_rata/fcfs": {
+      "buyer_cash_paid": 496.0593512767425,
+      "cash_burn_per_default": 900.0,
+      "cash_conservation_residual": 1.8189894035458565e-12,
+      "cash_nav_proxy_change": -9000.0,
+      "cash_nav_proxy_end": 11590.000000000002,
+      "cash_nav_proxy_start": 20590.0,
+      "claim_multiplier": 1.5,
+      "claim_reconciliation_residual": 0.0,
+      "defaulted_members": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4"
+      ],
+      "ending_federation_reserve": 177.68847826086954,
+      "ending_member_cash": 11412.311521739131,
+      "ending_regional_reserves": {
+        "EAST": 0.0,
+        "WEST": 0.0
+      },
+      "ending_system_cash": 11590.000000000002,
+      "ending_total_reserves": 177.68847826086954,
+      "external_operating_burn": 9000.0,
+      "federation_clearing": "fcfs",
+      "federation_reserve_paid": 1271.0234299516908,
+      "initial_system_cash": 20590.0,
+      "local_reserve_paid": {
+        "EAST": 90.0,
+        "WEST": 90.0
+      },
+      "max_abs_cash_conservation_residual": 1.8189894035458565e-12,
+      "member_contributions": {
+        "E2": 82.95721187025535,
+        "E3": 69.01311249137336,
+        "E4": 100.0,
+        "E5": 289.77125948930296,
+        "W2": 82.95721187025535,
+        "W3": 69.01311249137336,
+        "W4": 100.0,
+        "W5": 245.0
+      },
+      "nav_scope": "cash-only consolidated proxy; excludes internal claims and physical assets/liabilities",
+      "recovery_contributions": 1038.7119082125603,
+      "recovery_rule": "pro_rata",
+      "seller_bad_debt": {
+        "E5": 354.97032436162874,
+        "E6": 447.0,
+        "E7": 522.0,
+        "W5": 27.5,
+        "W6": 86.0,
+        "W7": 147.95721187025538,
+        "W8": 599.9896825396826,
+        "W9": 523.5
+      },
+      "seller_receipts": {
+        "E5": 354.52967563837126,
+        "E7": 199.5,
+        "E8": 213.0,
+        "E9": 237.0,
+        "W5": 145.0,
+        "W6": 100.0,
+        "W7": 287.0427881297446,
+        "W8": 411.0103174603174
+      },
+      "total_claims": 4656.0,
+      "total_reserve_paid": 1451.0234299516908,
+      "uncovered_internal_claims": 2708.9172187715667,
+      "waves": [
+        {
+          "buyer_cash_paid": 400.0,
+          "buyer_unpaid_claims": {
+            "E0": 324.5,
+            "E1": 351.5,
+            "W0": 270.5,
+            "W1": 297.5
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1644.0,
+          "cumulative_defaults": 4,
+          "eligible_recovery_members": 16,
+          "expected_system_cash": 16990.0,
+          "external_operating_burn": 3600.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 0.0,
+          "federation_reserve_end": 500.0,
+          "local_paid": 90.0,
+          "member_cash_end": 16400.0,
+          "member_contributions": {
+            "E2": 82.95721187025535,
+            "E3": 69.01311249137336,
+            "E4": 69.01311249137336,
+            "E5": 69.01311249137336,
+            "W2": 82.95721187025535,
+            "W3": 69.01311249137336,
+            "W4": 69.01311249137336,
+            "W5": 79.0200138026225
+          },
+          "minimum_nondefaulted_member_cash": 917.0427881297446,
+          "new_defaults": 4,
+          "recovery_contributions": 590.0,
+          "regional_recovery": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "regional_reserves_end": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "system_cash_end": 16990.0,
+          "uncovered": 654.0,
+          "wave": 1
+        },
+        {
+          "buyer_cash_paid": 96.05935127674252,
+          "buyer_unpaid_claims": {
+            "E2": 482.4572118702554,
+            "E3": 495.51311249137336,
+            "W2": 428.4572118702554,
+            "W3": 441.51311249137336
+          },
+          "cash_conservation_residual": 0.0,
+          "claims": 1944.0,
+          "cumulative_defaults": 8,
+          "eligible_recovery_members": 12,
+          "expected_system_cash": 13390.0,
+          "external_operating_burn": 3600.0,
+          "federation_paid": 500.0,
+          "federation_recovery_shortfall": 228.9765700483092,
+          "federation_reserve_end": 271.0234299516908,
+          "local_paid": 90.0,
+          "member_cash_end": 13118.97657004831,
+          "member_contributions": {
+            "E4": 30.986887508626634,
+            "E5": 102.45165631469979,
+            "W4": 30.986887508626634,
+            "W5": 106.59799861973775
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 4,
+          "recovery_contributions": 271.0234299516908,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 13390.0,
+          "uncovered": 1257.9406487232575,
+          "wave": 2
+        },
+        {
+          "buyer_cash_paid": 0.0,
+          "buyer_unpaid_claims": {
+            "E4": 547.5,
+            "W4": 520.5
+          },
+          "cash_conservation_residual": 1.8189894035458565e-12,
+          "claims": 1068.0,
+          "cumulative_defaults": 10,
+          "eligible_recovery_members": 10,
+          "expected_system_cash": 11590.0,
+          "external_operating_burn": 1800.0,
+          "federation_paid": 271.0234299516908,
+          "federation_recovery_shortfall": 322.31152173913046,
+          "federation_reserve_end": 177.68847826086954,
+          "local_paid": 0.0,
+          "member_cash_end": 11412.311521739131,
+          "member_contributions": {
+            "E5": 118.30649068322982,
+            "W5": 59.381987577639734
+          },
+          "minimum_nondefaulted_member_cash": 900.0,
+          "new_defaults": 2,
+          "recovery_contributions": 177.68847826086954,
+          "regional_recovery": {
+            "EAST": 0,
+            "WEST": 0
+          },
+          "regional_recovery_shortfall": {
+            "EAST": 45.0,
+            "WEST": 45.0
+          },
+          "regional_reserves_end": {
+            "EAST": 0.0,
+            "WEST": 0.0
+          },
+          "system_cash_end": 11590.000000000002,
+          "uncovered": 796.9765700483092,
+          "wave": 3
+        }
+      ]
+    }
+  }
+}
