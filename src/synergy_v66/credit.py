@@ -95,6 +95,8 @@ class CreditLedger:
         reserve_recovery_contribution_fraction: float = 0.10,
         cells: tuple[CellSpec, ...] | None = None,
         regions: tuple[str, ...] | None = None,
+        regional_reserve_members_by_region: dict[str, tuple[str, ...]] | None = None,
+        federation_reserve_members: tuple[str, ...] | None = None,
     ) -> None:
         self.cells = tuple(CELLS if cells is None else cells)
         if not self.cells or any(not isinstance(cell, CellSpec) for cell in self.cells):
@@ -129,6 +131,45 @@ class CreditLedger:
         if set(inferred_regions) != set(self.regions):
             raise ValueError("regions must match the regions represented by cells exactly")
         self.cell_by_id = {cell.cell_id: cell for cell in self.cells}
+
+        # Reserve funding membership is independent from physical topology roles.
+        # Backward-compatible default: every cell belongs to its own regional
+        # fund and to the federation fund, as in the legacy planner.
+        if regional_reserve_members_by_region is None:
+            regional_members = {
+                region: frozenset(cell.cell_id for cell in self.cells if cell.region == region)
+                for region in self.regions
+            }
+        else:
+            if not isinstance(regional_reserve_members_by_region, dict) or set(regional_reserve_members_by_region) != set(self.regions):
+                raise ValueError("regional_reserve_members_by_region must define every region exactly once")
+            regional_members = {}
+            for region in self.regions:
+                raw_members = regional_reserve_members_by_region[region]
+                if isinstance(raw_members, (str, bytes)):
+                    raise ValueError("regional reserve members must be an iterable of cell IDs, not a string")
+                members = tuple(raw_members)
+                if any(not isinstance(cell_id, str) or cell_id not in self.cell_by_id for cell_id in members):
+                    raise ValueError(f"regional reserve membership for {region} contains an unknown cell")
+                if len(set(members)) != len(members):
+                    raise ValueError(f"regional reserve membership for {region} contains duplicate cell IDs")
+                if any(self.cell_by_id[cell_id].region != region for cell_id in members):
+                    raise ValueError(f"regional reserve members must belong to region {region}")
+                regional_members[region] = frozenset(members)
+        if federation_reserve_members is None:
+            federation_members = frozenset(self.cell_by_id)
+        else:
+            if isinstance(federation_reserve_members, (str, bytes)):
+                raise ValueError("federation_reserve_members must be an iterable of cell IDs, not a string")
+            raw_federation_members = tuple(federation_reserve_members)
+            if any(not isinstance(cell_id, str) or cell_id not in self.cell_by_id for cell_id in raw_federation_members):
+                raise ValueError("federation reserve membership contains an unknown cell")
+            if len(set(raw_federation_members)) != len(raw_federation_members):
+                raise ValueError("federation reserve membership contains duplicate cell IDs")
+            federation_members = frozenset(raw_federation_members)
+        self.regional_reserve_members_by_region = regional_members
+        self.federation_reserve_members = federation_members
+
         limits = (initial_cash_per_cell, bank_limit_per_cell, trade_credit_limit_per_cell)
         if any(not math.isfinite(float(x)) or float(x) < 0 for x in limits):
             raise ValueError("cash and credit limits must be finite and >= 0")
@@ -1015,6 +1056,10 @@ class CreditLedger:
             amount = regional[cell_id] + federation[cell_id]
             if amount <= EPS:
                 continue
+            if regional[cell_id] > EPS and cell_id not in self.regional_reserve_members_by_region[self.cell_by_id[cell_id].region]:
+                raise ValueError(f"cell {cell_id} is not a member of its regional reserve")
+            if federation[cell_id] > EPS and cell_id not in self.federation_reserve_members:
+                raise ValueError(f"cell {cell_id} is not a federation reserve member")
             account = self.accounts[cell_id]
             if account.defaulted:
                 raise ValueError(f"defaulted member {cell_id} cannot replenish reserves")
