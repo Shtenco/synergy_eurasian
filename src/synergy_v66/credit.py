@@ -105,7 +105,7 @@ class CreditLedger:
         if len(set(cell_ids)) != len(cell_ids):
             raise ValueError("cell IDs must be unique")
         inferred_regions = tuple(sorted({cell.region for cell in self.cells}))
-        self.regions = tuple(inferred_regions if regions is None else regions)
+        self.regions = tuple((REGIONS if cells is None else inferred_regions) if regions is None else regions)
         if not self.regions or len(set(self.regions)) != len(self.regions):
             raise ValueError("regions must be non-empty and unique")
         if set(inferred_regions) != set(self.regions):
