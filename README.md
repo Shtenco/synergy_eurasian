@@ -331,6 +331,7 @@ python src/eiiom_optimizer.py --config config/base_scenario.json --output output
 | Экономическая стратегия | [`docs/36_GRAND_STRATEGY_2045.md`](docs/36_GRAND_STRATEGY_2045.md), [`docs/37_COUNTRY_PORTFOLIOS.md`](docs/37_COUNTRY_PORTFOLIOS.md) |
 | **SYNERGY Economy 6.3 / семь отраслей** | [Консолидированная модель](docs/38_SYNERGY_ECONOMY_6_3_CONSOLIDATED.md), [исполняемый расчёт](src/synergy_economy_7sector.py), [допущения](data/synergy_economy_7sector_v1_assumptions.json), [тесты](tests/test_economy_7sector.py) |
 | Прежняя полная версия главного README | [`docs/README_FULL_PRE_REDESIGN_2026.md`](docs/README_FULL_PRE_REDESIGN_2026.md) |
+| **V6.6.4-Q · непрерывное восстановление резервов** | [Спецификация 100-циклового производственного дефолта](docs/87_SYNERGY_V6_6_4Q_CONTINUOUS_PRODUCTION_DEFAULT_RECOVERY.md) |
 | Дизайн-ассеты | [`assets/readme/`](assets/readme/) |
 
 ---
