@@ -257,6 +257,11 @@ class CreditLedger:
                     raise ValueError(
                         f"regional contributions for {region} must sum to regional_pool_reserve_per_region"
                     )
+        for cell_id, contribution in reserve_contributions.items():
+            if contribution > EPS:
+                region = self.cell_by_id[cell_id].region
+                if cell_id not in self.regional_reserve_members_by_region[region]:
+                    raise ValueError(f"initial regional reserve contribution from non-member {cell_id}")
         if any(
             contribution > member_opening_cash[cell_id] + EPS
             for cell_id, contribution in reserve_contributions.items()
@@ -279,6 +284,9 @@ class CreditLedger:
                 federation_contributions[cell_id] = float(contribution)
             if abs(sum(federation_contributions.values()) - float(federation_pool_reserve_total)) > EPS:
                 raise ValueError("federation member contributions must sum to federation_pool_reserve_total")
+        for cell_id, contribution in federation_contributions.items():
+            if contribution > EPS and cell_id not in self.federation_reserve_members:
+                raise ValueError(f"initial federation reserve contribution from non-member {cell_id}")
         if any(
             reserve_contributions[cell_id] + federation_contributions[cell_id]
             > member_opening_cash[cell_id] + EPS
