@@ -127,3 +127,15 @@ jobs:
       - name: Run paired SYNERGY V6.6.4-P production payable-default batch experiment
         run: |
           python scripts/run_synergy_v664p_production_defaults.py --seed-start 11 --seed-count 3 --output outputs/synergy_v664p_production_default_batch_ci.json
+
+      - name: Run paired SYNERGY V6.6.4-Q3 continuous production-default experiment
+        run: |
+          python scripts/run_synergy_v664q3_continuous_defaults.py --seeds 11 23 37 --output outputs/synergy_v664q3_continuous_defaults_ci.json
+
+      - name: Upload V6.6.4-Q3 cycle-level research results
+        uses: actions/upload-artifact@v4
+        with:
+          name: synergy-v664q3-continuous-defaults
+          path: outputs/synergy_v664q3_continuous_defaults_ci.json
+          if-no-files-found: error
+          retention-days: 14
