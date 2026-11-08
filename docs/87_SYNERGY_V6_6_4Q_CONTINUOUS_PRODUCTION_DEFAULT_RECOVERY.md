@@ -113,3 +113,11 @@ The cycle report records claims, local/federation/member-assessment payments, se
 Detailed assumptions and interpretation boundaries: `docs/89_SYNERGY_V6_6_4Q3_CONTINUOUS_PRODUCTION_DEFAULTS.md`.
 
 V6.6.4-P remains one correlated 100-invoice batch; Q2 remains a separate membership/funding-capacity sensitivity fixture. Q3 is the first increment designed to meet the continuous actual-default path requirement.
+
+### Q2 hardening — initial reserve funding authorization
+
+A follow-up audit found that membership was enforced for recovery planning and replenishment settlement, but the constructor still accepted initial reserve funding from cells outside the explicit member sets. The ledger now validates both initial regional and initial federation funding maps against their respective memberships as well. Regression tests cover unauthorized seed capital at both reserve tiers. This closes the gap between initial funding rights and ongoing replenishment rights.
+
+### Q3 seed-diversity correction
+
+The first Q3 draft used identical 100-unit invoices across seeds, so different seed labels did not create different economic paths. The scenario generator now uses shuffled positive/negative shock pairs to vary invoice amounts from 80 to 120 while preserving exactly 10,000 total invoice value per path and 9,000 total payable claims after the 10-unit cash settlement per buyer. Added regression tests for seed diversity, the deterministic no-replenishment oracle, paired-policy path identity, and cycle-level invariants. These changes are committed; local execution and exact-head CI remain pending.
