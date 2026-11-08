@@ -31,7 +31,7 @@ def _maps(cells):
 def test_default_credit_topology_remains_the_canonical_physical_topology():
     ledger = CreditLedger()
     assert set(ledger.accounts) == {cell.cell_id for cell in CELLS}
-    assert ledger.regions == ("EAST", "WEST")
+    assert ledger.regions == ("WEST", "EAST")
     assert len(ledger.cells) == 20
 
 
