@@ -1,0 +1,28 @@
+{
+  "version": "V6.5.6",
+  "name": "Joint Survival & Recovery Optimizer",
+  "status": "synthetic joint-allocation heuristic prototype",
+  "policy_paths": 1600,
+  "components": {
+    "severe": 400,
+    "systemic": 1200
+  },
+  "nodes": 80,
+  "sectors": 4,
+  "days": 120,
+  "reserve_units": 180,
+  "policies": [
+    "liquidity_first",
+    "network_greedy",
+    "rolling_horizon",
+    "cvar_robust"
+  ],
+  "test_methods": 6,
+  "cvar_robust_is_exact_optimizer": false,
+  "rolling_horizon_is_exact_multiperiod_solver": false,
+  "limitations": [
+    "Synthetic uncalibrated assumptions",
+    "CVaR-robust is a heuristic, not exact CVaR optimization",
+    "Rolling-horizon is a discounted ranking heuristic"
+  ]
+}
