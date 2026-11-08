@@ -112,3 +112,9 @@ def test_stress_topology_does_not_mutate_the_canonical_physical_topology():
     CreditLedger(cells=custom)
     after = tuple((cell.cell_id, cell.region, cell.capacity) for cell in CELLS)
     assert after == before
+
+def test_stress_topology_rejects_invalid_capacity_and_region_metadata():
+    with pytest.raises(ValueError, match="capacities"):
+        CreditLedger(cells=(CellSpec("BAD-1", "WEST", "trade", "borrower", -1.0),))
+    with pytest.raises(ValueError, match="regions"):
+        CreditLedger(cells=(CellSpec("BAD-2", "", "trade", "borrower", 1.0),))
