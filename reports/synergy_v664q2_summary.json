@@ -80,7 +80,9 @@
       "contributor_gini": 0.45,
       "top20_contribution_share": 0.36363636,
       "max_member_contribution": 100,
-      "minimum_final_cash": 900
+      "minimum_final_cash": 900,
+      "maximum_final_cash": 1000,
+      "final_cash_gini": 0.02619048
     },
     {
       "method": "fcfs",
@@ -94,7 +96,9 @@
       "contributor_gini": 0.45,
       "top20_contribution_share": 0.36363636,
       "max_member_contribution": 100,
-      "minimum_final_cash": 900
+      "minimum_final_cash": 900,
+      "maximum_final_cash": 1000,
+      "final_cash_gini": 0.02619048
     },
     {
       "method": "pro_rata",
@@ -108,7 +112,9 @@
       "contributor_gini": 0.45,
       "top20_contribution_share": 0.36363636,
       "max_member_contribution": 100,
-      "minimum_final_cash": 900
+      "minimum_final_cash": 900,
+      "maximum_final_cash": 1000,
+      "final_cash_gini": 0.02619048
     },
     {
       "method": "fcfs",
@@ -122,7 +128,9 @@
       "contributor_gini": 0.45,
       "top20_contribution_share": 0.36363636,
       "max_member_contribution": 100,
-      "minimum_final_cash": 900
+      "minimum_final_cash": 900,
+      "maximum_final_cash": 1000,
+      "final_cash_gini": 0.02619048
     },
     {
       "method": "pro_rata",
@@ -136,7 +144,9 @@
       "contributor_gini": 0.50837081,
       "top20_contribution_share": 0.4097951,
       "max_member_contribution": 4100,
-      "minimum_final_cash": 900
+      "minimum_final_cash": 900,
+      "maximum_final_cash": 5000,
+      "final_cash_gini": 0.38693517
     },
     {
       "method": "fcfs",
@@ -150,7 +160,9 @@
       "contributor_gini": 0.50837081,
       "top20_contribution_share": 0.4097951,
       "max_member_contribution": 4100,
-      "minimum_final_cash": 900
+      "minimum_final_cash": 900,
+      "maximum_final_cash": 5000,
+      "final_cash_gini": 0.38693517
     },
     {
       "method": "pro_rata",
@@ -164,7 +176,9 @@
       "contributor_gini": 0.50837081,
       "top20_contribution_share": 0.4097951,
       "max_member_contribution": 4100,
-      "minimum_final_cash": 900
+      "minimum_final_cash": 900,
+      "maximum_final_cash": 5000,
+      "final_cash_gini": 0.38693517
     },
     {
       "method": "fcfs",
@@ -178,7 +192,9 @@
       "contributor_gini": 0.50837081,
       "top20_contribution_share": 0.4097951,
       "max_member_contribution": 4100,
-      "minimum_final_cash": 900
+      "minimum_final_cash": 900,
+      "maximum_final_cash": 5000,
+      "final_cash_gini": 0.38693517
     },
     {
       "method": "pro_rata",
@@ -192,7 +208,9 @@
       "contributor_gini": 0.5226638,
       "top20_contribution_share": 0.44097813,
       "max_member_contribution": 6100,
-      "minimum_final_cash": 900
+      "minimum_final_cash": 900,
+      "maximum_final_cash": 7000,
+      "final_cash_gini": 0.38831719
     },
     {
       "method": "fcfs",
@@ -206,7 +224,9 @@
       "contributor_gini": 0.5626044,
       "top20_contribution_share": 0.46317388,
       "max_member_contribution": 6100,
-      "minimum_final_cash": 900
+      "minimum_final_cash": 900,
+      "maximum_final_cash": 7000,
+      "final_cash_gini": 0.41010855
     },
     {
       "method": "pro_rata",
@@ -220,7 +240,9 @@
       "contributor_gini": 0.5107396,
       "top20_contribution_share": 0.41156438,
       "max_member_contribution": 6100,
-      "minimum_final_cash": 900
+      "minimum_final_cash": 900,
+      "maximum_final_cash": 7000,
+      "final_cash_gini": 0.43691084
     },
     {
       "method": "fcfs",
@@ -234,7 +256,9 @@
       "contributor_gini": 0.50891056,
       "top20_contribution_share": 0.41022192,
       "max_member_contribution": 6100,
-      "minimum_final_cash": 900
+      "minimum_final_cash": 900,
+      "maximum_final_cash": 7000,
+      "final_cash_gini": 0.43789238
     },
     {
       "method": "pro_rata",
@@ -248,7 +272,9 @@
       "contributor_gini": 0.54597069,
       "top20_contribution_share": 0.48418131,
       "max_member_contribution": 8000,
-      "minimum_final_cash": 1000
+      "minimum_final_cash": 1000,
+      "maximum_final_cash": 9000,
+      "final_cash_gini": 0.34379101
     },
     {
       "method": "fcfs",
@@ -262,7 +288,9 @@
       "contributor_gini": 0.62684865,
       "top20_contribution_share": 0.552868,
       "max_member_contribution": 8000,
-      "minimum_final_cash": 1000
+      "minimum_final_cash": 1000,
+      "maximum_final_cash": 9000,
+      "final_cash_gini": 0.38285879
     },
     {
       "method": "pro_rata",
@@ -276,7 +304,9 @@
       "contributor_gini": 0.53502455,
       "top20_contribution_share": 0.45137692,
       "max_member_contribution": 7841.29546307,
-      "minimum_final_cash": 1000
+      "minimum_final_cash": 1000,
+      "maximum_final_cash": 9000,
+      "final_cash_gini": 0.39204001
     },
     {
       "method": "fcfs",
@@ -290,7 +320,9 @@
       "contributor_gini": 0.56297822,
       "top20_contribution_share": 0.47086521,
       "max_member_contribution": 8000,
-      "minimum_final_cash": 1000
+      "minimum_final_cash": 1000,
+      "maximum_final_cash": 9000,
+      "final_cash_gini": 0.42121858
     },
     {
       "method": "pro_rata",
@@ -304,7 +336,9 @@
       "contributor_gini": 0.54597069,
       "top20_contribution_share": 0.48418131,
       "max_member_contribution": 8000,
-      "minimum_final_cash": 1000
+      "minimum_final_cash": 1000,
+      "maximum_final_cash": 11000,
+      "final_cash_gini": 0.2839797
     },
     {
       "method": "fcfs",
@@ -318,7 +352,9 @@
       "contributor_gini": 0.62684865,
       "top20_contribution_share": 0.552868,
       "max_member_contribution": 8000,
-      "minimum_final_cash": 1000
+      "minimum_final_cash": 1000,
+      "maximum_final_cash": 11000,
+      "final_cash_gini": 0.31386458
     },
     {
       "method": "pro_rata",
@@ -332,7 +368,9 @@
       "contributor_gini": 0.53502455,
       "top20_contribution_share": 0.45137692,
       "max_member_contribution": 7841.29546307,
-      "minimum_final_cash": 1000
+      "minimum_final_cash": 1000,
+      "maximum_final_cash": 11000,
+      "final_cash_gini": 0.31284935
     },
     {
       "method": "fcfs",
@@ -346,7 +384,9 @@
       "contributor_gini": 0.56297822,
       "top20_contribution_share": 0.47086521,
       "max_member_contribution": 8000,
-      "minimum_final_cash": 1000
+      "minimum_final_cash": 1000,
+      "maximum_final_cash": 11000,
+      "final_cash_gini": 0.3363306
     }
   ]
 }
