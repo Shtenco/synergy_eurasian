@@ -168,6 +168,8 @@ def simulate(method,membership_case,regional_members,inflow,cycles=CYCLES):
         "top20_contribution_share":top/total if total else 0.0,
         "max_member_contribution":max(values,default=0.0),
         "minimum_final_cash":min(cash.values()),
+        "maximum_final_cash":max(cash.values()),
+        "final_cash_gini":gini(list(cash.values())),
         "cycle_rows":rows,
     }
 
