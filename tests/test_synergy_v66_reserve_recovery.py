@@ -269,6 +269,7 @@ def test_ledger_rejects_caller_supplied_period_cap_above_its_own_policy():
 
 def test_planner_cannot_raise_ledger_owned_period_cap():
     ledger = CreditLedger(initial_cash_per_cell=100.0, reserve_recovery_contribution_fraction=0.10)
+    ledger.process_day(0)
     with pytest.raises(ValueError, match="cannot exceed the ledger policy cap"):
         plan_reserve_recovery(
             ledger,
