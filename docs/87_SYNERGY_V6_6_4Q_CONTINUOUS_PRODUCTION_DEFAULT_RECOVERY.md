@@ -65,3 +65,21 @@ No policy is ranked as fair, optimal, adequate or suitable for real EAEU deploym
 ## 10. Decision rule
 
 If the current ledger cannot accept an explicit topology without invasive changes, first deliver and test the topology abstraction as a separate increment. Do not force the repeated-cycle experiment into the existing fixed 20-cell topology. The next release label is provisional: **V6.6.4-Q — continuous production-default recovery stress**.
+
+## 11. Q1 implementation increment — parameterized credit topology
+
+The credit ledger now accepts an optional immutable tuple of `CellSpec` records and an optional explicit region ordering. When omitted, the canonical 20-cell physical topology and its original region ordering remain the defaults.
+
+The reserve recovery planner now derives cell IDs, cell metadata and regions from the ledger instance rather than importing the canonical physical topology. This keeps the recovery planner aligned with the exact ledger against which a plan is fingerprinted and settled.
+
+The ledger validates unique non-empty cell IDs, non-empty region/sector/role metadata, finite non-negative capacities, exact region membership, and exact opening-cash / reserve contribution map coverage. The stress topology is injected per ledger instance; module-level canonical topology maps are never mutated.
+
+Focused tests have been added for:
+- unchanged canonical 20-cell defaults and region ordering;
+- custom six-cell, two-region credit topology;
+- exact map coverage and duplicate-ID rejection;
+- malformed topology metadata rejection;
+- recovery planning and atomic settlement against a custom topology;
+- isolation of the canonical physical topology from custom stress fixtures.
+
+**Validation status:** implementation and tests are committed to the research branch, but the focused tests and full EIIOM CI have not yet been confirmed on the exact branch head. The continuous 100-cycle production-default engine is not implemented by this increment. Do not treat Q1 as evidence of a completed multi-cycle stress experiment.
