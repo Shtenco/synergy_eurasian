@@ -104,6 +104,24 @@ class CreditLedger:
             raise ValueError("cell IDs must be non-empty strings")
         if len(set(cell_ids)) != len(cell_ids):
             raise ValueError("cell IDs must be unique")
+        for cell in self.cells:
+            if not isinstance(cell.region, str) or not cell.region.strip():
+                raise ValueError("cell regions must be non-empty strings")
+            if not isinstance(cell.sector, str) or not cell.sector.strip():
+                raise ValueError("cell sectors must be non-empty strings")
+            if not isinstance(cell.role, str) or not cell.role.strip():
+                raise ValueError("cell roles must be non-empty strings")
+            if (
+                isinstance(cell.capacity, bool)
+                or not isinstance(cell.capacity, (int, float))
+                or not math.isfinite(float(cell.capacity))
+                or cell.capacity < 0
+                or isinstance(cell.warehouse_capacity, bool)
+                or not isinstance(cell.warehouse_capacity, (int, float))
+                or not math.isfinite(float(cell.warehouse_capacity))
+                or cell.warehouse_capacity < 0
+            ):
+                raise ValueError("cell capacities must be finite non-negative numbers")
         inferred_regions = tuple(sorted({cell.region for cell in self.cells}))
         self.regions = tuple((REGIONS if cells is None else inferred_regions) if regions is None else regions)
         if not self.regions or len(set(self.regions)) != len(self.regions):
