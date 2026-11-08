@@ -79,10 +79,11 @@ def _build_scenario(seed: int) -> dict[str, Any]:
     # Seed-specific heterogeneity without changing the aggregate claim oracle:
     # invoice amounts vary around 100, while their exact sum remains 10,000.
     rng = random.Random(seed)
-    raw_shocks = [rng.uniform(-20.0, 20.0) for _ in range(Q3_CYCLES)]
-    shock_mean = sum(raw_shocks) / Q3_CYCLES
+    paired_shocks = [round(rng.uniform(-20.0, 20.0), 8) for _ in range(Q3_CYCLES // 2)]
+    raw_shocks = [shock for value in paired_shocks for shock in (value, -value)]
+    rng.shuffle(raw_shocks)
     invoice_amounts = [
-        round(Q3_CLAIM_AMOUNT + shock - shock_mean, 8)
+        round(Q3_CLAIM_AMOUNT + shock, 8)
         for shock in raw_shocks
     ]
     invoice_amounts[-1] = round(
