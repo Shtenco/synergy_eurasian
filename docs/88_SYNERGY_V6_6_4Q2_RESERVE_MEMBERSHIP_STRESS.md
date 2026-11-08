@@ -114,6 +114,30 @@ reconstructs all cycle paths for the other inflow sensitivities.
    scenarios. Allocation fairness, concentration, timing and robustness need
    separate evaluation using production-compatible ledger semantics.
 
+## Contribution and ending-cash concentration at 80-unit inflow
+
+The aggregate report also calculates the Gini coefficient of cumulative member
+contributions, the top-20% share of contributions, and the Gini coefficient
+of final member cash. These are separate distributions and should not be
+confused.
+
+| Membership | Method | Contribution Gini | Top-20% contribution share | Final-cash Gini | Min final cash | Max final cash |
+|---|---|---:|---:|---:|---:|---:|
+| Baseline | Pro-rata | 0.54597069 | 48.418% | 0.34379101 | 1,000 | 9,000 |
+| Baseline | FCFS | 0.62684865 | 55.287% | 0.38285879 | 1,000 | 9,000 |
+| Expanded WEST | Pro-rata | 0.53502455 | 45.138% | 0.39204001 | 1,000 | 9,000 |
+| Expanded WEST | FCFS | 0.56297822 | 47.087% | 0.42121858 | 1,000 | 9,000 |
+
+In this fixture, pro-rata spreads contribution burden more evenly than FCFS:
+both its contribution Gini and top-20% share are lower. Expanding WEST
+membership also lowers contribution concentration while closing the WEST
+funding gap. However, final-cash inequality rises in the expanded-membership
+case. The reason is structural: cells outside the reserve membership continue
+to accumulate the assumed operating inflow but are not assessed. This is a
+warning against treating a better reserve coverage ratio as proof of fair
+system-wide burden sharing. Membership scope, contribution weights and
+governance need to be designed together.
+
 ## Invariants checked by the local fixture
 
 - Unknown cell IDs and cross-region local membership are rejected.
