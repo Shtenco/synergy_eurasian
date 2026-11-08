@@ -192,7 +192,8 @@ def plan_reserve_recovery(
         for cell_id in sorted(ledger.federation_reserve_members)
     }
     federation_weights = {cell_id: weights[cell_id] for cell_id in federation_caps}
-    federation_plan = _waterfill(federation_deficit, federation_caps, federation_weights)
+    federation_plan = {cell_id: 0.0 for cell_id in ledger.cell_by_id}
+    federation_plan.update(_waterfill(federation_deficit, federation_caps, federation_weights))
     requested_total = sum(regional_deficits.values()) + federation_deficit
     funded_total = sum(regional_plan.values()) + sum(federation_plan.values())
     unfunded_total = max(0.0, requested_total - funded_total)
