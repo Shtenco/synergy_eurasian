@@ -23,9 +23,9 @@ Each path has 210 cells:
 - 100 unique sellers (50 WEST, 50 EAST);
 - 10 dedicated reserve members (five per region).
 
-There are 100 cycles. A fresh borrower in alternating WEST/EAST order issues one 100-unit payable invoice to a same-region seller. Buyer opening cash is 10 units, so 10 is settled immediately and 90 remains as trade credit. The invoice is due the following day. The buyer has no bank line; the remaining payable is resolved through the actual production default path. Each borrower appears exactly once and remains permanently defaulted.
+There are 100 cycles. A fresh borrower in alternating WEST/EAST order issues one seed-varied payable invoice (80–120 units) to a same-region seller. Buyer opening cash is 10 units, so 10 is settled immediately and 70–110 remains as trade credit. The 100 invoice amounts are balanced around 100 and sum to exactly 10,000 units for every seed; therefore aggregate production-default claims remain exactly 9,000 units. The invoice is due the following day. The buyer has no bank line; the remaining payable is resolved through the actual production default path. Each borrower appears exactly once and remains permanently defaulted.
 
-All policies receive the same seed-specific invoice sequence and opening cash. The scenario fingerprint binds the seed, invoice path, opening cash, reserve member sets and reserve targets.
+All policies receive the same seed-specific invoice sequence and opening cash. Seeded invoice amounts are now genuinely heterogeneous: 50 deterministic positive/negative shock pairs are shuffled per seed, bounded to 80–120, with an exact 10,000-unit invoice total. Different seeds therefore represent different claim timing/size paths rather than merely different invoice IDs. The scenario fingerprint binds the seed, invoice path, opening cash, reserve member sets and reserve targets.
 
 ## 3. Reserve design
 
@@ -107,12 +107,26 @@ Do not merge to `main` or label any policy production-ready until the exact bran
 ## 9. Deterministic no-replenishment baseline (test oracle)
 
 Before running the engine, the no-replenishment path has an exact accounting oracle:
-- Each invoice is 100 units; 10 units are cash-settled at authorization.
-- The remaining payable claim at default is 90 units.
-- 100 unique borrowers therefore create 9,000 units of production-default claims.
+- Invoice amounts vary by seed from 80 to 120 units and sum to exactly 10,000 units per path; 10 units per invoice are cash-settled at authorization.
+- The remaining payable claims at default therefore sum to exactly 10,000 − 1,000 = 9,000 units.
+- 100 unique borrowers therefore create 9,000 units of production-default claims in aggregate, while individual cycle claims differ.
 - Initial reserves are 45 × 2 regional funds + 500 federation = 590 units.
 - With no reserve replenishment and no other guarantee/assessment source, maximum aggregate guarantee payout is 590 units.
 - Expected uncovered loss is 9,000 − 590 = 8,410 units.
 - Expected claim coverage is 590 / 9,000 = 6.5556%.
 
-This is a deterministic arithmetic expectation encoded as a regression-test oracle. It is not yet a measured GitHub Actions result. The Q3 runner must reproduce it before any replenishment-policy comparison is interpreted.
+This is a deterministic aggregate arithmetic expectation encoded as a regression-test oracle and remains invariant under the seed-specific invoice-size variation. It is not yet a measured GitHub Actions result. The Q3 runner must reproduce it before any replenishment-policy comparison is interpreted.
+
+
+## 10. Seed diversity correction and regression gate
+
+The first Q3 draft used a fixed 100-unit invoice in every cycle. Although the invoice IDs included the seed, that did not create distinct economic paths. The corrected scenario generator now creates 50 deterministic positive/negative shock pairs per seed, shuffles them, and applies bounded invoice amounts from 80 to 120 units. The exact total remains 10,000 invoice units for every seed, so the 9,000-unit aggregate default-claim oracle and 590-unit no-replenishment reserve payout oracle remain unchanged.
+
+Added focused tests for:
+- distinct seed-specific invoice amount sequences and fingerprints;
+- exact 10,000 invoice-unit total and positive claims after 10-unit cash settlement;
+- the 100-cycle no-replenishment oracle (9,000 requested, 590 paid, 8,410 written off);
+- paired recovery policies sharing one identical seed-specific path;
+- all cycle and path invariants across recovery strategies.
+
+**Validation status:** these regression tests and the corrected scenario generator are committed to the research branch. They have not yet been executed locally in this environment or confirmed by exact-head GitHub Actions. The exact-head CI and uploaded cycle artifact remain mandatory before interpreting the policy comparisons.
