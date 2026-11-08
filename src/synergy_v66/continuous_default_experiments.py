@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import random
 from typing import Any
 
 from .credit import CreditLedger, EPS
@@ -75,6 +76,23 @@ def _build_scenario(seed: int) -> dict[str, Any]:
             opening_cash[member] = Q3_RESERVE_MEMBER_CASH
         regional_members[region] = tuple(reserve_ids)
 
+    # Seed-specific heterogeneity without changing the aggregate claim oracle:
+    # invoice amounts vary around 100, while their exact sum remains 10,000.
+    rng = random.Random(seed)
+    raw_shocks = [rng.uniform(-20.0, 20.0) for _ in range(Q3_CYCLES)]
+    shock_mean = sum(raw_shocks) / Q3_CYCLES
+    invoice_amounts = [
+        round(Q3_CLAIM_AMOUNT + shock - shock_mean, 8)
+        for shock in raw_shocks
+    ]
+    invoice_amounts[-1] = round(
+        Q3_CLAIM_AMOUNT * Q3_CYCLES - sum(invoice_amounts[:-1]), 8
+    )
+    if any(amount <= Q3_BUYER_CASH for amount in invoice_amounts):
+        raise AssertionError("seeded invoice amount must exceed buyer opening cash")
+    if abs(sum(invoice_amounts) - Q3_CLAIM_AMOUNT * Q3_CYCLES) > 1e-7:
+        raise AssertionError("seeded invoice amounts do not preserve the aggregate claim oracle")
+
     invoices = []
     for cycle in range(Q3_CYCLES):
         region = "WEST" if cycle % 2 == 0 else "EAST"
@@ -86,7 +104,7 @@ def _build_scenario(seed: int) -> dict[str, Any]:
             "buyer": buyer,
             "seller": seller,
             "region": region,
-            "amount": Q3_CLAIM_AMOUNT,
+            "amount": invoice_amounts[cycle],
             "issue_day": cycle,
             "due_day": cycle + 1,
         })
@@ -250,6 +268,8 @@ def _run_one(scenario: dict[str, Any], recovery_rule: str) -> dict[str, Any]:
             "region": invoice["region"],
             "buyer": invoice["buyer"],
             "seller": invoice["seller"],
+            "invoice_amount": float(invoice["amount"]),
+            "cash_paid_at_authorization": Q3_BUYER_CASH,
             "buyer_defaulted": True,
             "claim_requested": claim_requested,
             "local_guarantee_paid": local_paid,
@@ -324,6 +344,9 @@ def _run_one(scenario: dict[str, Any], recovery_rule: str) -> dict[str, Any]:
         "path_fingerprint": scenario["path_fingerprint"],
         "cycle_count": len(cycle_rows),
         "invoice_count": len(ledger.payables),
+        "invoice_amount_total": sum(float(row["invoice_amount"]) for row in cycle_rows),
+        "invoice_amount_min": min(float(row["invoice_amount"]) for row in cycle_rows),
+        "invoice_amount_max": max(float(row["invoice_amount"]) for row in cycle_rows),
         "defaulted_borrower_count": sum(
             account.defaulted for cell_id, account in ledger.accounts.items()
             if cell_id.startswith(("W-B", "E-B"))
@@ -428,7 +451,9 @@ def run_continuous_production_default_experiment(
             "opening_cash_borrower": Q3_BUYER_CASH,
             "opening_cash_seller": Q3_SELLER_CASH,
             "opening_cash_reserve_member": Q3_RESERVE_MEMBER_CASH,
-            "invoice_amount": Q3_CLAIM_AMOUNT,
+            "invoice_amount_mean": Q3_CLAIM_AMOUNT,
+            "invoice_amount_seed_shock_range": [80.0, 120.0],
+            "invoice_amount_total_per_path": Q3_CLAIM_AMOUNT * Q3_CYCLES,
             "local_reserve_initial_and_target_per_region": Q3_LOCAL_RESERVE_TARGET,
             "federation_reserve_initial_and_target": Q3_FEDERATION_RESERVE_TARGET,
             "minimum_reserve_member_cash": Q3_CASH_FLOOR,
