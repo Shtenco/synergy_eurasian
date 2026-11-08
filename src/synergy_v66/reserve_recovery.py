@@ -12,7 +12,7 @@ import math
 from typing import Any
 
 from .credit import CreditLedger, EPS, RECOVERY_PERIOD_DAYS
-from .network_topology import CELL_BY_ID, CELLS, REGIONS
+
 
 ALLOCATION_RULES = {
     "equal",
@@ -23,7 +23,7 @@ ALLOCATION_RULES = {
 
 
 def _period_contributions(ledger: CreditLedger, period_id: str) -> dict[str, float]:
-    used = {cell_id: 0.0 for cell_id in CELL_BY_ID}
+    used = {cell_id: 0.0 for cell_id in ledger.cell_by_id}
     contribution_types = {
         "regional_reserve_replenishment_contribution",
         "federation_reserve_replenishment_contribution",
@@ -40,7 +40,7 @@ def _state_fingerprint(ledger: CreditLedger, period_id: str) -> str:
         "cash": {key: ledger.accounts[key].cash for key in sorted(ledger.accounts)},
         "initial_cash_by_cell": {key: ledger.initial_cash_by_cell[key] for key in sorted(ledger.initial_cash_by_cell)},
         "defaulted": {key: ledger.accounts[key].defaulted for key in sorted(ledger.accounts)},
-        "regional_reserves": {key: ledger.regional_pool_reserve_by_region[key] for key in REGIONS},
+        "regional_reserves": {key: ledger.regional_pool_reserve_by_region[key] for key in ledger.regions},
         "federation_reserve": ledger.federation_pool_reserve_balance,
         "reserve_recovery_contribution_fraction": ledger.reserve_recovery_contribution_fraction,
         "minimum_post_contribution_cash": ledger.minimum_post_contribution_cash,
@@ -54,7 +54,7 @@ def _weights(rule: str, capacities: dict[str, float], ledger: CreditLedger) -> d
     if rule == "equal":
         return {cell_id: 1.0 for cell_id in capacities}
     if rule == "production_capacity":
-        return {cell.cell_id: max(0.0, float(cell.capacity)) for cell in CELLS}
+        return {cell.cell_id: max(0.0, float(cell.capacity)) for cell in ledger.cells}
     if rule == "opening_cash":
         return {cell_id: max(0.0, float(ledger.initial_cash_by_cell[cell_id])) for cell_id in capacities}
     return {cell_id: max(0.0, value) for cell_id, value in capacities.items()}
@@ -119,7 +119,7 @@ def plan_reserve_recovery(
         raise ValueError(f"allocation_rule must be one of {sorted(ALLOCATION_RULES)}")
     if ledger.current_day < 0:
         raise ValueError("ledger must be initialized with process_day before reserve recovery planning")
-    if not isinstance(target_regional_by_region, dict) or set(target_regional_by_region) != set(REGIONS):
+    if not isinstance(target_regional_by_region, dict) or set(target_regional_by_region) != set(ledger.regions):
         raise ValueError("target_regional_by_region must contain every known region exactly once")
     if isinstance(target_federation, bool) or not isinstance(target_federation, (int, float)) or not math.isfinite(float(target_federation)) or target_federation < 0:
         raise ValueError("target_federation must be finite and non-negative")
@@ -149,7 +149,7 @@ def plan_reserve_recovery(
     period_used = _period_contributions(ledger, recovery_period_id)
     cash_capacity: dict[str, float] = {}
     period_limits: dict[str, float] = {}
-    for cell_id in CELL_BY_ID:
+    for cell_id in ledger.cell_by_id:
         opening = float(ledger.initial_cash_by_cell[cell_id])
         period_limit = opening * float(fraction)
         period_limits[cell_id] = period_limit
@@ -164,15 +164,15 @@ def plan_reserve_recovery(
         )
 
     weights = _weights(allocation_rule, cash_capacity, ledger)
-    regional_plan = {cell_id: 0.0 for cell_id in CELL_BY_ID}
+    regional_plan = {cell_id: 0.0 for cell_id in ledger.cell_by_id}
     remaining_capacity = dict(cash_capacity)
     regional_deficits = {
         region: max(0.0, targets[region] - ledger.regional_pool_reserve_by_region[region])
-        for region in REGIONS
+        for region in ledger.regions
     }
     regional_allocated: dict[str, float] = {}
-    for region in REGIONS:
-        members = [cell.cell_id for cell in CELLS if cell.region == region]
+    for region in ledger.regions:
+        members = [cell.cell_id for cell in ledger.cells if cell.region == region]
         caps = {cell_id: remaining_capacity[cell_id] for cell_id in members}
         region_weights = {cell_id: weights[cell_id] for cell_id in members}
         allocated = _waterfill(regional_deficits[region], caps, region_weights)
@@ -206,7 +206,7 @@ def plan_reserve_recovery(
         "period_used_by_cell": period_used,
         "remaining_capacity_by_cell": {
             cell_id: cash_capacity[cell_id] - regional_plan[cell_id] - federation_plan[cell_id]
-            for cell_id in CELL_BY_ID
+            for cell_id in ledger.cell_by_id
         },
         "requested_total": requested_total,
         "funded_total": funded_total,
