@@ -198,6 +198,7 @@ def test_initial_regional_reserve_funding_rejects_nonmember():
     federation = {cell.cell_id: 0.0 for cell in CELLS}
     regional["WEST-AG1"] = 1.0
     regional["WEST-PR1"] = 19.0
+    regional["EAST-AG1"] = 20.0
     federation["WEST-AG1"] = 0.0
     federation["EAST-AG1"] = 0.0
     with pytest.raises(ValueError, match="initial regional reserve contribution from non-member"):
