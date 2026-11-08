@@ -487,3 +487,8 @@ V6.6.4-O adds paired 100-cycle stress paths for the no-replenishment baseline an
 - [V6.6.4-P production payable-default batch experiment](docs/86_SYNERGY_V6_6_4P_PRODUCTION_DEFAULT_BATCH.md)
 
 V6.6.4-P complements the exogenous 100-cycle stress harness with 100 real synthetic payable invoices processed through cash-first authorization, due-date settlement, buyer cross-default and the production local-first/federation-second guarantee waterfall. It compares FCFS and same-day batch pro-rata clearing, then the four reserve-recovery allocation rules. This is one correlated due-day batch across 10 borrowers, not 100 sequential independent borrower defaults; exact-head CI and empirical calibration remain required.
+
+- [V6.6.4-Q2 independent regional and federation reserve membership stress](docs/88_SYNERGY_V6_6_4Q2_RESERVE_MEMBERSHIP_STRESS.md)
+
+The Q2 local research fixture tests independent regional/federation membership, permanent contributor exclusion after three scheduled synthetic defaults, and a single shared 30-day contribution capacity across both reserve tiers. It compares pro-rata and FCFS under five external-inflow sensitivities and two WEST membership cases over 100 continuous 30-day cycles. Aggregate results for all 20 scenarios and 400 cycle-level rows for the principal 80-unit inflow case are retained under reports/. The runner and regression tests are included. These are synthetic research results, not production CreditLedger validation or evidence of real reserve adequacy.
+
