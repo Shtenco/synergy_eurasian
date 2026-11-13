@@ -39,7 +39,7 @@ This deliberately favors duplicate prevention over liveness. Operational deploym
 
 ## Audit
 
-The registry maintains an append-only SHA-256 event chain for reservation and consumption transitions. `verify_event_chain()` checks sequence, previous hashes, event hashes and the head. `verify_projection_consistency()` replays registry events and compares the result with the mutable award table.
+The registry maintains an append-only SHA-256 event chain for reservation and consumption transitions. `verify_event_chain()` checks sequence, previous hashes, event hashes and the head. `verify_projection_consistency()` replays registry events and compares the result with the mutable award table. `verify_authorization_history()` re-verifies the original signed envelope at the reservation event timestamp (not merely at the signer's `issued_at`), so a key revoked after signing but before acceptance is rejected while a later revocation does not retroactively invalidate an accepted award.
 
 Consumption also verifies the local ledger's event chain and `verify_projection_consistency()` before accepting a local issuance reference. Registry and local event hashes are linked in the `AWARD_CONSUMED` record.
 
