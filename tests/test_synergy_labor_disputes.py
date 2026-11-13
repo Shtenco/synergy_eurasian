@@ -127,8 +127,12 @@ def appeal_authorization(private, *, case="case-1", principal="coop-a", version=
 
 
 def remediation_authorizations(private, *, case="case-1", version=1,
-                               remediation_ref="remediation-agreement-1"):
-    payload = {"remediation_ref": remediation_ref}
+                               remediation_ref="remediation-agreement-1",
+                               issuer_ack_ref="issuer-signed-ack-1",
+                               holder_ack_ref="holder-signed-ack-1"):
+    payload = {"remediation_ref": remediation_ref,
+               "issuer_ack_ref": issuer_ack_ref,
+               "holder_ack_ref": holder_ack_ref}
     return (
         signed_party(private, action="ACKNOWLEDGE_REMEDIATION", case=case,
                      principal="coop-a", payload=payload, version=version),
@@ -199,7 +203,8 @@ def test_dispute_upheld_does_not_automatically_cancel_or_release_capacity():
     released = disputes.acknowledge_remediation(
         "case-1", "remediation-agreement-1", "issuer-signed-ack-1",
         "holder-signed-ack-1", "remediation-ack",
-        *remediation_authorizations(private),
+        *remediation_authorizations(private, issuer_ack_ref="issuer-signed-ack-1",
+                                    holder_ack_ref="holder-signed-ack-1"),
     )
     assert released["frozen"] is False
     assert released["obligation_cancelled"] is False
@@ -240,7 +245,9 @@ def test_appeal_refreezes_and_requires_a_different_resolver():
     disputes.acknowledge_remediation(
         "case-1", "appeal-remediation-1", "issuer-ack-appeal",
         "holder-ack-appeal", "appeal-remediation",
-        *remediation_authorizations(private, version=3, remediation_ref="appeal-remediation-1"),
+        *remediation_authorizations(private, version=3, remediation_ref="appeal-remediation-1",
+                                    issuer_ack_ref="issuer-ack-appeal",
+                                    holder_ack_ref="holder-ack-appeal"),
     )
     assert ledger.verify_projection_consistency()["valid"] is True
     ledger.close()
@@ -440,7 +447,9 @@ def test_remediation_requires_two_distinct_signed_current_parties_and_same_diges
     wrong_holder = signed_party(
         {"party": private["party"]}, action="ACKNOWLEDGE_REMEDIATION",
         case="case-1", principal="member-b",
-        payload={"remediation_ref": "different-remediation"}, version=1,
+        payload={"remediation_ref": "different-remediation",
+                 "issuer_ack_ref": "issuer-signed-ack-1",
+                 "holder_ack_ref": "holder-signed-ack-1"}, version=1,
     )
     with pytest.raises(DisputeError, match="action digest mismatch"):
         disputes.acknowledge_remediation("case-1", "remediation-agreement-1",
