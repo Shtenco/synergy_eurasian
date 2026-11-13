@@ -167,7 +167,7 @@ class LaborCreditDisputes:
                 (case_id,credit_id,opened_by,reason_code,evidence_refs_json,status,version,
                  resolver_id,outcome,decision_digest,appeal_count)
                 VALUES (?,?,?,?,?,'OPEN',0,NULL,NULL,NULL,0)""",
-                (case, credit, actor, reason, json.dumps(refs, separators=(",", ":"))),
+                (case, credit, actor, reason, json.dumps(refs, separators=(",", ":"), ensure_ascii=False)),
             )
             return {"case_id": case, "credit_id": credit, "status": "OPEN",
                     "version": 0, "frozen": True, "evidence_count": len(refs)}
@@ -230,8 +230,9 @@ class LaborCreditDisputes:
             if appellant == row["resolver_id"]:
                 raise DisputeError("resolver cannot appeal own decision")
             self.ledger._db.execute(
-                "UPDATE disputes SET status='APPEALED',version=version+1,appeal_count=1 WHERE case_id=?",
-                (case,),
+                """UPDATE disputes SET status='APPEALED',version=version+1,appeal_count=1,
+                   appeal_ref=?,appeal_reason_code=?,appeal_evidence_refs_json=? WHERE case_id=?""",
+                (ref, reason, json.dumps(refs, separators=(",", ":"), ensure_ascii=False), case),
             )
             return {"case_id": case, "status": "APPEALED", "version": expected_version + 1,
                     "frozen": True, "appeal_ref": ref, "appeal_evidence_count": len(refs)}
@@ -241,6 +242,10 @@ class LaborCreditDisputes:
         row = self._case(_text(case_id, "case_id"))
         result = dict(row)
         result["evidence_refs"] = json.loads(result.pop("evidence_refs_json"))
+        if result.get("appeal_evidence_refs_json") is not None:
+            result["appeal_evidence_refs"] = json.loads(result["appeal_evidence_refs_json"])
+        else:
+            result["appeal_evidence_refs"] = []
         return result
 
     def _case(self, case_id: str):
