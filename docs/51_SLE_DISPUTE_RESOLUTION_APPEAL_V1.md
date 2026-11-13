@@ -44,6 +44,7 @@ The trusted key registry must authorize `DISPUTE_RESOLVER`, bind the principal t
 - An appeal re-freezes transfer, redemption and cancellation until its final decision.
 - Default is not automatically reversed by a dispute decision. A defaulted claim remains subject to the existing default restrictions.
 - The workflow records party IDs and evidence references but does not authenticate the person submitting an open/appeal command. Production must add signed party authorization and identity proofing.
+- Remediation acknowledgement references are caller-supplied metadata, not cryptographically verified issuer/holder approvals. The reference method demonstrates the state transition only; production must verify both parties' signatures/authority before allowing the freeze to be released.
 - No appeal deadline or legal standard is inferred; the reference implementation permits one appeal per case.
 
 ## Audit and recovery
