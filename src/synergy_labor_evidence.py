@@ -220,6 +220,8 @@ def score_verified_contributions(
             result = verify_evidence_envelope(envelope, blob, key_registry, now=now)
             if result["evidence_id"] != evidence_id:
                 raise EvidenceVerificationError("envelope evidence_id does not match contribution reference")
+            if result["subject_id"] != _text(record.get("contributor_id"), "contributor_id"):
+                raise EvidenceVerificationError("evidence subject_id does not match contribution contributor_id")
             if result["content_sha256"] != _hex64(item.get("sha256"), "evidence.sha256"):
                 raise EvidenceVerificationError("envelope digest does not match contribution evidence digest")
             benefit_stream_id = _text(record.get("benefit_stream_id"), "benefit_stream_id")
