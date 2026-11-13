@@ -109,7 +109,7 @@ class LaborCreditLedger:
             total_units TEXT NOT NULL,
             reserved_units TEXT NOT NULL,
             fulfilled_units TEXT NOT NULL,
-            evidence_sha256 TEXT NOT NULL,
+            evidence_sha256 TEXT NOT NULL UNIQUE,
             verifier_id TEXT NOT NULL,
             status TEXT NOT NULL CHECK(status IN ('OPEN','CLOSED')),
             FOREIGN KEY (issuer_id, service_code, unit)
@@ -131,6 +131,14 @@ class LaborCreditLedger:
             FOREIGN KEY (issuer_id, service_code, unit)
                 REFERENCES issuer_policies(issuer_id, service_code, unit)
         );
+        CREATE TRIGGER IF NOT EXISTS events_no_update
+        BEFORE UPDATE ON events BEGIN
+            SELECT RAISE(ABORT, 'events are append-only');
+        END;
+        CREATE TRIGGER IF NOT EXISTS events_no_delete
+        BEFORE DELETE ON events BEGIN
+            SELECT RAISE(ABORT, 'events are append-only');
+        END;
         CREATE INDEX IF NOT EXISTS credits_issuer_status
             ON credits(issuer_id, service_code, unit, status);
         CREATE TABLE IF NOT EXISTS events (
@@ -402,11 +410,11 @@ class LaborCreditLedger:
         expected_version: int, idempotency_key: str,
     ) -> dict[str, Any]:
         credit = _text(credit_id, "credit_id")
-        if issuer_approved is not True or holder_approved is not True:
-            raise ValueError("cancellation requires explicit issuer and holder approval")
+        issuer_ref = _text(issuer_approval_ref, "issuer_approval_ref")
+        holder_ref = _text(holder_approval_ref, "holder_approval_ref")
         if not isinstance(expected_version, int) or isinstance(expected_version, bool) or expected_version < 0:
             raise ValueError("expected_version must be a non-negative integer")
-        request = {"credit_id": credit, "issuer_approved": True, "holder_approved": True,
+        request = {"credit_id": credit, "issuer_approval_ref": issuer_ref, "holder_approval_ref": holder_ref,
                    "expected_version": expected_version}
 
         def apply() -> dict[str, Any]:
