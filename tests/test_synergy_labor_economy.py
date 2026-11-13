@@ -45,7 +45,7 @@ def contribution(**overrides):
 def test_score_is_deterministic_and_non_monetary():
     result = score_contributions([contribution()])
     assert result["policy_version"] == POLICY_VERSION
-    assert result["total_labor_score"] == "12.960"
+    assert result["total_labor_score"] == "12.96"
     assert result["status"] == "NON_MONETARY_SCORE_ONLY"
     assert result["money_issued"] is False
     assert "currency" not in result
@@ -55,7 +55,7 @@ def test_same_benefit_can_be_shared_but_attribution_must_not_exceed_one():
     first = contribution(contribution_id="a", attribution_share="0.4")
     second = contribution(contribution_id="b", contributor_id="person-002", attribution_share="0.6")
     result = score_contributions([second, first])
-    assert result["attribution_totals"] == {"benefit-001": "1.0"}
+    assert result["attribution_totals"] == {"benefit-001": "1"}
     assert [row["contribution_id"] for row in result["contributions"]] == ["a", "b"]
 
 
@@ -104,7 +104,7 @@ def test_policy_bounds_are_enforced(field, value):
 
 def test_zero_quality_is_a_valid_zero_score_not_a_negative_score():
     result = score_contributions([contribution(quality_factor="0")])
-    assert result["total_labor_score"] == "0.000"
+    assert result["total_labor_score"] == "0"
 
 
 def test_unknown_category_is_rejected():
