@@ -218,6 +218,8 @@ def test_registry_projection_replay_detects_direct_record_tampering():
     audit = registry.verify_projection_consistency()
     assert audit["valid"] is False
     assert "projection differs" in audit["issues"][0]
+    with pytest.raises(AwardRegistryError, match="projection is inconsistent"):
+        registry.reserve(signed_award(private), keys, now=NOW)
     close_all(ledger, registry)
 
 
@@ -254,5 +256,22 @@ def test_award_authorization_history_detects_trusted_key_mismatch():
     audit = registry.verify_authorization_history(keys)
     assert audit["valid"] is False
     assert "Ed25519 award authorization signature verification failed" in audit["issues"][0]
+    close_all(ledger, registry)
+
+
+def test_consumption_fails_closed_if_registry_projection_was_tampered():
+    ledger, registry, private, keys = setup()
+    envelope = signed_award(private)
+    registry.reserve(envelope, keys, now=NOW)
+    ledger.issue(
+        "issuer-a", "worker-b", "contribution-global-1", "award-global-1",
+        envelope["result_digest"], "field-service", "service-hour", "capacity-a",
+        "5", "2030-01-01T00:00:00Z", "credit-global-1", "issue-global-1",
+    )
+    registry._db.execute(
+        "UPDATE awards SET status='CONSUMED' WHERE award_id='award-global-1'"
+    )
+    with pytest.raises(AwardRegistryError, match="projection is inconsistent"):
+        registry.consume_from_ledger("award-global-1", ledger, "credit-global-1")
     close_all(ledger, registry)
 
