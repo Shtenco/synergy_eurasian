@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import sys
 
 import pytest
@@ -122,3 +123,16 @@ def test_effort_unit_is_required():
 def test_negative_observed_hours_are_rejected():
     with pytest.raises(ValueError, match="hours_observed cannot be negative"):
         score_contributions([contribution(hours_observed="-1")])
+
+
+def test_json_schema_accepts_valid_contribution_and_rejects_invalid_bounds():
+    import jsonschema
+
+    schema_path = ROOT / "interfaces" / "labor_contribution.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.validate(instance=contribution(), schema=schema)
+
+    invalid = contribution(attribution_share="1.01")
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(instance=invalid, schema=schema)
