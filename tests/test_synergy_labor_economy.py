@@ -18,6 +18,7 @@ def contribution(**overrides):
         "contributor_kind": "HUMAN",
         "project_id": "project-001",
         "benefit_stream_id": "benefit-001",
+        "result_digest": "c" * 64,
         "category": "TECHNICAL",
         "status": "ACCEPTED",
         "effort_units": 10,
@@ -149,3 +150,22 @@ def test_mixed_effort_units_cannot_be_aggregated():
     second = contribution(contribution_id="b", benefit_stream_id="benefit-002", effort_unit="hours")
     with pytest.raises(ValueError, match="mixed effort_unit"):
         score_contributions([first, second])
+
+
+def test_schema_version_is_mandatory():
+    record = contribution()
+    del record["schema_version"]
+    with pytest.raises(ValueError, match="unsupported schema_version"):
+        score_contributions([record])
+
+
+def test_same_result_digest_cannot_be_split_into_distinct_benefits():
+    first = contribution(contribution_id="a", benefit_stream_id="benefit-001")
+    second = contribution(contribution_id="b", benefit_stream_id="benefit-002")
+    with pytest.raises(ValueError, match="different benefit streams"):
+        score_contributions([first, second])
+
+
+def test_result_digest_must_be_sha256():
+    with pytest.raises(ValueError, match="result_digest must be 64 hex"):
+        score_contributions([contribution(result_digest="not-a-hash")])
