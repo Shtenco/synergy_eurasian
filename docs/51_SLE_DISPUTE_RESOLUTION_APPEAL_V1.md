@@ -36,7 +36,7 @@ Party authorization signatures use canonical JSON and the domain separator `SYNE
 - SHA-256 digest of the exact action payload;
 - signing timestamp.
 
-The trusted party key registry must bind each key to one principal, grant `SLE_CREDIT_PARTY`, and provide validity/revocation metadata. Opening and appeal require the signer to be the stated current issuer or holder. Remediation requires two valid signatures over the same remediation digest and version: one from the issuer and one from the current holder. Different principal and key identities are required. Signed envelopes and their digests are included in the append-only ledger event request.
+The trusted party key registry must bind each key to one principal, grant `SLE_CREDIT_PARTY`, and provide validity/revocation metadata. Opening and appeal require the signer to be the stated current issuer or holder. Remediation requires two valid signatures over the same digest (remediation reference plus both acknowledgement references) and dispute version: one from the issuer and one from the current holder. Different principal and key identities are required. Signed envelopes and their digests are included in the append-only ledger event request.
 
 This closes the earlier reference-only authorization gap at the module boundary, but does not establish real-world identity proofing or registry governance. The party registry is supplied by the caller; production still needs controlled enrollment, rotation, recovery, revocation governance and secure key custody. The module also does not independently establish that the referenced remediation actually occurred.
 
