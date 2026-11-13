@@ -180,3 +180,13 @@ def test_evidence_reuse_across_different_benefit_streams_is_rejected():
         score_verified_contributions(
             [first, second], {"evidence-001": envelope}, {"evidence-001": blob}, registry, now=NOW
         )
+
+
+def test_signed_evidence_envelope_matches_strict_json_schema():
+    import json
+    import jsonschema
+
+    envelope, blob, registry = signed_fixture()
+    schema = json.loads((ROOT / "interfaces" / "sle_evidence_envelope.schema.json").read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.validate(instance=envelope, schema=schema)
