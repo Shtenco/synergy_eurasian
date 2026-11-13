@@ -117,6 +117,9 @@ def test_dispute_upheld_does_not_automatically_cancel_or_release_capacity():
     assert ledger.get_capacity("capacity-1")["reserved_units"] == "20"
     with pytest.raises(ValueError, match="active dispute"):
         ledger.redeem("credit-1", "member-b", "1", 0, "blocked-after-upheld-dispute")
+    with pytest.raises(DisputeError, match="already has an active dispute"):
+        disputes.open_dispute("case-2", "credit-1", "coop-a", "SECOND",
+                              ["evidence://second"], "second-open")
     released = disputes.acknowledge_remediation(
         "case-1", "remediation-agreement-1", "issuer-signed-ack-1",
         "holder-signed-ack-1", "remediation-ack",
