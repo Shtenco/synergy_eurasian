@@ -31,6 +31,13 @@ def _decimal(value: Any, field: str) -> Decimal:
     return number
 
 
+def _format_decimal(value: Decimal) -> str:
+    """Serialize Decimal without input-dependent trailing zero noise."""
+    if value == ZERO:
+        return "0"
+    return format(value.normalize(), "f")
+
+
 def _required_text(record: dict[str, Any], field: str) -> str:
     value = record.get(field)
     if not isinstance(value, str) or not value.strip():
@@ -164,16 +171,16 @@ def score_contributions(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "contribution_id": item["contribution_id"],
             "contributor_id": item["contributor_id"],
             "benefit_stream_id": item["benefit_stream_id"],
-            "labor_score": str(score),
+            "labor_score": _format_decimal(score),
         })
 
     return {
         "policy_version": POLICY_VERSION,
         "status": "NON_MONETARY_SCORE_ONLY",
-        "total_labor_score": str(total_score),
+        "total_labor_score": _format_decimal(total_score),
         "contributions": scored,
         "attribution_totals": {
-            key: str(value) for key, value in sorted(attribution_by_benefit.items())
+            key: _format_decimal(value) for key, value in sorted(attribution_by_benefit.items())
         },
         "financial_authorization_required": True,
         "money_issued": False,
