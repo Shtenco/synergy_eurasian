@@ -468,16 +468,28 @@ def issue_authorized_credit(
     except AwardRegistryError:
         existing = None
 
-    if existing is not None and existing["status"] == "RESERVED":
+    if existing is not None and existing["status"] in {"RESERVED", "CONSUMED"}:
+        supplied_authorization = _canonical(dict(envelope))
+        if supplied_authorization != existing["authorization_json"]:
+            raise AwardRegistryError(
+                "recovery envelope does not match the originally reserved authorization"
+            )
+        history = registry.verify_authorization_history(key_registry)
+        if not history.get("valid"):
+            raise AwardRegistryError("stored award authorization history is invalid")
         try:
             ledger.get_credit(credit_id)
         except (KeyError, ValueError):
-            pass
+            if existing["status"] == "CONSUMED":
+                raise AwardRegistryError(
+                    "consumed award has no matching local credit for reconciliation"
+                ) from None
         else:
             consumed = registry.consume_from_ledger(award_id, ledger, credit_id)
             return {"credit_id": credit_id, "award_id": award_id,
                     "registry_status": consumed["status"],
-                    "reconciled_after_local_issue": True}
+                    "reconciled_after_local_issue": existing["status"] == "RESERVED",
+                    "idempotent_replay": existing["status"] == "CONSUMED"}
 
     reservation = registry.reserve(envelope, key_registry, now=now)
     result = ledger.issue(
