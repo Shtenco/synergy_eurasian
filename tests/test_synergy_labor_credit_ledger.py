@@ -26,7 +26,8 @@ def prepared_ledger(path=":memory:"):
 
 def issue(ledger, *, units="30", credit_id="credit-1", key="issue-1", due=DUE):
     return ledger.issue(
-        "coop-a", "member-b", "repair-service", "service-hour",
+        "coop-a", "member-b", f"contribution-{credit_id}", f"award-{key}",
+        "c" * 64, "repair-service", "service-hour",
         "capacity-1", units, due, credit_id, key,
     )
 
@@ -209,7 +210,8 @@ def test_concurrent_issuance_cannot_oversubscribe_capacity_or_issuer_limit(tmp_p
         ledger = LaborCreditLedger(path)
         try:
             return ledger.issue(
-                "coop-a", f"member-{index}", "repair-service", "service-hour",
+                "coop-a", f"member-{index}", f"contribution-{index}", f"award-parallel-{index}",
+                "d" * 64, "repair-service", "service-hour",
                 "capacity-1", "7", DUE, f"credit-{index}", f"parallel-{index}",
             )["credit_id"]
         except ValueError:
@@ -234,4 +236,31 @@ def test_event_chain_is_valid_after_all_lifecycle_events():
     audit = ledger.verify_event_chain()
     assert audit["valid"] is True
     assert audit["events_checked"] == 5
+    ledger.close()
+
+
+def test_one_contribution_cannot_back_two_credit_issues():
+    ledger = prepared_ledger()
+    issue(ledger, units="10", credit_id="credit-1", key="issue-1")
+    with pytest.raises(Exception):
+        ledger.issue(
+            "coop-a", "member-c", "contribution-credit-1", "award-issue-2",
+            "c" * 64, "repair-service", "service-hour", "capacity-1",
+            "10", DUE, "credit-2", "issue-2",
+        )
+    assert ledger.get_capacity("capacity-1")["reserved_units"] == "10"
+    assert len(ledger.list_events()) == 3
+    ledger.close()
+
+
+def test_award_reference_cannot_be_reused_for_another_contribution():
+    ledger = prepared_ledger()
+    issue(ledger, units="10", credit_id="credit-1", key="issue-1")
+    with pytest.raises(Exception):
+        ledger.issue(
+            "coop-a", "member-c", "contribution-credit-2", "award-issue-1",
+            "e" * 64, "repair-service", "service-hour", "capacity-1",
+            "10", DUE, "credit-2", "issue-2",
+        )
+    assert ledger.get_capacity("capacity-1")["reserved_units"] == "10"
     ledger.close()
