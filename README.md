@@ -501,6 +501,7 @@ for name, report in reports.items():
 | **Отраслевой LP V4** | [модель и ограничения](docs/42_SYNERGY_SECTOR_CAPITAL_OPTIMIZER_V4.md), [исполняемый код](src/synergy_sector_optimizer_v4.py) |
 | **Сводная исследовательская система** | [Master map V1–V6](docs/45_SYNERGY_PRODUCTIVITY_RESILIENCE_SYSTEM_MASTER.md), [интерфейсы и границы федерации](docs/72_SYNERGY_SUES_FEDERATION_AUTHORIZATION_POLICY_V1.md) |
 | **V6.4–V7 / SUES / V6.6: ещё не слито в main** | [PR #9](https://github.com/Shtenco/synergy_eurasian/pull/9), [#10](https://github.com/Shtenco/synergy_eurasian/pull/10), [#11](https://github.com/Shtenco/synergy_eurasian/pull/11), [#16](https://github.com/Shtenco/synergy_eurasian/pull/16) |
+| **SYNERGY Labor Economy (SLE): исследовательский PR, не слито в main** | [PR #17](https://github.com/Shtenco/synergy_eurasian/pull/17), [спецификация SLE](docs/46_SYNERGY_LABOR_ECONOMY_V1.md), [Labor Credit Ledger](docs/47_SYNERGY_LABOR_CREDIT_LEDGER_V1.md), [реализация](src/synergy_labor_credit_ledger.py), [тесты](tests/test_synergy_labor_credit_ledger.py) |
 | **Аудит и технические риски** | [Срез 9 ноября 2026](docs/REPOSITORY_AUDIT_2026-11-09.md), [безопасность](SECURITY.md) |
 | Прежняя полная версия главного README | [`docs/README_FULL_PRE_REDESIGN_2026.md`](docs/README_FULL_PRE_REDESIGN_2026.md) |
 | Дизайн-ассеты | [`assets/readme/`](assets/readme/) |
