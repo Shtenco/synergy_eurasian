@@ -531,6 +531,7 @@ class LaborCreditLedger:
             capacities: dict[str, dict[str, Any]] = {}
             credits: dict[str, dict[str, Any]] = {}
             issues: list[str] = []
+            events_replayed = 0
 
             rows = self._db.execute("SELECT * FROM events ORDER BY seq").fetchall()
             for event in rows:
@@ -655,6 +656,7 @@ class LaborCreditLedger:
 
                     else:
                         raise ValueError(f"unsupported event type: {event_type}")
+                    events_replayed += 1
 
                 except (KeyError, TypeError, ValueError, InvalidOperation) as exc:
                     issues.append(f"event seq {event['seq']}: replay failed: {exc}")
@@ -703,7 +705,7 @@ class LaborCreditLedger:
             return {
                 "valid": not issues,
                 "issues": issues,
-                "events_replayed": len(rows) if not issues else max(0, int(rows[len(issues) - 1]["seq"]) - 1) if rows else 0,
+                "events_replayed": events_replayed,
             }
 
     def list_events(self) -> list[dict[str, Any]]:
