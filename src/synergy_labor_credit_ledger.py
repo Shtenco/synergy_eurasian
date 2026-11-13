@@ -150,10 +150,12 @@ class LaborCreditLedger:
             appeal_count INTEGER NOT NULL DEFAULT 0,
             appeal_ref TEXT,
             appeal_reason_code TEXT,
-            appeal_evidence_refs_json TEXT
+            appeal_evidence_refs_json TEXT,
+            remediation_closed INTEGER NOT NULL DEFAULT 0 CHECK(remediation_closed IN (0,1)),
+            remediation_ref TEXT,
+            issuer_ack_ref TEXT,
+            holder_ack_ref TEXT
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS disputes_one_active_per_credit
-            ON disputes(credit_id) WHERE status IN ('OPEN','APPEALED');
         CREATE TABLE IF NOT EXISTS events (
             seq INTEGER PRIMARY KEY AUTOINCREMENT,
             event_id TEXT NOT NULL UNIQUE,
@@ -182,9 +184,19 @@ class LaborCreditLedger:
             ("appeal_ref", "TEXT"),
             ("appeal_reason_code", "TEXT"),
             ("appeal_evidence_refs_json", "TEXT"),
+            ("remediation_closed", "INTEGER NOT NULL DEFAULT 0"),
+            ("remediation_ref", "TEXT"),
+            ("issuer_ack_ref", "TEXT"),
+            ("holder_ack_ref", "TEXT"),
         ):
             if column not in dispute_columns:
                 self._db.execute(f"ALTER TABLE disputes ADD COLUMN {column} {declaration}")
+        self._db.execute("DROP INDEX IF EXISTS disputes_one_active_per_credit")
+        self._db.execute(
+            """CREATE UNIQUE INDEX disputes_one_active_per_credit ON disputes(credit_id)
+            WHERE status IN ('OPEN','APPEALED')
+               OR (status='DECIDED' AND outcome='DISPUTE_UPHELD' AND remediation_closed=0)"""
+        )
 
     def _event_head(self) -> tuple[int, str]:
         row = self._db.execute(
@@ -493,7 +505,7 @@ class LaborCreditLedger:
 
     def _has_active_dispute(self, credit_id: str) -> bool:
         row = self._db.execute(
-            "SELECT 1 FROM disputes WHERE credit_id=? AND status IN ('OPEN','APPEALED') LIMIT 1",
+            "SELECT 1 FROM disputes WHERE credit_id=? AND (status IN ('OPEN','APPEALED') OR (status='DECIDED' AND outcome='DISPUTE_UPHELD' AND remediation_closed=0)) LIMIT 1",
             (credit_id,),
         ).fetchone()
         return row is not None
@@ -659,6 +671,8 @@ class LaborCreditLedger:
                             "outcome": None, "decision_digest": None, "appeal_count": 0,
                             "appeal_ref": None, "appeal_reason_code": None,
                             "appeal_evidence_refs_json": None,
+                            "remediation_closed": 0, "remediation_ref": None,
+                            "issuer_ack_ref": None, "holder_ack_ref": None,
                         }
 
                     elif event_type == "DISPUTE_DECIDED":
@@ -690,6 +704,15 @@ class LaborCreditLedger:
                         case["appeal_ref"] = request["appeal_ref"]
                         case["appeal_reason_code"] = request["reason_code"]
                         case["appeal_evidence_refs_json"] = _canonical(request["evidence_refs"])
+
+                    elif event_type == "DISPUTE_REMEDIATION_ACKNOWLEDGED":
+                        case = disputes[request["case_id"]]
+                        if case["status"] != "DECIDED" or case["outcome"] != "DISPUTE_UPHELD" or case["remediation_closed"] != 0:
+                            raise ValueError("invalid dispute remediation acknowledgement")
+                        case["remediation_closed"] = 1
+                        case["remediation_ref"] = request["remediation_ref"]
+                        case["issuer_ack_ref"] = request["issuer_ack_ref"]
+                        case["holder_ack_ref"] = request["holder_ack_ref"]
 
                     elif event_type == "CREDIT_TRANSFERRED":
                         credit = credits[request["credit_id"]]
