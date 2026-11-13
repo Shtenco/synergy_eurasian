@@ -360,7 +360,7 @@ class SLEAwardRegistry:
             checked = 0
             issues = []
             for row in self._db.execute(
-                "SELECT seq,event_type,payload_json FROM events ORDER BY seq"
+                "SELECT seq,event_type,payload_json,created_at FROM events ORDER BY seq"
             ).fetchall():
                 if row["event_type"] != "AWARD_RESERVED":
                     continue
