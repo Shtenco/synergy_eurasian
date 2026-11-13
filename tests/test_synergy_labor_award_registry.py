@@ -94,7 +94,14 @@ def test_global_reservation_is_idempotent_and_blocks_same_contribution_under_new
     )
     with pytest.raises(AwardRegistryError, match="already reserved"):
         registry.reserve(competing, keys, now=NOW)
+    same_result = signed_award(
+        private, award_id="award-global-3",
+        contribution_id="contribution-global-3",
+    )
+    with pytest.raises(AwardRegistryError, match="already reserved"):
+        registry.reserve(same_result, keys, now=NOW)
     assert registry.verify_projection_consistency()["valid"] is True
+    assert registry.verify_authorization_history(keys)["authorizations_checked"] == 1
     close_all(ledger, registry)
 
 
@@ -131,6 +138,7 @@ def test_authorized_credit_issue_reserves_then_consumes_global_award():
     assert award["ledger_event_hash"]
     assert registry.verify_event_chain()["valid"] is True
     assert registry.verify_projection_consistency()["valid"] is True
+    assert registry.verify_authorization_history(keys)["valid"] is True
     close_all(ledger, registry)
 
 
@@ -145,6 +153,7 @@ def test_issue_retry_is_idempotent_and_does_not_consume_award_twice():
     assert second["registry_status"] == "CONSUMED"
     assert ledger.verify_event_chain()["events_checked"] == 3
     assert registry.verify_projection_consistency()["valid"] is True
+    assert registry.verify_authorization_history(keys)["authorizations_checked"] == 1
     close_all(ledger, registry)
 
 
@@ -223,3 +232,27 @@ def test_award_registry_record_matches_strict_schema():
     jsonschema.Draft202012Validator.check_schema(schema)
     jsonschema.validate(record, schema)
     close_all(ledger, registry)
+
+def test_award_authorization_history_survives_later_key_revocation():
+    ledger, registry, private, keys = setup()
+    registry.reserve(signed_award(private), keys, now=NOW)
+    keys["reward-key-1"]["revoked_at"] = "2026-11-15T00:00:00Z"
+    audit = registry.verify_authorization_history(keys)
+    assert audit["valid"] is True
+    assert audit["authorizations_checked"] == 1
+    close_all(ledger, registry)
+
+
+def test_award_authorization_history_detects_trusted_key_mismatch():
+    ledger, registry, private, keys = setup()
+    registry.reserve(signed_award(private), keys, now=NOW)
+    replacement = Ed25519PrivateKey.generate().public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    keys["reward-key-1"]["public_key_b64"] = base64.b64encode(replacement).decode("ascii")
+    audit = registry.verify_authorization_history(keys)
+    assert audit["valid"] is False
+    assert "Ed25519 award authorization signature verification failed" in audit["issues"][0]
+    close_all(ledger, registry)
+
