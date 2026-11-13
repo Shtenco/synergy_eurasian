@@ -275,3 +275,20 @@ def test_consumption_fails_closed_if_registry_projection_was_tampered():
         registry.consume_from_ledger("award-global-1", ledger, "credit-global-1")
     close_all(ledger, registry)
 
+
+def test_registry_reconciles_original_issue_after_credit_is_transferred():
+    ledger, registry, private, keys = setup()
+    envelope = signed_award(private)
+    registry.reserve(envelope, keys, now=NOW)
+    ledger.issue(
+        "issuer-a", "worker-b", "contribution-global-1", "award-global-1",
+        envelope["result_digest"], "field-service", "service-hour", "capacity-a",
+        "5", "2030-01-01T00:00:00Z", "credit-global-1", "issue-before-transfer",
+    )
+    ledger.transfer("credit-global-1", "worker-b", "worker-c", 0, "transfer-before-reconcile")
+    consumed = registry.consume_from_ledger("award-global-1", ledger, "credit-global-1")
+    assert consumed["status"] == "CONSUMED"
+    assert ledger.get_credit("credit-global-1")["holder_id"] == "worker-c"
+    assert registry.verify_projection_consistency()["valid"] is True
+    close_all(ledger, registry)
+
