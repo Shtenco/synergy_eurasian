@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 from pathlib import Path
+import threading
 import sys
 
 import pytest
@@ -354,7 +355,7 @@ def test_concurrent_competing_reservations_across_connections_have_one_winner(tm
         signed_award(private, award_id="award-race-a"),
         signed_award(private, award_id="award-race-b"),
     ]
-    barrier = __import__("threading").Barrier(2)
+    barrier = threading.Barrier(2)
 
     def reserve(registry, envelope):
         barrier.wait()
