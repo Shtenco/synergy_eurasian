@@ -274,7 +274,7 @@ def test_legacy_dispute_table_is_migrated_additively(tmp_path):
             "remediation_closed", "remediation_ref", "issuer_ack_ref",
             "holder_ack_ref"} <= columns
     indexes = ledger._db.execute(
-        "SELECT sql FROM sqlite_master WHERE type='index' AND name='disputes_one_active_per_credit'"
+        "SELECT sql FROM sqlite_master WHERE type='index' AND name='disputes_one_active_per_credit_v2'"
     ).fetchone()
     assert "remediation_closed=0" in indexes["sql"]
     ledger.close()
