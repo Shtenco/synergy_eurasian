@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
 
+      - name: Run SLE focused tests
+        run: python -m pytest -q tests/test_synergy_labor_economy.py
+
       - name: Run invariant and schema tests
         run: python -m pytest -q
 
