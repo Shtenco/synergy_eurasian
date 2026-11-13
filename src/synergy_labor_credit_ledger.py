@@ -421,7 +421,7 @@ class LaborCreditLedger:
         return self._command("CREDIT_DEFAULTED_ISSUER_FROZEN", idempotency_key, request, apply)
 
     def cancel(
-        self, credit_id: str, issuer_approved: bool, holder_approved: bool,
+        self, credit_id: str, issuer_approval_ref: str, holder_approval_ref: str,
         expected_version: int, idempotency_key: str,
     ) -> dict[str, Any]:
         credit = _text(credit_id, "credit_id")
