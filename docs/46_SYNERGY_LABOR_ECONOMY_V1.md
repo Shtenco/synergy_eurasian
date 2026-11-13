@@ -35,7 +35,7 @@ Each contribution is keyed by an immutable `contribution_id` and references:
 
 The record must not contain names, government identifiers, health data or other unnecessary personal data. Store evidence off-chain or in an access-controlled evidence service; publish only references and hashes where appropriate.
 
-Accepted records require at least one declared independent evidence item and a declared independent verifier. **V1 validates metadata assertions only:** it does not fetch evidence bytes, recompute their hashes, authenticate verifier identities or cryptographically verify signatures. A production adapter must perform those checks before it can assert acceptance. Self-attestation alone is insufficient.
+The baseline `score_contributions` path validates declared metadata only. The additional `score_verified_contributions` path in `src/synergy_labor_evidence.py` verifies supplied evidence bytes against SHA-256 and checks an Ed25519 signature, signer role, key principal, validity interval and revocation against a caller-supplied key registry. Self-attestation alone is insufficient. The key registry and evidence storage still require trusted production governance.
 
 ## 4. V1 score
 
@@ -127,7 +127,7 @@ Focused tests are in `tests/test_synergy_labor_economy.py`. These tests establis
 ## 10. Roadmap
 
 - V1: evidence contract, contribution scoring, attribution conservation.
-- V1.1: append-only revision/dispute lifecycle and signed evidence envelope.
+- V1.1: Ed25519 evidence envelope verification is implemented; trusted key-registry governance, durable evidence storage and append-only dispute/revision lifecycle remain.
 - V2: funded reward-pool proposal with deterministic minor-unit allocation; no payment execution.
 - V3: issuer-specific service credits with capacity reservation, limits, expiry, redemption and default handling.
 - V4: Financial OS and settlement adapters with idempotency, accounting mapping and reconciliation.
