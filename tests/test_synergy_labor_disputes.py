@@ -111,8 +111,18 @@ def test_dispute_upheld_does_not_automatically_cancel_or_release_capacity():
         signed_decision(private, outcome="DISPUTE_UPHELD"), NOW, "decision-1"
     )
     assert result["obligation_cancelled"] is False
+    assert result["frozen"] is True
     assert ledger.get_credit("credit-1")["status"] == "ACTIVE"
     assert ledger.get_credit("credit-1")["remaining_units"] == "20"
+    assert ledger.get_capacity("capacity-1")["reserved_units"] == "20"
+    with pytest.raises(ValueError, match="active dispute"):
+        ledger.redeem("credit-1", "member-b", "1", 0, "blocked-after-upheld-dispute")
+    released = disputes.acknowledge_remediation(
+        "case-1", "remediation-agreement-1", "issuer-signed-ack-1",
+        "holder-signed-ack-1", "remediation-ack",
+    )
+    assert released["frozen"] is False
+    assert released["obligation_cancelled"] is False
     assert ledger.get_capacity("capacity-1")["reserved_units"] == "20"
     assert ledger.verify_projection_consistency()["valid"] is True
     ledger.close()
