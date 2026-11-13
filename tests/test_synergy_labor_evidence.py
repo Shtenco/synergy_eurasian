@@ -63,6 +63,7 @@ def test_valid_ed25519_evidence_envelope_verifies_content_and_signer():
     assert result["verified"] is True
     assert result["signer_id"] == "verifier-001"
     assert result["verification_method"] == "ED25519_CONTENT_HASH_AND_KEY_REGISTRY"
+    assert result["verification_policy_version"] == "SLE-ED25519-1.0"
 
 
 def test_modified_envelope_fails_signature_verification():
