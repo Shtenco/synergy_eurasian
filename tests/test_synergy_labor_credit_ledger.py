@@ -15,11 +15,11 @@ DUE = "2030-01-01T00:00:00+00:00"
 LATER = "2030-01-03T00:00:00+00:00"
 
 
-def prepared_ledger(path=":memory:"):
+def prepared_ledger(path=":memory:", *, max_outstanding="100", capacity_units="80"):
     ledger = LaborCreditLedger(path)
-    ledger.register_issuer("coop-a", "repair-service", "service-hour", "100", "policy-1")
+    ledger.register_issuer("coop-a", "repair-service", "service-hour", max_outstanding, "policy-1")
     ledger.add_capacity(
-        "coop-a", "repair-service", "service-hour", "capacity-1", "80",
+        "coop-a", "repair-service", "service-hour", "capacity-1", capacity_units,
         "a" * 64, "independent-verifier", "capacity-1",
     )
     return ledger
@@ -49,11 +49,11 @@ def test_issue_creates_claim_and_reserves_capacity_without_money():
 
 
 def test_issuer_outstanding_limit_is_enforced_atomically():
-    ledger = prepared_ledger()
-    issue(ledger, units="70")
+    ledger = prepared_ledger(max_outstanding="60", capacity_units="80")
+    issue(ledger, units="50")
     before = len(ledger.list_events())
     with pytest.raises(ValueError, match="outstanding limit"):
-        issue(ledger, units="31", credit_id="credit-2", key="issue-2")
+        issue(ledger, units="11", credit_id="credit-2", key="issue-2")
     assert len(ledger.list_events()) == before
     assert ledger.get_capacity("capacity-1")["reserved_units"] == "70"
     ledger.close()
