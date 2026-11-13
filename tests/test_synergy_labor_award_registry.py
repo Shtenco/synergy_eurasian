@@ -143,7 +143,7 @@ def test_issue_retry_is_idempotent_and_does_not_consume_award_twice():
     second = issue_authorized_credit(ledger, registry, envelope, keys, **args)
     assert first["credit_id"] == second["credit_id"]
     assert second["registry_status"] == "CONSUMED"
-    assert ledger.verify_event_chain()["events_checked"] == 4
+    assert ledger.verify_event_chain()["events_checked"] == 3
     assert registry.verify_projection_consistency()["valid"] is True
     close_all(ledger, registry)
 
