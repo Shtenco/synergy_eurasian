@@ -195,10 +195,11 @@ class LaborCreditDisputes:
                    outcome=?,decision_digest=? WHERE case_id=?""",
                 (verified["resolver_id"], verified["outcome"], verified["decision_digest"], verified["case_id"]),
             )
+            frozen = verified["outcome"] == "DISPUTE_UPHELD"
             return {"case_id": verified["case_id"], "status": "DECIDED",
                     "outcome": verified["outcome"], "resolver_id": verified["resolver_id"],
                     "decision_digest": verified["decision_digest"],
-                    "version": verified["expected_version"] + 1, "frozen": False,
+                    "version": verified["expected_version"] + 1, "frozen": frozen,
                     "obligation_cancelled": False}
         return self.ledger._command("DISPUTE_DECIDED", idempotency_key, request, apply)
 
@@ -237,6 +238,35 @@ class LaborCreditDisputes:
             return {"case_id": case, "status": "APPEALED", "version": expected_version + 1,
                     "frozen": True, "appeal_ref": ref, "appeal_evidence_count": len(refs)}
         return self.ledger._command("DISPUTE_APPEALED", idempotency_key, request, apply)
+
+    def acknowledge_remediation(
+        self, case_id: str, remediation_ref: str, issuer_ack_ref: str,
+        holder_ack_ref: str, idempotency_key: str,
+    ) -> dict[str, Any]:
+        case = _text(case_id, "case_id")
+        remediation = _text(remediation_ref, "remediation_ref")
+        issuer_ack = _text(issuer_ack_ref, "issuer_ack_ref")
+        holder_ack = _text(holder_ack_ref, "holder_ack_ref")
+        if issuer_ack == holder_ack:
+            raise DisputeError("issuer and holder acknowledgements must be distinct")
+        request = {"case_id": case, "remediation_ref": remediation,
+                   "issuer_ack_ref": issuer_ack, "holder_ack_ref": holder_ack}
+
+        def apply():
+            row = self._case(case)
+            if row["status"] != "DECIDED" or row["outcome"] != "DISPUTE_UPHELD":
+                raise DisputeError("bilateral remediation is only required after DISPUTE_UPHELD")
+            if row["remediation_closed"]:
+                raise DisputeError("dispute remediation was already acknowledged")
+            self.ledger._db.execute(
+                """UPDATE disputes SET remediation_closed=1,remediation_ref=?,
+                   issuer_ack_ref=?,holder_ack_ref=? WHERE case_id=?""",
+                (remediation, issuer_ack, holder_ack, case),
+            )
+            return {"case_id": case, "status": "DECIDED", "outcome": "DISPUTE_UPHELD",
+                    "frozen": False, "remediation_ref": remediation,
+                    "obligation_cancelled": False}
+        return self.ledger._command("DISPUTE_REMEDIATION_ACKNOWLEDGED", idempotency_key, request, apply)
 
     def get_dispute(self, case_id: str) -> dict[str, Any]:
         row = self._case(_text(case_id, "case_id"))
