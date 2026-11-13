@@ -497,3 +497,71 @@ def test_party_authorization_schema_is_strict_and_signature_fields_are_not_optio
         jsonschema.validate(invalid, schema)
     ledger.close()
 
+
+def test_cryptographic_authorization_history_replays_open_decision_appeal_and_remediation():
+    ledger, disputes, private = setup()
+    open_case(ledger, disputes)
+    disputes.decide(signed_decision(private), NOW, "decision-1")
+    disputes.appeal("case-1", "member-b", "appeal-ref-1", "NEW_EVIDENCE",
+                    ["evidence://appeal/1"], 1, "appeal-1",
+                    appeal_authorization(private, principal="member-b"))
+    disputes.decide(
+        signed_decision(private, resolver="resolver-b", outcome="DISPUTE_UPHELD", version=2),
+        NOW, "appeal-decision",
+    )
+    issuer, holder = remediation_authorizations(private, version=3)
+    disputes.acknowledge_remediation(
+        "case-1", "remediation-agreement-1", "issuer-signed-ack-1",
+        "holder-signed-ack-1", "remediation-ack", issuer, holder,
+    )
+    audit = disputes.verify_authorization_history()
+    assert audit["valid"] is True
+    assert audit["authorizations_checked"] == 6
+    assert audit["issues"] == []
+    assert ledger.verify_projection_consistency()["valid"] is True
+    ledger.close()
+
+
+def test_authorization_history_uses_historical_key_validity_not_current_revocation():
+    ledger, disputes, private = setup()
+    open_case(ledger, disputes)
+    disputes.decide(signed_decision(private), NOW, "decision-1")
+    disputes.trusted_party_keys["member-b-party-key"]["revoked_at"] = "2026-11-15T00:00:00Z"
+    disputes.trusted_resolver_keys["resolver-a-key"]["revoked_at"] = "2026-11-15T00:00:00Z"
+    audit = disputes.verify_authorization_history()
+    assert audit["valid"] is True
+    assert audit["authorizations_checked"] == 2
+    ledger.close()
+
+
+def test_authorization_history_detects_trusted_key_mismatch():
+    ledger, disputes, private = setup()
+    open_case(ledger, disputes)
+    disputes.decide(signed_decision(private), NOW, "decision-1")
+    replacement = Ed25519PrivateKey.generate().public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    disputes.trusted_resolver_keys["resolver-a-key"]["public_key_b64"] = base64.b64encode(
+        replacement
+    ).decode("ascii")
+    audit = disputes.verify_authorization_history()
+    assert audit["valid"] is False
+    assert audit["authorizations_checked"] == 1
+    assert "resolver decision signature verification failed" in audit["issues"][0]
+    ledger.close()
+
+
+def test_decision_event_retains_original_signed_envelope():
+    ledger, disputes, private = setup()
+    open_case(ledger, disputes)
+    envelope = signed_decision(private)
+    disputes.decide(envelope, NOW, "decision-1")
+    row = ledger._db.execute(
+        "SELECT payload_json FROM events WHERE event_type='DISPUTE_DECIDED'"
+    ).fetchone()
+    request = json.loads(row["payload_json"])["request"]
+    assert request["decision_envelope"] == envelope
+    assert ledger.verify_event_chain()["valid"] is True
+    ledger.close()
+
