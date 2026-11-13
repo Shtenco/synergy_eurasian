@@ -328,7 +328,11 @@ def test_second_active_dispute_for_same_credit_is_rejected():
     open_case(ledger, disputes)
     with pytest.raises(DisputeError, match="already has an active dispute"):
         disputes.open_dispute("case-2", "credit-1", "coop-a", "OTHER",
-                              ["evidence://other"], "open-case-2")
+                              ["evidence://other"], "open-case-2",
+                              signed_party({"party": disputes._test_party_private},
+                                  action="OPEN_DISPUTE", case="case-2", principal="coop-a",
+                                  payload={"opened_by": "coop-a", "reason_code": "OTHER",
+                                           "evidence_refs": ["evidence://other"]}))
     assert ledger.verify_projection_consistency()["valid"] is True
     ledger.close()
 
@@ -374,3 +378,105 @@ def test_revoked_resolver_key_is_rejected():
     with pytest.raises(DisputeError, match="revoked"):
         disputes.decide(signed_decision(private), NOW, "revoked-decision")
     ledger.close()
+
+def test_party_authorization_is_required_and_bound_to_exact_action_case_and_version():
+    ledger, disputes, private = setup()
+    with pytest.raises(DisputeError, match="envelope fields mismatch"):
+        open_case_without_authorization(disputes)
+    auth = signed_party(
+        {"party": private["party"]}, action="OPEN_DISPUTE", case="case-1",
+        principal="member-b",
+        payload={"opened_by": "member-b", "reason_code": "SERVICE_QUALITY",
+                 "evidence_refs": ["evidence://inspection/1"]},
+    )
+    altered = dict(auth)
+    altered["case_id"] = "case-other"
+    with pytest.raises(DisputeError, match="another case or credit"):
+        disputes.open_dispute("case-1", "credit-1", "member-b", "SERVICE_QUALITY",
+                              ["evidence://inspection/1"], "bad-case", altered)
+    altered = dict(auth)
+    altered["expected_version"] = 1
+    with pytest.raises(DisputeError, match="version mismatch"):
+        disputes.open_dispute("case-1", "credit-1", "member-b", "SERVICE_QUALITY",
+                              ["evidence://inspection/1"], "bad-version", altered)
+    altered = dict(auth)
+    altered["signature"] = base64.b64encode(b"x" * 64).decode("ascii")
+    with pytest.raises(DisputeError, match="signature verification failed"):
+        disputes.open_dispute("case-1", "credit-1", "member-b", "SERVICE_QUALITY",
+                              ["evidence://inspection/1"], "bad-signature", altered)
+    ledger.close()
+
+
+def open_case_without_authorization(disputes):
+    return disputes.open_dispute("case-1", "credit-1", "member-b", "SERVICE_QUALITY",
+                                 ["evidence://inspection/1"], "missing-auth")
+
+
+def test_party_key_role_revocation_and_identity_binding_are_enforced():
+    ledger, disputes, private = setup()
+    auth = signed_party(
+        {"party": private["party"]}, action="OPEN_DISPUTE", case="case-1",
+        principal="member-b",
+        payload={"opened_by": "member-b", "reason_code": "SERVICE_QUALITY",
+                 "evidence_refs": ["evidence://inspection/1"]},
+    )
+    disputes.trusted_party_keys["member-b-party-key"]["roles"] = ["DISPUTE_RESOLVER"]
+    with pytest.raises(DisputeError, match="SLE_CREDIT_PARTY"):
+        disputes.open_dispute("case-1", "credit-1", "member-b", "SERVICE_QUALITY",
+                              ["evidence://inspection/1"], "wrong-role", auth)
+    disputes.trusted_party_keys["member-b-party-key"]["roles"] = ["SLE_CREDIT_PARTY"]
+    disputes.trusted_party_keys["member-b-party-key"]["revoked_at"] = "2026-11-14T10:00:00Z"
+    with pytest.raises(DisputeError, match="revoked"):
+        disputes.open_dispute("case-1", "credit-1", "member-b", "SERVICE_QUALITY",
+                              ["evidence://inspection/1"], "revoked", auth)
+    ledger.close()
+
+
+def test_remediation_requires_two_distinct_signed_current_parties_and_same_digest():
+    ledger, disputes, private = setup()
+    open_case(ledger, disputes)
+    disputes.decide(signed_decision(private, outcome="DISPUTE_UPHELD"), NOW, "decision-1")
+    issuer, holder = remediation_authorizations(private)
+    wrong_holder = signed_party(
+        {"party": private["party"]}, action="ACKNOWLEDGE_REMEDIATION",
+        case="case-1", principal="member-b",
+        payload={"remediation_ref": "different-remediation"}, version=1,
+    )
+    with pytest.raises(DisputeError, match="action digest mismatch"):
+        disputes.acknowledge_remediation("case-1", "remediation-agreement-1",
+            "issuer-ref", "holder-ref", "bad-digest", issuer, wrong_holder)
+    with pytest.raises(DisputeError, match="issuer remediation signature"):
+        disputes.acknowledge_remediation("case-1", "remediation-agreement-1",
+            "issuer-ref", "holder-ref", "wrong-issuer", holder, holder)
+    with pytest.raises(DisputeError, match="distinct issuer and holder"):
+        same_key_holder = dict(holder)
+        same_key_holder["principal_id"] = "coop-a"
+        # A valid issuer signature cannot be re-labelled as the holder.
+        same_key_holder["key_id"] = "coop-a-party-key"
+        same_key_holder["signature"] = issuer["signature"]
+        disputes.acknowledge_remediation("case-1", "remediation-agreement-1",
+            "issuer-ref", "holder-ref", "same-principal", issuer, same_key_holder)
+    assert disputes.get_dispute("case-1")["remediation_closed"] == 0
+    assert ledger.verify_projection_consistency()["valid"] is True
+    ledger.close()
+
+
+def test_party_authorization_schema_is_strict_and_signature_fields_are_not_optional():
+    import json
+    import jsonschema
+    ledger, disputes, private = setup()
+    auth = signed_party(
+        {"party": private["party"]}, action="OPEN_DISPUTE", case="case-1",
+        principal="member-b",
+        payload={"opened_by": "member-b", "reason_code": "SERVICE_QUALITY",
+                 "evidence_refs": ["evidence://inspection/1"]},
+    )
+    schema = json.loads((ROOT / "interfaces" / "sle_dispute_party_authorization.schema.json").read_text())
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.validate(auth, schema)
+    invalid = dict(auth)
+    invalid["action"] = "WRITE_OFF"
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(invalid, schema)
+    ledger.close()
+
