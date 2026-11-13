@@ -453,10 +453,10 @@ def test_remediation_requires_two_distinct_signed_current_parties_and_same_diges
     )
     with pytest.raises(DisputeError, match="action digest mismatch"):
         disputes.acknowledge_remediation("case-1", "remediation-agreement-1",
-            "issuer-ref", "holder-ref", "bad-digest", issuer, wrong_holder)
+            "issuer-signed-ack-1", "holder-signed-ack-1", "bad-digest", issuer, wrong_holder)
     with pytest.raises(DisputeError, match="issuer remediation signature"):
         disputes.acknowledge_remediation("case-1", "remediation-agreement-1",
-            "issuer-ref", "holder-ref", "wrong-issuer", holder, holder)
+            "issuer-signed-ack-1", "holder-signed-ack-1", "wrong-issuer", holder, holder)
     with pytest.raises(DisputeError, match="action digest mismatch"):
         disputes.acknowledge_remediation("case-1", "remediation-agreement-1",
             "issuer-ref-tampered", "holder-signed-ack-1", "tampered-ack-refs", issuer, holder)
@@ -467,7 +467,7 @@ def test_remediation_requires_two_distinct_signed_current_parties_and_same_diges
         same_key_holder["key_id"] = "coop-a-party-key"
         same_key_holder["signature"] = issuer["signature"]
         disputes.acknowledge_remediation("case-1", "remediation-agreement-1",
-            "issuer-ref", "holder-ref", "same-principal", issuer, same_key_holder)
+            "issuer-signed-ack-1", "holder-signed-ack-1", "same-principal", issuer, same_key_holder)
     assert disputes.get_dispute("case-1")["remediation_closed"] == 0
     assert ledger.verify_projection_consistency()["valid"] is True
     ledger.close()
