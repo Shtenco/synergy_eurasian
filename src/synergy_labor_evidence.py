@@ -136,9 +136,13 @@ def verify_evidence_envelope(
     key_valid_until = _utc(key_record.get("valid_until"), "key_registry.valid_until")
     if key_valid_until <= key_valid_from or instant < key_valid_from or instant >= key_valid_until:
         raise EvidenceVerificationError("signing key is outside its validity interval")
+    if issued_at < key_valid_from or issued_at >= key_valid_until or expires_at > key_valid_until:
+        raise EvidenceVerificationError("evidence validity interval exceeds signing key validity")
     revoked_at = key_record.get("revoked_at")
-    if revoked_at is not None and instant >= _utc(revoked_at, "key_registry.revoked_at"):
-        raise EvidenceVerificationError("signing key is revoked")
+    if revoked_at is not None:
+        revoked_time = _utc(revoked_at, "key_registry.revoked_at")
+        if instant >= revoked_time or issued_at >= revoked_time:
+            raise EvidenceVerificationError("signing key is revoked")
 
     public_key_b64 = _text(key_record.get("public_key_b64"), "key_registry.public_key_b64")
     signature_b64 = _text(envelope.get("signature"), "signature")
@@ -201,10 +205,14 @@ def score_verified_contributions(
         if not isinstance(evidence_items, list) or not evidence_items:
             raise EvidenceVerificationError("contribution must reference evidence")
         independent_signer_found = False
+        record_evidence_ids: set[str] = set()
         for item in evidence_items:
             if not isinstance(item, dict):
                 raise EvidenceVerificationError("evidence item must be an object")
             evidence_id = _text(item.get("evidence_id"), "evidence.evidence_id")
+            if evidence_id in record_evidence_ids:
+                raise EvidenceVerificationError("duplicate evidence_id within one contribution")
+            record_evidence_ids.add(evidence_id)
             envelope = evidence_envelopes.get(evidence_id)
             blob = evidence_blobs.get(evidence_id)
             if envelope is None or blob is None:
