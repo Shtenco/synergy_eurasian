@@ -5,6 +5,7 @@
 This reference workflow adds a dispute state machine to the SLE service-credit ledger. It is not a court, legal arbitration service, monetary dispute rail or production identity system.
 
 Implementation: `src/synergy_labor_disputes.py`
+Decision schema: `interfaces/sle_dispute_decision.schema.json`
 Ledger integration: `src/synergy_labor_credit_ledger.py`
 Tests: `tests/test_synergy_labor_disputes.py`
 
