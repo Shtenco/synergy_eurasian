@@ -41,7 +41,7 @@ The signature is Ed25519 and encoded as base64. The public key registry entry co
 - envelope validity exceeds the key validity interval;
 - base64, key length, signature length or Ed25519 signature is invalid.
 
-`score_verified_contributions(...)` additionally binds the verified evidence ID, digest and subject ID to each contribution record and requires at least one evidence item signed by the record's declared independent verifier. Shared evidence may support multiple contributors only when it refers to the same benefit stream; duplicate evidence IDs within one contribution and cross-benefit reuse are rejected.
+`score_verified_contributions(...)` additionally binds the verified evidence ID, digest and benefit-stream benefit-stream subject ID to each contribution record and requires at least one evidence item signed by the record's declared independent verifier. Shared evidence may support multiple contributors only when it refers to the same benefit stream; duplicate evidence IDs within one contribution and cross-benefit reuse are rejected.
 
 The original `score_contributions` remains a metadata-only local scorer. Callers must choose `score_verified_contributions` when cryptographic evidence verification is required. The output explicitly marks its verification scope.
 
