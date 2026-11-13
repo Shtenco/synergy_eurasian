@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
+import re
 from typing import Any, Mapping
 
 from cryptography.exceptions import InvalidSignature
@@ -98,14 +99,15 @@ def verify_award_authorization(
     if values["policy_version"] == "":
         raise AwardAuthorizationError("policy_version is required")
 
+    raw_quantity = envelope["quantity"]
+    if not isinstance(raw_quantity, str) or not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?", raw_quantity):
+        raise AwardAuthorizationError("quantity must use the schema's plain decimal-string format")
     try:
-        quantity = Decimal(_text(envelope["quantity"], "quantity"))
-    except (InvalidOperation, ValueError):
+        quantity = Decimal(raw_quantity)
+    except InvalidOperation:
         raise AwardAuthorizationError("quantity must be a finite positive decimal string") from None
     if not quantity.is_finite() or quantity <= 0:
         raise AwardAuthorizationError("quantity must be a finite positive decimal string")
-    if not isinstance(envelope["quantity"], str):
-        raise AwardAuthorizationError("quantity must be encoded as a decimal string")
 
     issued = _timestamp(envelope["issued_at"], "issued_at")
     expires = _timestamp(envelope["expires_at"], "expires_at")
