@@ -24,7 +24,7 @@ This is only global within the shared registry database. Two disconnected regist
 5. Match the exact `CREDIT_ISSUED` event and its issuer, beneficiary, contribution, award ID, result digest, service, unit, capacity and quantity against the reservation.
 6. Atomically transition the registry record from `RESERVED` to `CONSUMED` and append a registry event referencing the local event ID and hash.
 
-The local ledger and shared registry are separate SQLite databases; this is not a distributed atomic transaction. The reservation is committed first, so a crash cannot open a duplicate-award window. If local issuance succeeds but the process crashes before registry consumption, a retry with the same credit and idempotency identifiers reconciles the existing `CREDIT_ISSUED` event. It does not issue a second credit.
+The local ledger and shared registry are separate SQLite databases; this is not a distributed atomic transaction. The reservation is committed first, so a crash cannot open a duplicate-award window. If local issuance succeeds but the process crashes before registry consumption, a retry with the same credit and idempotency identifiers reconciles the existing `CREDIT_ISSUED` event. It does not issue a second credit. A retry after the registry is already `CONSUMED` is also idempotent after authorization expiry: the caller must supply the byte-for-byte canonical original envelope, and the registry re-verifies its historical signature against the supplied trust registry before confirming the existing local issuance. A substituted envelope for the same award ID is rejected.
 
 ## Reservation lifecycle and failure policy
 
@@ -56,4 +56,4 @@ The event chain is tamper-evident, not tamper-proof. External checkpoints, backu
 
 ## Status
 
-Research/reference implementation under PR #17. Focused tests cover global source/award uniqueness across registry instances sharing one database, signature verification, idempotent issuance, crash recovery after local issue, stranded reservation safety, local term mismatch and projection tampering. This is not a production distributed consensus service.
+Research/reference implementation under PR #17. Focused tests cover global source/award/result uniqueness across registry instances sharing one database, signature verification, idempotent issuance and post-expiry replay, crash recovery after local issue, rejection of substituted recovery envelopes, stranded reservation safety, local term mismatch and projection tampering. This is not a production distributed consensus service.
