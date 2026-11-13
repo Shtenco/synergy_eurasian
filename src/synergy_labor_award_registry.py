@@ -158,6 +158,9 @@ class SLEAwardRegistry:
         with self._lock:
             self._db.execute("BEGIN IMMEDIATE")
             try:
+                audit = self.verify_projection_consistency()
+                if not audit.get("valid"):
+                    raise AwardRegistryError("award registry projection is inconsistent")
                 by_award = self._db.execute(
                     "SELECT * FROM awards WHERE award_id=?", (verified["award_id"],)
                 ).fetchone()
@@ -216,6 +219,9 @@ class SLEAwardRegistry:
         self, award_id: str, ledger: Any, credit_id: str,
     ) -> dict[str, Any]:
         """Consume only after the local SQLite ledger proves the matching issue event."""
+        registry_audit = self.verify_projection_consistency()
+        if not registry_audit.get("valid"):
+            raise AwardRegistryError("award registry projection is inconsistent")
         award = self.get_award(award_id)
         credit = ledger.get_credit(credit_id)
         expected = {
@@ -414,11 +420,9 @@ class SLEAwardRegistry:
                 }
                 if replay != actual:
                     issues.append("award registry projection differs from event replay")
+            event_count = int(self._db.execute("SELECT COUNT(*) FROM events").fetchone()[0])
             return {
-                "valid": not issues, "events_replayed": len(replay) + sum(
-                    1 for row in self._db.execute("SELECT event_type FROM events")
-                    if row["event_type"] == "AWARD_CONSUMED"
-                ), "issues": issues,
+                "valid": not issues, "events_replayed": event_count, "issues": issues,
             }
 
 
