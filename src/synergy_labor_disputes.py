@@ -158,7 +158,9 @@ class LaborCreditDisputes:
             if self.ledger._db.execute("SELECT 1 FROM disputes WHERE case_id=?", (case,)).fetchone():
                 raise DisputeError("case_id already exists")
             if self.ledger._db.execute(
-                "SELECT 1 FROM disputes WHERE credit_id=? AND status IN ('OPEN','APPEALED')",
+                """SELECT 1 FROM disputes WHERE credit_id=? AND
+                   (status IN ('OPEN','APPEALED') OR
+                    (status='DECIDED' AND outcome='DISPUTE_UPHELD' AND remediation_closed=0))""",
                 (credit,),
             ).fetchone():
                 raise DisputeError("credit already has an active dispute")
