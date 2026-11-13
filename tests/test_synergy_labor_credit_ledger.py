@@ -197,7 +197,12 @@ def test_event_rows_are_append_only_and_chain_detects_tampering():
 
 def test_concurrent_issuance_cannot_oversubscribe_capacity_or_issuer_limit(tmp_path):
     path = tmp_path / "concurrent.sqlite"
-    setup = prepared_ledger(str(path))
+    setup = LaborCreditLedger(path)
+    setup.register_issuer("coop-a", "repair-service", "service-hour", "10", "policy")
+    setup.add_capacity(
+        "coop-a", "repair-service", "service-hour", "capacity-1", "10",
+        "b" * 64, "independent-verifier", "capacity",
+    )
     setup.close()
 
     def attempt(index):
