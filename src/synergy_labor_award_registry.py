@@ -367,8 +367,15 @@ class SLEAwardRegistry:
                 try:
                     payload = json.loads(row["payload_json"])
                     envelope = payload["authorization"]
-                    issued_at = datetime.fromisoformat(envelope["issued_at"].replace("Z", "+00:00"))
-                    verified = verify_award_authorization(envelope, key_registry, now=issued_at)
+                    # Revalidate at the actual reservation-event time, not merely at
+                    # envelope issuance. A key revoked after signing but before the
+                    # registry accepted the award must fail historical verification.
+                    reserved_at = datetime.fromisoformat(
+                        row["created_at"].replace("Z", "+00:00")
+                    )
+                    verified = verify_award_authorization(
+                        envelope, key_registry, now=reserved_at
+                    )
                     if verified["authorization_digest"] != payload["authorization_digest"]:
                         raise AwardRegistryError("historical award authorization digest mismatch")
                     for field in ("award_id", "source_contribution_id", "result_digest",
