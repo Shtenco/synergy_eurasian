@@ -17,7 +17,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 SCHEMA = "sle.dispute-decision/v1"
-DOMAIN = b"SYNERGY_SLE_DISPUTE_DECISION_V1\\x00"
+DOMAIN = b"SYNERGY_SLE_DISPUTE_DECISION_V1\x00"
 OUTCOMES = frozenset({"CLAIM_UPHELD", "DISPUTE_UPHELD"})
 
 
