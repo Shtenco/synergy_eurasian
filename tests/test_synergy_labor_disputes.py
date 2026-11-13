@@ -146,7 +146,13 @@ def test_appeal_refreezes_and_requires_a_different_resolver():
         signed_decision(private, resolver="resolver-b", outcome="DISPUTE_UPHELD", version=2),
         NOW, "appeal-decision",
     )
-    assert final["status"] == "DECIDED" and final["frozen"] is False
+    assert final["status"] == "DECIDED" and final["frozen"] is True
+    with pytest.raises(ValueError, match="active dispute"):
+        ledger.redeem("credit-1", "member-b", "1", 0, "blocked-final-upheld")
+    disputes.acknowledge_remediation(
+        "case-1", "appeal-remediation-1", "issuer-ack-appeal",
+        "holder-ack-appeal", "appeal-remediation",
+    )
     assert ledger.verify_projection_consistency()["valid"] is True
     ledger.close()
 
