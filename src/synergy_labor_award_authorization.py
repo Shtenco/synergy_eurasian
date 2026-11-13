@@ -100,7 +100,7 @@ def verify_award_authorization(
         raise AwardAuthorizationError("policy_version is required")
 
     raw_quantity = envelope["quantity"]
-    if not isinstance(raw_quantity, str) or not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?", raw_quantity):
+    if not isinstance(raw_quantity, str) or not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?", raw_quantity):
         raise AwardAuthorizationError("quantity must use the schema's plain decimal-string format")
     try:
         quantity = Decimal(raw_quantity)
