@@ -113,12 +113,14 @@ class SLEAwardRegistry:
         ).fetchone()
         return (0, GENESIS_HASH) if row is None else (int(row["seq"]), row["event_hash"])
 
-    def _append_event(self, event_type: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+    def _append_event(
+        self, event_type: str, payload: Mapping[str, Any], *, created_at: str | None = None,
+    ) -> dict[str, Any]:
         seq, previous = self._head()
         event_id = hashlib.sha256(
             f"{seq + 1}:{event_type}:{_canonical(payload)}:{previous}".encode("utf-8")
         ).hexdigest()
-        created_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+        created_at = created_at or datetime.now(timezone.utc).isoformat(timespec="microseconds")
         payload_json = _canonical(payload)
         body = {
             "seq": seq + 1, "event_id": event_id, "event_type": event_type,
@@ -196,7 +198,7 @@ class SLEAwardRegistry:
                      verified["service_code"], verified["unit"], verified["quantity"],
                      verified["capacity_id"], reserved_at),
                 )
-                event = self._append_event("AWARD_RESERVED", request)
+                event = self._append_event("AWARD_RESERVED", request, created_at=reserved_at)
                 self._db.execute("COMMIT")
                 return {
                     **request, "status": "RESERVED", "reservation_id": verified["award_id"],
@@ -314,6 +316,7 @@ class SLEAwardRegistry:
                     {"award_id": award_id, "credit_id": credit_id,
                      "ledger_event_id": event["event_id"],
                      "ledger_event_hash": event["event_hash"]},
+                    created_at=consumed_at,
                 )
                 self._db.execute("COMMIT")
                 return {
