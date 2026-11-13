@@ -558,6 +558,7 @@ class LaborCreditLedger:
             policies: dict[tuple[str, str, str], dict[str, Any]] = {}
             capacities: dict[str, dict[str, Any]] = {}
             credits: dict[str, dict[str, Any]] = {}
+            disputes: dict[str, dict[str, Any]] = {}
             issues: list[str] = []
             events_replayed = 0
 
@@ -626,6 +627,50 @@ class LaborCreditLedger:
                             "issued_units": _fmt(amount), "remaining_units": _fmt(amount),
                             "due_at": request["due_at"], "status": ACTIVE, "version": 0,
                         }
+
+                    elif event_type == "DISPUTE_OPENED":
+                        case_id = request["case_id"]
+                        credit_id = request["credit_id"]
+                        if case_id in disputes or credit_id not in credits:
+                            raise ValueError("duplicate dispute or unknown credit in dispute event")
+                        if any(x["credit_id"] == credit_id and x["status"] in {"OPEN", "APPEALED"} for x in disputes.values()):
+                            raise ValueError("credit already has an active dispute")
+                        if request["opened_by"] not in {credits[credit_id]["issuer_id"], credits[credit_id]["holder_id"]}:
+                            raise ValueError("dispute opener is not a credit party")
+                        disputes[case_id] = {
+                            "case_id": case_id, "credit_id": credit_id,
+                            "opened_by": request["opened_by"], "reason_code": request["reason_code"],
+                            "evidence_refs_json": _canonical(request["evidence_refs"]),
+                            "status": "OPEN", "version": 0, "resolver_id": None,
+                            "outcome": None, "decision_digest": None, "appeal_count": 0,
+                        }
+
+                    elif event_type == "DISPUTE_DECIDED":
+                        case = disputes[request["case_id"]]
+                        if case["status"] not in {"OPEN", "APPEALED"} or case["version"] != request["expected_version"]:
+                            raise ValueError("invalid dispute decision transition")
+                        if request["resolver_id"] in {credits[case["credit_id"]]["issuer_id"], credits[case["credit_id"]]["holder_id"]}:
+                            raise ValueError("dispute resolver is a party")
+                        if case["resolver_id"] == request["resolver_id"]:
+                            raise ValueError("same resolver cannot decide an appeal")
+                        case["status"] = "DECIDED"
+                        case["version"] += 1
+                        case["resolver_id"] = request["resolver_id"]
+                        case["outcome"] = request["outcome"]
+                        case["decision_digest"] = request["decision_digest"]
+
+                    elif event_type == "DISPUTE_APPEALED":
+                        case = disputes[request["case_id"]]
+                        credit = credits[case["credit_id"]]
+                        if case["status"] != "DECIDED" or case["version"] != request["expected_version"] or case["appeal_count"] != 0:
+                            raise ValueError("invalid or repeated dispute appeal")
+                        if request["appellant_id"] not in {credit["issuer_id"], credit["holder_id"]}:
+                            raise ValueError("appeal actor is not a credit party")
+                        if request["appellant_id"] == case["resolver_id"]:
+                            raise ValueError("resolver cannot appeal own decision")
+                        case["status"] = "APPEALED"
+                        case["version"] += 1
+                        case["appeal_count"] += 1
 
                     elif event_type == "CREDIT_TRANSFERRED":
                         credit = credits[request["credit_id"]]
@@ -709,6 +754,12 @@ class LaborCreditLedger:
                     issues.append("capacity projection differs from event replay")
                 if credits != actual_credits:
                     issues.append("credit projection differs from event replay")
+                actual_disputes = {
+                    row["case_id"]: dict(row)
+                    for row in self._db.execute("SELECT * FROM disputes").fetchall()
+                }
+                if disputes != actual_disputes:
+                    issues.append("dispute projection differs from event replay")
 
             if not issues:
                 for capacity_id, capacity in capacities.items():
