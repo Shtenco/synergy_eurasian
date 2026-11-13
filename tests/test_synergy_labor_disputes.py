@@ -193,3 +193,22 @@ def test_dispute_evidence_references_must_be_nonempty_and_unique():
         disputes.open_dispute("case-dup", "credit-1", "member-b", "QUALITY",
                               ["same", "same"], "dup")
     ledger.close()
+
+
+def test_signed_decision_matches_strict_json_schema():
+    import json
+    import jsonschema
+
+    ledger, disputes, private = setup()
+    open_case(ledger, disputes)
+    envelope = signed_decision(private)
+    schema = json.loads(
+        (ROOT / "interfaces" / "sle_dispute_decision.schema.json").read_text(encoding="utf-8")
+    )
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.validate(instance=envelope, schema=schema)
+    invalid = dict(envelope)
+    invalid["outcome"] = "WRITE_OFF"
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(instance=invalid, schema=schema)
+    ledger.close()
