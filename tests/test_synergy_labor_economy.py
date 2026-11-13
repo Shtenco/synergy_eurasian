@@ -105,3 +105,20 @@ def test_policy_bounds_are_enforced(field, value):
 def test_zero_quality_is_a_valid_zero_score_not_a_negative_score():
     result = score_contributions([contribution(quality_factor="0")])
     assert result["total_labor_score"] == "0.000"
+
+
+def test_unknown_category_is_rejected():
+    with pytest.raises(ValueError, match="unsupported contribution category"):
+        score_contributions([contribution(category="UNKNOWN")])
+
+
+def test_effort_unit_is_required():
+    record = contribution()
+    del record["effort_unit"]
+    with pytest.raises(ValueError, match="effort_unit"):
+        score_contributions([record])
+
+
+def test_negative_observed_hours_are_rejected():
+    with pytest.raises(ValueError, match="hours_observed cannot be negative"):
+        score_contributions([contribution(hours_observed="-1")])
