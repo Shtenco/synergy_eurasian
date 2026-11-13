@@ -23,7 +23,7 @@ NOW = datetime(2026, 11, 14, 12, 0, tzinfo=timezone.utc)
 BLOB = b"independently verified production evidence"
 
 
-def signed_fixture(*, role="INDEPENDENT_VERIFIER", revoked_at=None, expires_at="2027-01-01T00:00:00Z", subject_id="person-pseudo-001"):
+def signed_fixture(*, role="INDEPENDENT_VERIFIER", revoked_at=None, expires_at="2027-01-01T00:00:00Z", subject_id="benefit-001"):
     private = Ed25519PrivateKey.generate()
     public = private.public_key().public_bytes(
         encoding=serialization.Encoding.Raw,
@@ -192,8 +192,8 @@ def test_signed_evidence_envelope_matches_strict_json_schema():
     jsonschema.validate(instance=envelope, schema=schema)
 
 
-def test_verified_scoring_binds_evidence_subject_to_contributor():
-    envelope, blob, registry = signed_fixture(subject_id="different-person")
+def test_verified_scoring_binds_evidence_subject_to_benefit_stream():
+    envelope, blob, registry = signed_fixture(subject_id="different-benefit")
     record = contribution_record(hashlib.sha256(blob).hexdigest())
     with pytest.raises(EvidenceVerificationError, match="subject_id"):
         score_verified_contributions(
