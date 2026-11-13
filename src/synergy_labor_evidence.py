@@ -17,6 +17,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 
 SCHEMA = "sle.evidence/v1"
+VERIFICATION_POLICY_VERSION = "SLE-ED25519-1.0"
 DOMAIN = b"SYNERGY_SLE_EVIDENCE_V1\x00"
 HEX = frozenset("0123456789abcdef")
 
@@ -175,6 +176,7 @@ def verify_evidence_envelope(
         "signature_sha256": hashlib.sha256(signature).hexdigest(),
         "verified_at": instant.isoformat(),
         "verification_method": "ED25519_CONTENT_HASH_AND_KEY_REGISTRY",
+        "verification_policy_version": VERIFICATION_POLICY_VERSION,
     }
 
 
