@@ -43,7 +43,7 @@ A source contribution ID and reward authorization reference can each back only o
 - `SETTLED`: remaining quantity is zero after fulfilment.
 - `CANCELLED`: both parties supplied approval references; unfulfilled remainder is released. Already fulfilled quantity remains fulfilled.
 
-A defaulted claim cannot be redeemed or transferred in V1. No automatic write-off, debt forgiveness, reserve draw, cash settlement or re-issuance is implied. Recovery, dispute, hardship and restructuring are later explicit workflows.
+A defaulted claim cannot be redeemed or transferred in V1. No automatic write-off, debt forgiveness, reserve draw, cash settlement or re-issuance is implied. Dispute/appeal now has a separate explicit reference workflow (see document 51); recovery, hardship and restructuring remain later workflows.
 
 ## 5. Concurrency, idempotency and audit
 
@@ -79,9 +79,9 @@ Focused adversarial tests cover issuer/capacity ceilings, duplicate requests, st
 
 1. Evidence references and approval references are metadata, not cryptographically authenticated credentials.
 2. Capacity lots can still double-count the same real-world asset if distinct hashes are supplied; require canonical asset IDs, independent valuation/inspection and cross-lot reservation.
-3. No dispute/appeal, restructuring, recovery or default resolution lifecycle yet.
-4. No independent event-log replay into projections yet.
+3. Dispute/appeal exists as a reference workflow, but party identity and remediation acknowledgements are not cryptographically authenticated; only one appeal is supported.
+4. Restructuring, recovery, hardship and default resolution lifecycle are not implemented.
 5. SQLite is a single-node reference store, not a federated consensus ledger.
 6. No jurisdiction-specific legal classification or enforceability assessment is claimed.
 
-Before production: implement signed evidence envelopes, actor authorization, canonical asset identity, event replay/reconciliation, dispute/restructuring controls, independent audit and legal review. Do not enable transferability or external exchange until these gates are satisfied.
+Before production: govern trusted keys, cryptographically authenticate party and remediation approvals, verify canonical asset identity, anchor event checkpoints externally, implement restructuring/recovery, conduct independent audit and legal review. Do not enable transferability or external exchange until these gates are satisfied.
