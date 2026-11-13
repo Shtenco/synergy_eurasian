@@ -87,10 +87,10 @@ def verify_award_authorization(
 
     values = {field: _text(envelope[field], field) for field in (
         "award_id", "source_contribution_id", "beneficiary_id", "issuer_id",
-        "service_code", "unit", "capacity_id", "policy_version", "budget_ref",
+        "service_code", "unit", "capacity_id", "policy_version", "budget_ref", "result_digest",
         "signer_id", "signer_role", "key_id", "signature",
     )}
-    digest = values["result_digest"] if "result_digest" in values else _text(envelope["result_digest"], "result_digest")
+    digest = values["result_digest"]
     if len(digest) != 64 or any(c not in "0123456789abcdefABCDEF" for c in digest):
         raise AwardAuthorizationError("result_digest must be a SHA-256 hex digest")
     role = values["signer_role"].upper()
