@@ -263,7 +263,7 @@ class LaborCreditDisputes:
 
     def decide(self, envelope: Mapping[str, Any], now: datetime, idempotency_key: str) -> dict[str, Any]:
         verified = verify_resolver_decision(envelope, self.trusted_resolver_keys, now=now)
-        request = dict(verified)
+        request = {**verified, "decision_envelope": dict(envelope)}
 
         def apply():
             row = self._case(verified["case_id"])
@@ -399,6 +399,172 @@ class LaborCreditDisputes:
                     "frozen": False, "remediation_ref": remediation,
                     "obligation_cancelled": False}
         return self.ledger._command("DISPUTE_REMEDIATION_ACKNOWLEDGED", idempotency_key, request, apply)
+
+    def verify_authorization_history(self) -> dict[str, Any]:
+        """Re-verify every signed dispute command from the immutable event history.
+
+        Key validity and revocation are evaluated at each envelope's signing time,
+        so later key revocation does not retroactively invalidate a valid signature.
+        The supplied registries remain trust roots managed outside this module.
+        """
+        with self.ledger._lock:
+            events = self.ledger._db.execute(
+                "SELECT seq,event_type,payload_json FROM events ORDER BY seq"
+            ).fetchall()
+            credits: dict[str, dict[str, str]] = {}
+            checked = 0
+            issues: list[str] = []
+
+            def verify_party(req, *, action, case_id, credit_id, payload, version):
+                envelope = req.get("party_authorization")
+                signed_at = _time(envelope.get("signed_at"), "party signed_at") if isinstance(envelope, Mapping) else None
+                verified = verify_party_authorization(
+                    envelope, self.trusted_party_keys, action=action,
+                    case_id=case_id, credit_id=credit_id,
+                    action_digest=_action_digest(action, payload),
+                    expected_version=version, now=signed_at,
+                )
+                if req.get("party_authorization_digest") != verified["authorization_digest"]:
+                    raise DisputeError("stored party authorization digest mismatch")
+                return verified
+
+            for event in events:
+                try:
+                    payload = json.loads(event["payload_json"])
+                    req = payload["request"]
+                    event_type = event["event_type"]
+
+                    if event_type == "CREDIT_ISSUED":
+                        credits[req["credit_id"]] = {
+                            "issuer_id": req["issuer_id"], "holder_id": req["holder_id"]
+                        }
+
+                    elif event_type == "CREDIT_TRANSFERRED":
+                        credit = credits[req["credit_id"]]
+                        if credit["holder_id"] != req["from_holder"]:
+                            raise DisputeError("historical transfer does not match current replay holder")
+                        credit["holder_id"] = req["to_holder"]
+
+                    elif event_type == "DISPUTE_OPENED":
+                        credit = credits[req["credit_id"]]
+                        action_payload = {
+                            "opened_by": req["opened_by"],
+                            "reason_code": req["reason_code"],
+                            "evidence_refs": req["evidence_refs"],
+                        }
+                        verified = verify_party(
+                            req, action="OPEN_DISPUTE", case_id=req["case_id"],
+                            credit_id=req["credit_id"], payload=action_payload, version=0,
+                        )
+                        if verified["principal_id"] != req["opened_by"] or verified["principal_id"] not in {
+                            credit["issuer_id"], credit["holder_id"]
+                        }:
+                            raise DisputeError("historical dispute opener is not the signing credit party")
+                        checked += 1
+
+                    elif event_type == "DISPUTE_DECIDED":
+                        envelope = req.get("decision_envelope")
+                        if not isinstance(envelope, Mapping):
+                            raise DisputeError("historical resolver decision envelope is missing")
+                        decided_at = _time(envelope.get("decided_at"), "decided_at")
+                        verified = verify_resolver_decision(
+                            envelope, self.trusted_resolver_keys, now=decided_at
+                        )
+                        for field in ("case_id", "credit_id", "resolver_id", "outcome",
+                                      "decision_digest", "expected_version"):
+                            if verified[field] != req.get(field):
+                                raise DisputeError(f"historical resolver decision {field} mismatch")
+                        credit = credits[req["credit_id"]]
+                        if verified["resolver_id"] in {credit["issuer_id"], credit["holder_id"]}:
+                            raise DisputeError("historical resolver was a credit party")
+                        checked += 1
+
+                    elif event_type == "DISPUTE_APPEALED":
+                        credit = credits[req["credit_id"]] if "credit_id" in req else None
+                        if credit is None:
+                            # Appeal events identify the case; recover its credit from the
+                            # preceding OPEN event without trusting the mutable SQL projection.
+                            prior = next(
+                                (json.loads(x["payload_json"])["request"]
+                                 for x in reversed(events[:int(event["seq"])-1])
+                                 if x["event_type"] == "DISPUTE_OPENED"
+                                 and json.loads(x["payload_json"])["request"]["case_id"] == req["case_id"]),
+                                None,
+                            )
+                            if prior is None:
+                                raise DisputeError("appeal has no preceding dispute-open event")
+                            credit = credits[prior["credit_id"]]
+                            credit_id = prior["credit_id"]
+                        else:
+                            credit_id = req["credit_id"]
+                        action_payload = {
+                            "appellant_id": req["appellant_id"],
+                            "appeal_ref": req["appeal_ref"],
+                            "reason_code": req["reason_code"],
+                            "evidence_refs": req["evidence_refs"],
+                        }
+                        verified = verify_party(
+                            req, action="APPEAL_DISPUTE", case_id=req["case_id"],
+                            credit_id=credit_id, payload=action_payload,
+                            version=req["expected_version"],
+                        )
+                        if verified["principal_id"] != req["appellant_id"] or verified["principal_id"] not in {
+                            credit["issuer_id"], credit["holder_id"]
+                        }:
+                            raise DisputeError("historical appellant is not the signing current credit party")
+                        checked += 1
+
+                    elif event_type == "DISPUTE_REMEDIATION_ACKNOWLEDGED":
+                        prior = next(
+                            (json.loads(x["payload_json"])["request"]
+                             for x in reversed(events[:int(event["seq"])-1])
+                             if x["event_type"] == "DISPUTE_OPENED"
+                             and json.loads(x["payload_json"])["request"]["case_id"] == req["case_id"]),
+                            None,
+                        )
+                        if prior is None:
+                            raise DisputeError("remediation has no preceding dispute-open event")
+                        credit = credits[prior["credit_id"]]
+                        credit_id = prior["credit_id"]
+                        action_payload = {
+                            "remediation_ref": req["remediation_ref"],
+                            "issuer_ack_ref": req["issuer_ack_ref"],
+                            "holder_ack_ref": req["holder_ack_ref"],
+                        }
+                        digest = _action_digest("ACKNOWLEDGE_REMEDIATION", action_payload)
+                        version = req["expected_version"]
+                        proofs = []
+                        for envelope_key, digest_key in (
+                            ("issuer_authorization", "issuer_authorization_digest"),
+                            ("holder_authorization", "holder_authorization_digest"),
+                        ):
+                            envelope = req.get(envelope_key)
+                            signed_at = _time(envelope.get("signed_at"), "party signed_at") if isinstance(envelope, Mapping) else None
+                            proof = verify_party_authorization(
+                                envelope, self.trusted_party_keys,
+                                action="ACKNOWLEDGE_REMEDIATION", case_id=req["case_id"],
+                                credit_id=credit_id, action_digest=digest,
+                                expected_version=version, now=signed_at,
+                            )
+                            if req.get(digest_key) != proof["authorization_digest"]:
+                                raise DisputeError("stored remediation authorization digest mismatch")
+                            proofs.append(proof)
+                        if proofs[0]["principal_id"] != credit["issuer_id"] or proofs[1]["principal_id"] != credit["holder_id"]:
+                            raise DisputeError("historical remediation approvals do not match issuer and current holder")
+                        if proofs[0]["principal_id"] == proofs[1]["principal_id"] or proofs[0]["key_id"] == proofs[1]["key_id"]:
+                            raise DisputeError("historical remediation approvals are not independent")
+                        checked += 2
+
+                except (KeyError, TypeError, ValueError, InvalidSignature) as exc:
+                    issues.append(f"event seq {event['seq']}: authorization replay failed: {exc}")
+                    break
+
+            return {
+                "valid": not issues,
+                "events_checked": len(events),
+                "authorizations_checked": checked,
+                "issues": issues,
+            }
 
     def get_dispute(self, case_id: str) -> dict[str, Any]:
         row = self._case(_text(case_id, "case_id"))
