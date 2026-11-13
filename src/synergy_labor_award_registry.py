@@ -67,7 +67,7 @@ class SLEAwardRegistry:
         CREATE TABLE IF NOT EXISTS awards (
             award_id TEXT PRIMARY KEY,
             source_contribution_id TEXT NOT NULL UNIQUE,
-            result_digest TEXT NOT NULL,
+            result_digest TEXT NOT NULL UNIQUE,
             authorization_digest TEXT NOT NULL UNIQUE,
             authorization_json TEXT NOT NULL,
             beneficiary_id TEXT NOT NULL,
@@ -83,6 +83,7 @@ class SLEAwardRegistry:
             reserved_at TEXT NOT NULL,
             consumed_at TEXT
         );
+        CREATE UNIQUE INDEX IF NOT EXISTS awards_result_digest_unique ON awards(result_digest);
         CREATE TABLE IF NOT EXISTS events (
             seq INTEGER PRIMARY KEY AUTOINCREMENT,
             event_id TEXT NOT NULL UNIQUE,
@@ -152,6 +153,7 @@ class SLEAwardRegistry:
             "unit": verified["unit"],
             "quantity": verified["quantity"],
             "capacity_id": verified["capacity_id"],
+            "authorization": dict(envelope),
         }
         with self._lock:
             self._db.execute("BEGIN IMMEDIATE")
@@ -163,7 +165,11 @@ class SLEAwardRegistry:
                     "SELECT * FROM awards WHERE source_contribution_id=?",
                     (verified["source_contribution_id"],),
                 ).fetchone()
-                existing = by_award or by_contribution
+                by_result = self._db.execute(
+                    "SELECT * FROM awards WHERE result_digest=?",
+                    (verified["result_digest"],),
+                ).fetchone()
+                existing = by_award or by_contribution or by_result
                 if existing is not None:
                     if (existing["award_id"] == verified["award_id"]
                         and existing["source_contribution_id"] == verified["source_contribution_id"]
@@ -313,6 +319,39 @@ class SLEAwardRegistry:
                 return {"valid": False, "failed_seq": None}
             return {"valid": True, "events_checked": len(rows), "head_hash": head}
 
+
+    def verify_authorization_history(self, key_registry: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+        """Re-verify every signed award envelope retained in reservation events."""
+        with self._lock:
+            chain = self.verify_event_chain()
+            if not chain["valid"]:
+                return {"valid": False, "authorizations_checked": 0,
+                        "issues": ["award registry event chain is invalid"]}
+            checked = 0
+            issues = []
+            for row in self._db.execute(
+                "SELECT seq,event_type,payload_json FROM events ORDER BY seq"
+            ).fetchall():
+                if row["event_type"] != "AWARD_RESERVED":
+                    continue
+                try:
+                    payload = json.loads(row["payload_json"])
+                    envelope = payload["authorization"]
+                    issued_at = datetime.fromisoformat(envelope["issued_at"].replace("Z", "+00:00"))
+                    verified = verify_award_authorization(envelope, key_registry, now=issued_at)
+                    if verified["authorization_digest"] != payload["authorization_digest"]:
+                        raise AwardRegistryError("historical award authorization digest mismatch")
+                    for field in ("award_id", "source_contribution_id", "result_digest",
+                                  "beneficiary_id", "issuer_id", "service_code", "unit",
+                                  "quantity", "capacity_id"):
+                        if str(verified[field]) != str(payload[field]):
+                            raise AwardRegistryError(f"historical award authorization {field} mismatch")
+                    checked += 1
+                except (KeyError, TypeError, ValueError) as exc:
+                    issues.append(f"event seq {row['seq']}: award authorization replay failed: {exc}")
+                    break
+            return {"valid": not issues, "authorizations_checked": checked, "issues": issues}
+
     def verify_projection_consistency(self) -> dict[str, Any]:
         """Replay reservation/consumption events and compare the mutable award projection."""
         with self._lock:
@@ -328,14 +367,16 @@ class SLEAwardRegistry:
                         award_id = payload["award_id"]
                         if award_id in replay or any(
                             x["source_contribution_id"] == payload["source_contribution_id"]
+                            or x["result_digest"] == payload["result_digest"]
                             for x in replay.values()
                         ):
-                            raise ValueError("duplicate global award or source contribution")
+                            raise ValueError("duplicate global award, source contribution or result digest")
                         replay[award_id] = {
                             "award_id": award_id,
                             "source_contribution_id": payload["source_contribution_id"],
                             "result_digest": payload["result_digest"],
                             "authorization_digest": payload["authorization_digest"],
+                            "authorization_json": _canonical(payload["authorization"]),
                             "beneficiary_id": payload["beneficiary_id"],
                             "issuer_id": payload["issuer_id"],
                             "service_code": payload["service_code"],
@@ -364,7 +405,7 @@ class SLEAwardRegistry:
                     row["award_id"]: {
                         key: row[key] for key in (
                             "award_id", "source_contribution_id", "result_digest",
-                            "authorization_digest", "beneficiary_id", "issuer_id",
+                            "authorization_digest", "authorization_json", "beneficiary_id", "issuer_id",
                             "service_code", "unit", "quantity", "capacity_id", "status",
                             "credit_id", "ledger_event_id", "ledger_event_hash",
                         )
