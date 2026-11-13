@@ -49,11 +49,17 @@ def _validate_record(record: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(record, dict):
         raise ValueError("each contribution must be an object")
 
+    if record.get("schema_version") != "1.0":
+        raise ValueError("unsupported schema_version; expected 1.0")
+
     contribution_id = _required_text(record, "contribution_id")
     contributor_id = _required_text(record, "contributor_id")
     _required_text(record, "project_id")
     _required_text(record, "effort_unit")
     benefit_stream_id = _required_text(record, "benefit_stream_id")
+    result_digest = _required_text(record, "result_digest")
+    if len(result_digest) != 64 or any(ch not in "0123456789abcdefABCDEF" for ch in result_digest):
+        raise ValueError(f"{contribution_id}: result_digest must be 64 hex characters")
 
     if record.get("status") != "ACCEPTED":
         raise ValueError(f"{contribution_id}: only ACCEPTED contributions can be scored")
@@ -120,6 +126,7 @@ def _validate_record(record: dict[str, Any]) -> dict[str, Any]:
         "contribution_id": contribution_id,
         "contributor_id": contributor_id,
         "benefit_stream_id": benefit_stream_id,
+        "result_digest": result_digest.lower(),
         "effort_unit": record["effort_unit"],
         "effort_units": effort,
         "complexity_factor": complexity,
@@ -147,6 +154,12 @@ def score_contributions(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
     effort_units = {item["effort_unit"] for item in validated}
     if len(effort_units) != 1:
         raise ValueError("mixed effort_unit values cannot be aggregated in one scoring batch")
+
+    digest_to_benefit: dict[str, str] = {}
+    for item in validated:
+        prior_benefit = digest_to_benefit.setdefault(item["result_digest"], item["benefit_stream_id"])
+        if prior_benefit != item["benefit_stream_id"]:
+            raise ValueError("the same result_digest cannot be credited to different benefit streams")
 
     attribution_by_benefit: dict[str, Decimal] = defaultdict(lambda: ZERO)
     for item in validated:
@@ -183,6 +196,7 @@ def score_contributions(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
     return {
         "policy_version": POLICY_VERSION,
         "status": "NON_MONETARY_SCORE_ONLY",
+        "verification_scope": "DECLARED_METADATA_ONLY_NOT_CRYPTOGRAPHICALLY_VERIFIED",
         "total_labor_score": _format_decimal(total_score),
         "effort_unit": next(iter(effort_units)),
         "contributions": scored,
