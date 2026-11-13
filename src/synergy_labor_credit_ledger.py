@@ -286,6 +286,8 @@ class LaborCreditLedger:
             raise ValueError("issuer cannot be the initial holder of its own claim")
         amount = _decimal(units, "units", positive=True)
         due = _timestamp(due_at, "due_at")
+        if due <= datetime.now(timezone.utc).isoformat(timespec="microseconds"):
+            raise ValueError("due_at must be in the future at issuance")
         request = {"issuer_id": issuer, "holder_id": holder, "source_contribution_id": contribution,
                    "award_authorization_ref": award_ref, "result_digest": digest,
                    "service_code": service, "unit": measure, "capacity_id": cid,
@@ -486,7 +488,7 @@ class LaborCreditLedger:
 
     def get_credit(self, credit_id: str) -> dict[str, Any]:
         row = self._credit(_text(credit_id, "credit_id"))
-        return dict(row)
+        return {"schema_version": "1.0", **dict(row)}
 
     def get_capacity(self, capacity_id: str) -> dict[str, Any]:
         row = self._capacity(_text(capacity_id, "capacity_id"))
