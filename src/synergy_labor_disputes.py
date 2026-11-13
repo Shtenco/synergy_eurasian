@@ -412,6 +412,7 @@ class LaborCreditDisputes:
                 "SELECT seq,event_type,payload_json FROM events ORDER BY seq"
             ).fetchall()
             credits: dict[str, dict[str, str]] = {}
+            dispute_credits: dict[str, str] = {}
             checked = 0
             issues: list[str] = []
 
@@ -447,6 +448,7 @@ class LaborCreditDisputes:
 
                     elif event_type == "DISPUTE_OPENED":
                         credit = credits[req["credit_id"]]
+                        dispute_credits[req["case_id"]] = req["credit_id"]
                         action_payload = {
                             "opened_by": req["opened_by"],
                             "reason_code": req["reason_code"],
@@ -480,23 +482,8 @@ class LaborCreditDisputes:
                         checked += 1
 
                     elif event_type == "DISPUTE_APPEALED":
-                        credit = credits[req["credit_id"]] if "credit_id" in req else None
-                        if credit is None:
-                            # Appeal events identify the case; recover its credit from the
-                            # preceding OPEN event without trusting the mutable SQL projection.
-                            prior = next(
-                                (json.loads(x["payload_json"])["request"]
-                                 for x in reversed(events[:int(event["seq"])-1])
-                                 if x["event_type"] == "DISPUTE_OPENED"
-                                 and json.loads(x["payload_json"])["request"]["case_id"] == req["case_id"]),
-                                None,
-                            )
-                            if prior is None:
-                                raise DisputeError("appeal has no preceding dispute-open event")
-                            credit = credits[prior["credit_id"]]
-                            credit_id = prior["credit_id"]
-                        else:
-                            credit_id = req["credit_id"]
+                        credit_id = dispute_credits[req["case_id"]]
+                        credit = credits[credit_id]
                         action_payload = {
                             "appellant_id": req["appellant_id"],
                             "appeal_ref": req["appeal_ref"],
@@ -515,17 +502,8 @@ class LaborCreditDisputes:
                         checked += 1
 
                     elif event_type == "DISPUTE_REMEDIATION_ACKNOWLEDGED":
-                        prior = next(
-                            (json.loads(x["payload_json"])["request"]
-                             for x in reversed(events[:int(event["seq"])-1])
-                             if x["event_type"] == "DISPUTE_OPENED"
-                             and json.loads(x["payload_json"])["request"]["case_id"] == req["case_id"]),
-                            None,
-                        )
-                        if prior is None:
-                            raise DisputeError("remediation has no preceding dispute-open event")
-                        credit = credits[prior["credit_id"]]
-                        credit_id = prior["credit_id"]
+                        credit_id = dispute_credits[req["case_id"]]
+                        credit = credits[credit_id]
                         action_payload = {
                             "remediation_ref": req["remediation_ref"],
                             "issuer_ack_ref": req["issuer_ack_ref"],
