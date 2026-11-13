@@ -237,6 +237,9 @@ def test_event_chain_is_valid_after_all_lifecycle_events():
     audit = ledger.verify_event_chain()
     assert audit["valid"] is True
     assert audit["events_checked"] == 5
+    projection = ledger.verify_projection_consistency()
+    assert projection["valid"] is True
+    assert projection["events_replayed"] == 5
     ledger.close()
 
 
@@ -280,4 +283,24 @@ def test_credit_claim_schema_accepts_ledger_projection_and_rejects_missing_award
     del invalid["award_authorization_ref"]
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(instance=invalid, schema=schema)
+    ledger.close()
+
+
+def test_projection_replay_detects_direct_database_mutation():
+    ledger = prepared_ledger()
+    issue(ledger, units="10")
+    ledger._db.execute("UPDATE credits SET remaining_units='9' WHERE credit_id='credit-1'")
+    audit = ledger.verify_projection_consistency()
+    assert audit["valid"] is False
+    assert any("projection differs" in item for item in audit["issues"])
+    ledger.close()
+
+
+def test_projection_replay_detects_capacity_reservation_corruption():
+    ledger = prepared_ledger()
+    issue(ledger, units="10")
+    ledger._db.execute("UPDATE capacity SET reserved_units='8' WHERE capacity_id='capacity-1'")
+    audit = ledger.verify_projection_consistency()
+    assert audit["valid"] is False
+    assert any("capacity projection differs" in item for item in audit["issues"])
     ledger.close()
