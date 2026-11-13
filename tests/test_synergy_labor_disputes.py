@@ -432,6 +432,11 @@ def test_party_key_role_revocation_and_identity_binding_are_enforced():
         disputes.open_dispute("case-1", "credit-1", "member-b", "SERVICE_QUALITY",
                               ["evidence://inspection/1"], "wrong-role", auth)
     disputes.trusted_party_keys["member-b-party-key"]["roles"] = ["SLE_CREDIT_PARTY"]
+    disputes.trusted_party_keys["member-b-party-key"]["valid_until"] = "2026-11-13T10:00:00Z"
+    with pytest.raises(DisputeError, match="outside its validity interval"):
+        disputes.open_dispute("case-1", "credit-1", "member-b", "SERVICE_QUALITY",
+                              ["evidence://inspection/1"], "expired", auth)
+    disputes.trusted_party_keys["member-b-party-key"]["valid_until"] = "2028-01-01T00:00:00Z"
     disputes.trusted_party_keys["member-b-party-key"]["revoked_at"] = "2026-11-13T10:00:00Z"
     with pytest.raises(DisputeError, match="revoked"):
         disputes.open_dispute("case-1", "credit-1", "member-b", "SERVICE_QUALITY",
