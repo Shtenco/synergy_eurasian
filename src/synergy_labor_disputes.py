@@ -102,7 +102,7 @@ def verify_resolver_decision(
         raise DisputeError("trusted key lacks DISPUTE_RESOLVER role")
     valid_from = _time(record.get("valid_from"), "key valid_from")
     valid_until = _time(record.get("valid_until"), "key valid_until")
-    if not (valid_from <= instant < valid_until) or decided < valid_from or decided > valid_until:
+    if not (valid_from <= instant < valid_until) or decided < valid_from or decided >= valid_until:
         raise DisputeError("resolver key is outside its validity interval")
     revoked_at = record.get("revoked_at")
     if revoked_at is not None and instant >= _time(revoked_at, "key revoked_at"):
