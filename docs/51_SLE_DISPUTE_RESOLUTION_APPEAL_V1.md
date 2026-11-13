@@ -4,7 +4,7 @@
 
 This reference workflow adds a dispute state machine to the SLE service-credit ledger. It is not a court, legal arbitration service, monetary dispute rail or production identity system.
 
-Implementation: `src/synergy_labor_disputes.py`
+Implementation: `src/synergy_labor_disputes.py` (including bilateral remediation acknowledgement)
 Decision schema: `interfaces/sle_dispute_decision.schema.json`
 Ledger integration: `src/synergy_labor_credit_ledger.py`
 Tests: `tests/test_synergy_labor_disputes.py`
@@ -16,7 +16,8 @@ OPEN -> DECIDED -> APPEALED -> DECIDED
 ```
 
 - `OPEN`: a current issuer or holder records a reason code and non-empty evidence references.
-- `DECIDED`: an independent resolver signs one of `CLAIM_UPHELD` or `DISPUTE_UPHELD`.
+- `DECIDED / CLAIM_UPHELD`: an independent resolver finds the claim valid; the dispute freeze is released.
+- `DECIDED / DISPUTE_UPHELD`: the challenge is upheld; the claim remains frozen until both issuer and holder acknowledge a remediation reference.
 - `APPEALED`: either credit party may appeal once with a reason and evidence references; the claim is frozen again.
 - The appeal must be decided by a different resolver key/principal than the first decision.
 
@@ -38,7 +39,8 @@ The trusted key registry must authorize `DISPUTE_RESOLVER`, bind the principal t
 
 - Opening a dispute does not erase or reduce the outstanding obligation.
 - Resolver outcomes do not automatically cancel the claim, release capacity, write off a balance, transfer money or post Financial OS entries.
-- A decision ends the dispute freeze; if `DISPUTE_UPHELD`, any actual cancellation or restructuring still requires its separately authorized workflow and existing bilateral cancellation controls.
+- `CLAIM_UPHELD` releases the dispute freeze. `DISPUTE_UPHELD` keeps it in place; `acknowledge_remediation()` requires distinct issuer and holder acknowledgement references before releasing the freeze.
+- Bilateral remediation acknowledgement does not itself cancel, reduce or restructure the claim. Any cancellation still requires the existing bilateral cancellation command; restructuring remains a separate workflow.
 - An appeal re-freezes transfer, redemption and cancellation until its final decision.
 - Default is not automatically reversed by a dispute decision. A defaulted claim remains subject to the existing default restrictions.
 - The workflow records party IDs and evidence references but does not authenticate the person submitting an open/appeal command. Production must add signed party authorization and identity proofing.
