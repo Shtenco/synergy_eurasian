@@ -354,7 +354,11 @@ class LaborCreditDisputes:
             raise DisputeError("issuer and holder acknowledgements must be distinct")
         row_snapshot = self._case(case)
         credit_snapshot = self.ledger._credit(row_snapshot["credit_id"])
-        digest = _action_digest("ACKNOWLEDGE_REMEDIATION", {"remediation_ref": remediation})
+        digest = _action_digest("ACKNOWLEDGE_REMEDIATION", {
+            "remediation_ref": remediation,
+            "issuer_ack_ref": issuer_ack,
+            "holder_ack_ref": holder_ack,
+        })
         expected_version = int(row_snapshot["version"])
         issuer_proof = verify_party_authorization(
             issuer_authorization, self.trusted_party_keys, action="ACKNOWLEDGE_REMEDIATION",
