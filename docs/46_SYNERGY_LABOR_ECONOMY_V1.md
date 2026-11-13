@@ -35,7 +35,7 @@ Each contribution is keyed by an immutable `contribution_id` and references:
 
 The record must not contain names, government identifiers, health data or other unnecessary personal data. Store evidence off-chain or in an access-controlled evidence service; publish only references and hashes where appropriate.
 
-Accepted records require at least one independent evidence item and an independent verifier. Self-attestation alone is insufficient for an accepted score.
+Accepted records require at least one declared independent evidence item and a declared independent verifier. **V1 validates metadata assertions only:** it does not fetch evidence bytes, recompute their hashes, authenticate verifier identities or cryptographically verify signatures. A production adapter must perform those checks before it can assert acceptance. Self-attestation alone is insufficient.
 
 ## 4. V1 score
 
@@ -65,7 +65,7 @@ For every underlying benefit stream (b):
 sum_{i\in b} A_i\leq 1
 ]
 
-If the total attribution exceeds 1, the complete scoring batch is rejected. The engine does not silently normalize shares because that would hide duplicate claims and change previously agreed attribution.
+If the total attribution exceeds 1, the complete scoring batch is rejected. A repeated `result_digest` cannot be assigned to different benefit streams within one batch. The engine does not silently normalize shares because that would hide duplicate claims and change previously agreed attribution.
 
 A single measured benefit may have several contributors, but the aggregate credited attribution cannot exceed the underlying benefit. Repeated evidence hashes do not by themselves prove separate benefits.
 
