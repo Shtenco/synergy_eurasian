@@ -425,6 +425,7 @@ class SLEAwardRegistry:
                             "capacity_id": payload["capacity_id"],
                             "status": "RESERVED", "credit_id": None,
                             "ledger_event_id": None, "ledger_event_hash": None,
+                            "reserved_at": row["created_at"], "consumed_at": None,
                         }
                     elif row["event_type"] == "AWARD_CONSUMED":
                         award = replay[payload["award_id"]]
@@ -434,6 +435,7 @@ class SLEAwardRegistry:
                             "status": "CONSUMED", "credit_id": payload["credit_id"],
                             "ledger_event_id": payload["ledger_event_id"],
                             "ledger_event_hash": payload["ledger_event_hash"],
+                            "consumed_at": row["created_at"],
                         })
                     else:
                         raise ValueError("unsupported award registry event")
@@ -448,6 +450,7 @@ class SLEAwardRegistry:
                             "authorization_digest", "authorization_json", "beneficiary_id", "issuer_id",
                             "service_code", "unit", "quantity", "capacity_id", "status",
                             "credit_id", "ledger_event_id", "ledger_event_hash",
+                            "reserved_at", "consumed_at",
                         )
                     }
                     for row in self._db.execute("SELECT * FROM awards").fetchall()
