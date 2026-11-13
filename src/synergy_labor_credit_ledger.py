@@ -191,9 +191,8 @@ class LaborCreditLedger:
         ):
             if column not in dispute_columns:
                 self._db.execute(f"ALTER TABLE disputes ADD COLUMN {column} {declaration}")
-        self._db.execute("DROP INDEX IF EXISTS disputes_one_active_per_credit")
         self._db.execute(
-            """CREATE UNIQUE INDEX disputes_one_active_per_credit ON disputes(credit_id)
+            """CREATE UNIQUE INDEX IF NOT EXISTS disputes_one_active_per_credit_v2 ON disputes(credit_id)
             WHERE status IN ('OPEN','APPEALED')
                OR (status='DECIDED' AND outcome='DISPUTE_UPHELD' AND remediation_closed=0)"""
         )
