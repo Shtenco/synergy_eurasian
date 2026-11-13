@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 import sqlite3
 import threading
 from pathlib import Path
@@ -51,6 +52,10 @@ class SLEAwardRegistry:
     """One shared uniqueness authority for all participating award producers."""
 
     def __init__(self, database: str | Path = ":memory:", *, timeout: float = 10.0):
+        if (isinstance(timeout, bool) or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout) or timeout < 0
+            or timeout > 2_147_483.647):
+            raise ValueError("timeout must be a finite number between 0 and 2147483.647 seconds")
         self.database = str(database)
         self._lock = threading.RLock()
         self._db = sqlite3.connect(
@@ -59,7 +64,7 @@ class SLEAwardRegistry:
         )
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA foreign_keys=ON")
-        self._db.execute("PRAGMA busy_timeout=10000")
+        self._db.execute(f"PRAGMA busy_timeout={int(timeout * 1000)}")
         if self.database != ":memory:":
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA synchronous=FULL")
