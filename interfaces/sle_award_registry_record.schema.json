@@ -9,7 +9,7 @@
     "source_contribution_id",
     "result_digest",
     "authorization_digest",
-    "authorization",
+    "authorization_json",
     "beneficiary_id",
     "issuer_id",
     "service_code",
@@ -41,10 +41,6 @@
     "authorization_digest": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
-    },
-    "authorization": {
-      "type": "string",
-      "contentMediaType": "application/json"
     },
     "beneficiary_id": {
       "type": "string",
@@ -110,6 +106,10 @@
         "null"
       ],
       "format": "date-time"
+    },
+    "authorization_json": {
+      "type": "string",
+      "contentMediaType": "application/json"
     }
   }
 }
