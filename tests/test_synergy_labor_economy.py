@@ -12,6 +12,7 @@ from synergy_labor_economy import POLICY_VERSION, score_contributions
 
 def contribution(**overrides):
     record = {
+        "schema_version": "1.0",
         "contribution_id": "contrib-001",
         "contributor_id": "person-pseudo-001",
         "contributor_kind": "HUMAN",
@@ -19,13 +20,13 @@ def contribution(**overrides):
         "benefit_stream_id": "benefit-001",
         "category": "TECHNICAL",
         "status": "ACCEPTED",
-        "effort_units": "10",
+        "effort_units": 10,
         "effort_unit": "verified_work_package_unit",
-        "complexity_factor": "1.5",
-        "quality_factor": "0.8",
-        "outcome_factor": "1.2",
-        "reliability_factor": "0.9",
-        "attribution_share": "1",
+        "complexity_factor": 1.5,
+        "quality_factor": 0.8,
+        "outcome_factor": 1.2,
+        "reliability_factor": 0.9,
+        "attribution_share": 1,
         "evidence": [{
             "evidence_id": "evidence-001",
             "sha256": "a" * 64,
@@ -133,6 +134,6 @@ def test_json_schema_accepts_valid_contribution_and_rejects_invalid_bounds():
     jsonschema.Draft202012Validator.check_schema(schema)
     jsonschema.validate(instance=contribution(), schema=schema)
 
-    invalid = contribution(attribution_share="1.01")
+    invalid = contribution(attribution_share=1.01)
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(instance=invalid, schema=schema)
