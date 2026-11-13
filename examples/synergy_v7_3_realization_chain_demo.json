@@ -1,0 +1,115 @@
+{
+  "as_of": "2026-02-15",
+  "outputs": [
+    {
+      "output_id": "out1",
+      "enterprise_id": "factory",
+      "project_id": "project1",
+      "benefit_stream_id": "energy-efficiency",
+      "period": "2026-Q1",
+      "product_id": "machine_part",
+      "observed_quantity": 100,
+      "baseline_quantity": 80,
+      "unit": "unit",
+      "evidence_method": "PRE_POST",
+      "evidence_id": "meter:output",
+      "source_class": "OBSERVED"
+    }
+  ],
+  "deliveries": [
+    {
+      "delivery_id": "del1",
+      "output_id": "out1",
+      "customer_id": "buyer",
+      "accepted_date": "2026-02-01",
+      "accepted_quantity": 90,
+      "unit": "unit",
+      "acceptance_ref": "acceptance:del1",
+      "source_class": "VERIFIED"
+    }
+  ],
+  "invoice_allocations": [
+    {
+      "allocation_id": "ial1",
+      "delivery_id": "del1",
+      "invoice_document_id": "invoice1",
+      "invoiced_quantity": 80,
+      "unit": "unit",
+      "invoiced_amount": 8000,
+      "currency": "USD",
+      "source_ref": "erp:invoice-line"
+    }
+  ],
+  "invoices": [
+    {
+      "document_id": "invoice1",
+      "side": "RECEIVABLE",
+      "enterprise_id": "factory",
+      "counterparty_id": "buyer",
+      "issue_date": "2026-02-02",
+      "due_date": "2026-03-02",
+      "currency": "USD",
+      "original_amount": 9000,
+      "source_ref": "erp:invoice:invoice1"
+    }
+  ],
+  "settlements": [
+    {
+      "settlement_id": "settle1",
+      "document_id": "invoice1",
+      "settlement_date": "2026-02-10",
+      "amount": 5000,
+      "currency": "USD",
+      "cash_account_id": "bank-usd",
+      "source_ref": "bank:line"
+    }
+  ],
+  "collection_attributions": [
+    {
+      "attribution_id": "ca1",
+      "settlement_id": "settle1",
+      "invoice_allocation_id": "ial1",
+      "amount": 5000,
+      "currency": "USD",
+      "source_ref": "bank:allocation"
+    }
+  ],
+  "costs": [
+    {
+      "cost_id": "cost1",
+      "enterprise_id": "factory",
+      "project_id": "project1",
+      "benefit_stream_id": "energy-efficiency",
+      "period": "2026-Q1",
+      "cost_type": "DIRECT_COST",
+      "amount": 2000,
+      "currency": "USD",
+      "evidence_id": "erp:cost",
+      "source_class": "VERIFIED"
+    },
+    {
+      "cost_id": "cost2",
+      "enterprise_id": "factory",
+      "project_id": "project1",
+      "benefit_stream_id": "energy-efficiency",
+      "period": "2026-Q1",
+      "cost_type": "INCREMENTAL_OPEX",
+      "amount": 500,
+      "currency": "USD",
+      "evidence_id": "erp:opex",
+      "source_class": "VERIFIED"
+    },
+    {
+      "cost_id": "cost3",
+      "enterprise_id": "factory",
+      "project_id": "project1",
+      "benefit_stream_id": "energy-efficiency",
+      "period": "2026-Q1",
+      "cost_type": "REPLACEMENT_OBLIGATION",
+      "amount": 300,
+      "currency": "USD",
+      "evidence_id": "asset:replacement",
+      "source_class": "VERIFIED"
+    }
+  ]
+}

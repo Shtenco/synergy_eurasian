@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/synergy_v7_trade_ledger.schema.json",
+  "title": "SYNERGY V7.2.1 Trade Ledger Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "as_of",
+    "documents",
+    "settlements",
+    "adjustments",
+    "disputes"
+  ],
+  "properties": {
+    "as_of": {
+      "type": "string",
+      "format": "date"
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document_id",
+          "side",
+          "enterprise_id",
+          "counterparty_id",
+          "issue_date",
+          "due_date",
+          "currency",
+          "original_amount",
+          "source_ref"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "side": {
+            "enum": [
+              "RECEIVABLE",
+              "PAYABLE"
+            ]
+          },
+          "enterprise_id": {
+            "type": "string"
+          },
+          "counterparty_id": {
+            "type": "string"
+          },
+          "issue_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "original_amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "source_ref": {
+            "type": "string"
+          },
+          "contract_ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "settlements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "settlement_id",
+          "document_id",
+          "settlement_date",
+          "amount",
+          "currency",
+          "cash_account_id",
+          "source_ref"
+        ],
+        "properties": {
+          "settlement_id": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "settlement_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "currency": {
+            "type": "string"
+          },
+          "cash_account_id": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "adjustments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "adjustment_id",
+          "document_id",
+          "adjustment_date",
+          "amount",
+          "currency",
+          "reason",
+          "source_ref"
+        ],
+        "properties": {
+          "adjustment_id": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "adjustment_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "currency": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "disputes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dispute_id",
+          "document_id",
+          "event_date",
+          "amount",
+          "currency",
+          "action",
+          "source_ref"
+        ],
+        "properties": {
+          "dispute_id": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "event_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "currency": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "OPEN",
+              "RESOLVE"
+            ]
+          },
+          "source_ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "credit_assessments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "counterparty_id",
+          "currency",
+          "probability_of_default",
+          "loss_given_default",
+          "assessment_date",
+          "source_ref"
+        ],
+        "properties": {
+          "counterparty_id": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "probability_of_default": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "loss_given_default": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "assessment_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "source_ref": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

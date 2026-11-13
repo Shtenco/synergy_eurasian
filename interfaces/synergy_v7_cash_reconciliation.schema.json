@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/synergy_v7_cash_reconciliation.schema.json",
+  "title": "SYNERGY V7.2.2 Cash Reconciliation Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "as_of",
+    "documents",
+    "prior_settlements",
+    "statement_lines",
+    "allocations"
+  ],
+  "properties": {
+    "as_of": {
+      "type": "string",
+      "format": "date"
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "document_id",
+          "side",
+          "enterprise_id",
+          "counterparty_id",
+          "issue_date",
+          "due_date",
+          "currency",
+          "original_amount",
+          "source_ref"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "RECEIVABLE",
+              "PAYABLE"
+            ]
+          },
+          "enterprise_id": {
+            "type": "string"
+          },
+          "counterparty_id": {
+            "type": "string"
+          },
+          "issue_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "original_amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "source_ref": {
+            "type": "string"
+          },
+          "contract_ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "prior_settlements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "settlement_id",
+          "document_id",
+          "settlement_date",
+          "amount",
+          "currency",
+          "cash_account_id",
+          "source_ref"
+        ],
+        "properties": {
+          "settlement_id": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "settlement_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "currency": {
+            "type": "string"
+          },
+          "cash_account_id": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "statement_lines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "line_id",
+          "cash_account_id",
+          "booked_date",
+          "signed_amount",
+          "currency",
+          "bank_reference",
+          "source_ref"
+        ],
+        "properties": {
+          "line_id": {
+            "type": "string"
+          },
+          "cash_account_id": {
+            "type": "string"
+          },
+          "booked_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "signed_amount": {
+            "type": "number",
+            "not": {
+              "const": 0
+            }
+          },
+          "currency": {
+            "type": "string"
+          },
+          "bank_reference": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "allocations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "allocation_id",
+          "bank_line_id",
+          "document_id",
+          "allocated_amount",
+          "source_ref"
+        ],
+        "properties": {
+          "allocation_id": {
+            "type": "string"
+          },
+          "bank_line_id": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "allocated_amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "source_ref": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

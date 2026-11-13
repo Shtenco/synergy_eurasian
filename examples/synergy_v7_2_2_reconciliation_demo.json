@@ -1,0 +1,64 @@
+{
+  "as_of": "2026-02-05",
+  "documents": [
+    {
+      "document_id": "AR-FACTORY-001",
+      "side": "RECEIVABLE",
+      "enterprise_id": "factory-01",
+      "counterparty_id": "buyer-01",
+      "issue_date": "2026-01-01",
+      "due_date": "2026-01-31",
+      "currency": "USD",
+      "original_amount": 100000,
+      "source_ref": "erp:invoice:AR-FACTORY-001"
+    },
+    {
+      "document_id": "AP-FACTORY-001",
+      "side": "PAYABLE",
+      "enterprise_id": "factory-01",
+      "counterparty_id": "supplier-01",
+      "issue_date": "2026-01-02",
+      "due_date": "2026-01-25",
+      "currency": "USD",
+      "original_amount": 40000,
+      "source_ref": "erp:invoice:AP-FACTORY-001"
+    }
+  ],
+  "prior_settlements": [],
+  "statement_lines": [
+    {
+      "line_id": "BANK-IN-001",
+      "cash_account_id": "USD-OPERATING",
+      "booked_date": "2026-02-01",
+      "signed_amount": 60000,
+      "currency": "USD",
+      "bank_reference": "buyer payment",
+      "source_ref": "bank:statement:line-001"
+    },
+    {
+      "line_id": "BANK-OUT-001",
+      "cash_account_id": "USD-OPERATING",
+      "booked_date": "2026-02-02",
+      "signed_amount": -25000,
+      "currency": "USD",
+      "bank_reference": "supplier payment",
+      "source_ref": "bank:statement:line-002"
+    }
+  ],
+  "allocations": [
+    {
+      "allocation_id": "ALLOC-001",
+      "bank_line_id": "BANK-IN-001",
+      "document_id": "AR-FACTORY-001",
+      "allocated_amount": 60000,
+      "source_ref": "approved:match:001"
+    },
+    {
+      "allocation_id": "ALLOC-002",
+      "bank_line_id": "BANK-OUT-001",
+      "document_id": "AP-FACTORY-001",
+      "allocated_amount": 25000,
+      "source_ref": "approved:match:002"
+    }
+  ]
+}

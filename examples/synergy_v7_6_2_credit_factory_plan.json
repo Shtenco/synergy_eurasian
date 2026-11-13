@@ -1,0 +1,53 @@
+{
+  "horizon_periods": 3,
+  "objective_currency": "USD",
+  "recipes": [
+    {
+      "recipe_id": "make",
+      "output_product_id": "finished",
+      "output_quantity_per_batch": 1,
+      "output_unit": "unit",
+      "input_requirements": [],
+      "resource_requirements": [],
+      "lead_time_periods": 1
+    }
+  ],
+  "demands": [
+    {
+      "demand_id": "sale",
+      "product_id": "finished",
+      "quantity": 1,
+      "unit": "unit",
+      "due_period": 1,
+      "unit_value": 100,
+      "currency": "USD"
+    }
+  ],
+  "inventory_receipts": [],
+  "resource_capacities": [],
+  "batch_limits": {
+    "make": 1
+  },
+  "batch_costs": {
+    "make": 20
+  },
+  "holding_costs": {},
+  "cash_opening_balance": 0,
+  "cash_minimum_balance": {
+    "0": 0,
+    "1": 0,
+    "2": 0
+  },
+  "collection_lag_by_demand": {
+    "sale": 1
+  },
+  "credit_limit": 20,
+  "credit_opening_balance": 0,
+  "credit_draw_limits_by_period": {
+    "0": 20
+  },
+  "credit_interest_rates_by_period": {
+    "2": 0.1
+  },
+  "terminal_credit_balance_limit": 0
+}

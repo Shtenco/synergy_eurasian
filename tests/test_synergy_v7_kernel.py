@@ -1,0 +1,1308 @@
+import sys
+from pathlib import Path
+import pytest
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/"src"))
+from synergy_v7 import (DomainEvent,EventStore,GraphNode,GraphEdge,EconomicGraph,
+    PhysicalFlow,physical_flow_summary,ResourceCapacity,ResourceCommitment,
+    validate_resource_capacity,graph_from_events,BenefitClaim,BenefitLedger,
+    cashflow_npv,empirical_cvar,pareto_frontier)
+
+
+def event(seq=1,**kw):
+    d=dict(event_id=f"e{seq}",aggregate_type="PROJECT",aggregate_id="p1",sequence=seq,
+      event_type="PROJECT_CREATED" if seq==1 else "PROJECT_UPDATED",
+      effective_at="2026-01-01T00:00:00Z",recorded_at="2026-01-01T00:01:00Z",
+      payload={"amount":100},source_ref="test-fixture",idempotency_key=f"key{seq}")
+    d.update(kw); return DomainEvent(**d)
+
+
+def test_event_store_hash_chain_and_sequence():
+    s=EventStore(); a=s.append(event()); b=s.append(event(2))
+    assert b.previous_hash==a.event_hash and s.verify()
+
+
+def test_event_store_rejects_duplicate_and_sequence_gap():
+    s=EventStore(); s.append(event())
+    with pytest.raises(ValueError,match="sequence"): s.append(event(3))
+    with pytest.raises(ValueError,match="idempotency"): s.append(event(2,idempotency_key="key1"))
+
+
+def test_event_store_requires_timezone_and_finite_json():
+    with pytest.raises(ValueError,match="timezone"): EventStore().append(event(effective_at="2026-01-01T00:00:00"))
+    with pytest.raises(ValueError): EventStore().append(event(payload={"bad":float("nan")}))
+
+
+def test_graph_rejects_dangling_edges_and_duplicate_nodes():
+    with pytest.raises(ValueError,match="Dangling"): EconomicGraph.build([GraphNode("a","PROJECT")],[GraphEdge("e","a","b","SUPPLIES")])
+    with pytest.raises(ValueError,match="Duplicate"): EconomicGraph.build([GraphNode("a","PROJECT"),GraphNode("a","ASSET")],[])
+
+
+def test_dependency_graph_must_be_acyclic():
+    ns=[GraphNode("a","PROJECT"),GraphNode("b","PROJECT")]
+    es=[GraphEdge("e1","a","b","DEPENDS_ON"),GraphEdge("e2","b","a","DEPENDS_ON")]
+    with pytest.raises(ValueError,match="cycle"): EconomicGraph.build(ns,es)
+
+
+def test_physical_flow_does_not_promote_internal_transfer_to_output():
+    fs=[PhysicalFlow("f1","a","b","steel",10,"tonne","2026-Q1","INTERNAL"),
+        PhysicalFlow("f2","b","customer","steel",7,"tonne","2026-Q1","EXPORT")]
+    r=physical_flow_summary(fs)
+    assert r["internal_transfer_volume"]==10 and r["external_exports"]["steel::tonne"]==7
+    assert r["internal_transfer_is_new_output"] is False
+
+
+def claim(**kw):
+    d=dict(enterprise_id="co1",benefit_stream_id="energy_saving",period="2026-Q1",
+      gross_incremental_benefit=100,incremental_opex=20,replacement_obligation=15,
+      evidence_id="meter:123",source_class="VERIFIED")
+    d.update(kw); return BenefitClaim(**d)
+
+
+def test_benefit_ledger_rejects_double_counting_and_nets_costs():
+    l=BenefitLedger(); l.add(claim())
+    assert l.consolidated()["net_reproducible_benefit"]==65
+    with pytest.raises(ValueError,match="Duplicate"): l.add(claim())
+
+
+def test_scenario_is_separated_from_observed():
+    l=BenefitLedger(); l.add(claim(source_class="SCENARIO"))
+    assert l.consolidated()["by_evidence_class"]["SCENARIO"]==65
+    assert l.consolidated()["scenario_values_are_not_observed_cash"]
+
+
+def test_npv_and_cvar():
+    assert cashflow_npv([-100,60,60],0.0)==20
+    assert empirical_cvar([0,1,2,3,100],0.8)==100
+
+
+def test_pareto_frontier_keeps_tradeoffs_and_removes_dominated():
+    rows=[{"name":"a","npv":10,"resilience":5},{"name":"b","npv":8,"resilience":8},{"name":"c","npv":7,"resilience":4}]
+    assert {r["name"] for r in pareto_frontier(rows,("npv","resilience"))}=={"a","b"}
+
+
+def test_resource_capacity_rejects_overcommitment():
+    caps=[ResourceCapacity("power","2026-Q2",100,"MWh","OBSERVED","meter:power")]
+    commits=[ResourceCommitment("c1","power","p1","2026-Q2",60,"MWh"),ResourceCommitment("c2","power","p2","2026-Q2",50,"MWh")]
+    r=validate_resource_capacity(caps,commits)
+    assert not r["feasible"]
+    assert r["violations"][0]["excess"]==10
+
+
+def test_unverified_capacity_cannot_be_used_as_firm_supply():
+    caps=[ResourceCapacity("grid","2027-Q1",100,"MW","UNDER_CONSTRUCTION","permit")]
+    commits=[ResourceCommitment("c1","grid","p1","2027-Q1",10,"MW")]
+    with pytest.raises(ValueError,match="not firm"): validate_resource_capacity(caps,commits)
+
+
+def test_proposed_commitments_are_excluded_by_default():
+    caps=[ResourceCapacity("water","2026-Q2",100,"m3","OBSERVED","meter")]
+    cs=[ResourceCommitment("c1","water","p1","2026-Q2",90,"m3"),
+        ResourceCommitment("c2","water","p2","2026-Q2",90,"m3","PROPOSED")]
+    assert validate_resource_capacity(caps,cs)["feasible"]
+    assert not validate_resource_capacity(caps,cs,include_proposed=True)["feasible"]
+
+
+def test_graph_projection_rebuilt_from_domain_events():
+    s=EventStore()
+    s.append(event(event_type="NODE_REGISTERED",payload={"node_id":"p1","node_type":"PROJECT"}))
+    s.append(event(2,event_type="NODE_REGISTERED",payload={"node_id":"a1","node_type":"ASSET"}))
+    s.append(event(3,event_type="EDGE_REGISTERED",payload={"edge_id":"e1","source_id":"p1","target_id":"a1","relation":"OWNS"}))
+    g=graph_from_events(s.events)
+    assert set(g.nodes)=={"p1","a1"} and g.edges[0].relation=="OWNS"
+
+
+from synergy_v7 import (MaterialRequirement, ResourceRequirement, ProductionRecipe,
+    ProductionOrder, InventoryReceipt, ProductDemand, evaluate_production_plan)
+
+
+def test_production_plan_completes_after_lead_time_and_serves_demand():
+    recipe=ProductionRecipe("r1","finished",10,"unit",(MaterialRequirement("raw",5,"kg"),),
+      (ResourceRequirement("power",2,"MWh"),),1)
+    orders=[ProductionOrder("o1","r1",0,2)]
+    receipts=[InventoryReceipt("i1","raw",10,"kg",0,"OBSERVED")]
+    demands=[ProductDemand("d1","finished",20,"unit",1)]
+    caps=[ResourceCapacity("power","0",4,"MWh","OBSERVED","meter")]
+    r=evaluate_production_plan([recipe],orders,receipts,demands,caps)
+    assert r["feasible"] and r["demand"]["finished"]["fulfilled"]==20
+    assert r["orders"]["o1"]["finish_period"]==1
+
+
+def test_production_blocks_order_when_input_material_is_missing():
+    recipe=ProductionRecipe("r1","finished",10,"unit",(MaterialRequirement("raw",5,"kg"),),(),1)
+    r=evaluate_production_plan([recipe],[ProductionOrder("o1","r1",0,1)],[],[],[])
+    assert not r["feasible"] and r["orders"]["o1"]["status"]=="BLOCKED"
+    assert r["violations"][0]["type"]=="MATERIAL_SHORTAGE"
+
+
+def test_production_detects_competing_orders_for_same_resource():
+    recipes=[ProductionRecipe("r1","a",1,"unit",(),(ResourceRequirement("power",6,"MWh"),),1),
+      ProductionRecipe("r2","b",1,"unit",(),(ResourceRequirement("power",6,"MWh"),),1)]
+    orders=[ProductionOrder("o1","r1",0,1),ProductionOrder("o2","r2",0,1)]
+    caps=[ResourceCapacity("power","0",10,"MWh","OBSERVED","meter")]
+    r=evaluate_production_plan(recipes,orders,[],[],caps)
+    assert not r["feasible"] and r["orders"]["o2"]["status"]=="BLOCKED"
+
+
+def test_production_excludes_planned_material_supply_by_default():
+    recipe=ProductionRecipe("r1","finished",1,"unit",(MaterialRequirement("raw",1,"kg"),),(),1)
+    receipt=InventoryReceipt("i1","raw",1,"kg",0,"PLANNED")
+    r=evaluate_production_plan([recipe],[ProductionOrder("o1","r1",0,1)],[receipt],[],[])
+    assert not r["feasible"] and r["excluded_nonfirm_receipts"]==["i1"]
+
+
+def test_production_tracks_inventory_across_periods_and_priorities():
+    recipe=ProductionRecipe("r1","finished",10,"unit",(MaterialRequirement("raw",5,"kg"),),(),1)
+    orders=[ProductionOrder("o1","r1",0,1),ProductionOrder("o2","r1",1,1)]
+    receipts=[InventoryReceipt("i1","raw",10,"kg",0)]
+    demands=[ProductDemand("d1","finished",5,"unit",1,priority=1),
+      ProductDemand("d2","finished",5,"unit",1,priority=2),
+      ProductDemand("d3","finished",10,"unit",2)]
+    r=evaluate_production_plan([recipe],orders,receipts,demands,[])
+    assert r["feasible"] and r["demand"]["finished"]["fulfilled"]==20
+    assert r["inventory_trace"][-1]["inventory"]["raw"]==0
+
+
+def test_recipe_rejects_zero_lead_time_and_duplicate_inputs():
+    with pytest.raises(ValueError,match="lead_time"): ProductionRecipe("r","x",1,"u",(),(),0)
+    with pytest.raises(ValueError,match="Duplicate"): ProductionRecipe("r","x",1,"u",
+      (MaterialRequirement("raw",1,"kg"),MaterialRequirement("raw",2,"kg")),(),1)
+
+
+def test_production_rejects_product_unit_mismatch():
+    recipe=ProductionRecipe("r1","finished",1,"unit",(MaterialRequirement("raw",1,"kg"),),(),1)
+    receipt=InventoryReceipt("i1","raw",1,"tonne",0)
+    with pytest.raises(ValueError,match="Unit mismatch"):
+        evaluate_production_plan([recipe],[],[receipt],[],[])
+
+
+def test_integrated_factory_fixture_is_schema_valid_and_feasible():
+    import json
+    from synergy_v7.cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_1_integrated_factory_demo.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    result=evaluate_document(document)
+    assert result["feasible"]
+    assert result["demand"]["machine_part"]["fulfilled"]==12
+    assert result["completed_output"]["steel"]==80
+    assert result["completed_output"]["machine_part"]==12
+
+
+from synergy_v7 import (WorkingCapitalSnapshot, working_capital_cash_impact,
+    CashWaterfallInput, run_cash_waterfall)
+
+
+def test_working_capital_and_cash_conversion_cycle():
+    w=WorkingCapitalSnapshot(100,200,50,10,1000,730,365)
+    assert w.net_operating_working_capital==240
+    assert w.dso_days==pytest.approx(36.5)
+    assert w.dio_days==pytest.approx(100)
+    assert w.dpo_days==pytest.approx(25)
+    assert w.cash_conversion_cycle_days==pytest.approx(111.5)
+
+
+def test_reduction_in_net_working_capital_releases_cash():
+    old=WorkingCapitalSnapshot(100,200,50,10,1000,730)
+    new=WorkingCapitalSnapshot(80,180,60,10,1000,730)
+    assert working_capital_cash_impact(old,new)==50
+
+
+def test_cash_waterfall_respects_replacement_reserve_and_distribution_gates():
+    x=CashWaterfallInput(opening_cash=50,customer_collections=100,
+      other_external_operating_receipts=0,financing_proceeds=25,internal_transfers_received=10,
+      opening_reserve=20,reserve_target=50,opex_due=70,replacement_due=40,
+      debt_service_due=20,growth_capex_requested=20,distributions_requested=10)
+    r=run_cash_waterfall(x)
+    assert r["solvent_for_listed_mandatory_obligations"]
+    assert r["reserve"]["ending"]==50
+    assert r["growth_capex_funded"]==20
+    assert r["distribution_funded"]==5
+    assert r["external_operating_cash_generation"]==100
+    assert r["financing_proceeds_excluded_from_operating_generation"]==25
+    assert r["internal_transfers_excluded_from_consolidated_operating_generation"]==10
+
+
+def test_cash_waterfall_uses_reserve_for_mandatory_shortfall_and_blocks_distributions():
+    x=CashWaterfallInput(opening_cash=10,customer_collections=0,
+      other_external_operating_receipts=0,financing_proceeds=0,internal_transfers_received=0,
+      opening_reserve=5,reserve_target=5,opex_due=20,replacement_due=10,
+      debt_service_due=0,growth_capex_requested=50,distributions_requested=10)
+    r=run_cash_waterfall(x)
+    assert r["allocations"]["opex"]["funded"]==15
+    assert r["allocations"]["replacement"]["unfunded"]==10
+    assert r["distribution_funded"]==0
+    assert not r["distribution_gate_passed"]
+    assert r["growth_capex_funded"]==0
+
+
+def test_cash_waterfall_funds_reserve_before_growth_and_distribution():
+    x=CashWaterfallInput(opening_cash=100,customer_collections=0,
+      other_external_operating_receipts=0,financing_proceeds=0,internal_transfers_received=0,
+      opening_reserve=0,reserve_target=80,opex_due=0,replacement_due=0,
+      debt_service_due=0,growth_capex_requested=50,distributions_requested=50)
+    r=run_cash_waterfall(x)
+    assert r["reserve"]["ending"]==80
+    assert r["growth_capex_funded"]==20
+    assert r["distribution_funded"]==0
+
+
+def test_working_capital_rejects_negative_balances():
+    with pytest.raises(ValueError,match="non-negative"):
+        WorkingCapitalSnapshot(-1,0,0,0,0,0)
+
+
+from synergy_v7 import (TradeDocument, SettlementEvent, DocumentAdjustment,
+    DisputeEvent, CreditRiskAssessment, build_trade_ledger)
+
+
+def trade_doc(document_id="inv1",side="RECEIVABLE",amount=100,counterparty="buyer1"):
+    return TradeDocument(document_id,side,"enterprise1",counterparty,"2026-01-01",
+      "2026-01-31","USD",amount,"erp:invoice:"+document_id)
+
+
+def test_trade_ledger_partial_settlement_and_aging():
+    doc=trade_doc()
+    settlement=SettlementEvent("s1","inv1","2026-02-10",40,"USD","bank1","bank:tx1")
+    r=build_trade_ledger([doc],[settlement],[],[],"2026-03-05")
+    row=r["documents"][0]
+    assert row["outstanding"]==60
+    assert row["days_past_due"]==33
+    assert row["aging_bucket"]=="DUE_31_60"
+    assert r["totals_by_side_and_currency"]["RECEIVABLE::USD"]==60
+
+
+def test_trade_ledger_replays_disputes_and_settlements_chronologically():
+    doc=trade_doc(amount=100)
+    dispute=DisputeEvent("d1","inv1","2026-01-15",80,"USD","OPEN","case:1")
+    settlement=SettlementEvent("s1","inv1","2026-02-01",80,"USD","bank1","bank:1")
+    r=build_trade_ledger([doc],[settlement],[],[dispute],"2026-02-02")
+    row=r["documents"][0]
+    assert row["outstanding"]==20
+    assert row["disputed_outstanding"]==20
+
+
+def test_trade_ledger_rejects_settlement_over_open_balance():
+    doc=trade_doc(amount=100)
+    payments=[SettlementEvent("s1","inv1","2026-01-10",60,"USD","bank","tx1"),
+      SettlementEvent("s2","inv1","2026-01-11",50,"USD","bank","tx2")]
+    with pytest.raises(ValueError,match="exceeds open balance"):
+        build_trade_ledger([doc],payments,[],[],"2026-01-12")
+
+
+def test_trade_ledger_credit_adjustment_reduces_open_balance_once():
+    doc=trade_doc(amount=100)
+    adjustment=DocumentAdjustment("cn1","inv1","2026-01-15",25,"USD","credit note","erp:cn1")
+    r=build_trade_ledger([doc],[],[adjustment],[],"2026-01-20")
+    assert r["documents"][0]["outstanding"]==75
+
+
+def test_trade_ledger_dispute_resolution_and_limits():
+    doc=trade_doc(amount=100)
+    events=[DisputeEvent("d1","inv1","2026-01-10",60,"USD","OPEN","case:1"),
+      DisputeEvent("d2","inv1","2026-01-20",20,"USD","RESOLVE","case:2")]
+    r=build_trade_ledger([doc],[],[],events,"2026-01-25")
+    assert r["documents"][0]["disputed_outstanding"]==40
+    too_much=events+[DisputeEvent("d3","inv1","2026-01-21",50,"USD","RESOLVE","case:3")]
+    with pytest.raises(ValueError,match="exceeds disputed"):
+        build_trade_ledger([doc],[],[],too_much,"2026-01-25")
+
+
+def test_trade_ledger_expected_credit_loss_is_separate_from_cash():
+    doc=trade_doc(amount=200)
+    risk=CreditRiskAssessment("buyer1","USD",0.1,0.5,"2026-01-15","risk:rating1")
+    r=build_trade_ledger([doc],[],[],[],"2026-02-01",[risk])
+    exposure=r["counterparty_exposure"][0]
+    assert exposure["expected_credit_loss"]==10
+    assert r["expected_credit_loss_is_estimate_not_cash_or_provision"]
+
+
+def test_trade_ledger_future_settlements_and_risk_assessments_are_not_looked_ahead():
+    doc=trade_doc(amount=100)
+    future=SettlementEvent("s1","inv1","2026-02-01",100,"USD","bank","tx1")
+    future_risk=CreditRiskAssessment("buyer1","USD",1,1,"2026-02-01","risk:future")
+    r=build_trade_ledger([doc],[future],[],[],"2026-01-31",[future_risk])
+    assert r["documents"][0]["outstanding"]==100
+    assert r["counterparty_exposure"][0]["expected_credit_loss"] is None
+
+
+def test_trade_ledger_keeps_payable_and_receivable_gross_without_netting():
+    docs=[trade_doc("ar1","RECEIVABLE",100,"partner"),
+      trade_doc("ap1","PAYABLE",70,"partner")]
+    r=build_trade_ledger(docs,[],[],[],"2026-01-15")
+    assert r["totals_by_side_and_currency"]=={"PAYABLE::USD":70,"RECEIVABLE::USD":100}
+    assert r["internal_netting_applied"] is False
+
+
+def test_trade_ledger_rejects_currency_mismatch_and_unknown_document():
+    doc=trade_doc()
+    bad=SettlementEvent("s1","inv1","2026-01-10",10,"EUR","bank","tx")
+    with pytest.raises(ValueError,match="currency mismatch"):
+        build_trade_ledger([doc],[bad],[],[],"2026-01-11")
+    orphan=SettlementEvent("s2","missing","2026-01-10",10,"USD","bank","tx")
+    with pytest.raises(ValueError,match="Unknown document"):
+        build_trade_ledger([doc],[orphan],[],[],"2026-01-11")
+
+
+def test_trade_ledger_rejects_duplicate_documents_and_conflicting_same_day_risk():
+    doc=trade_doc()
+    risk1=CreditRiskAssessment("buyer1","USD",0.1,0.5,"2026-01-15","risk:1")
+    risk2=CreditRiskAssessment("buyer1","USD",0.2,0.5,"2026-01-15","risk:2")
+    with pytest.raises(ValueError,match="Duplicate document"):
+        build_trade_ledger([doc,doc],[],[],[],"2026-01-20")
+    with pytest.raises(ValueError,match="Conflicting credit assessments"):
+        build_trade_ledger([doc],[],[],[],"2026-01-20",[risk1,risk2])
+
+
+def test_trade_ledger_cli_fixture_is_schema_valid_and_reconciles():
+    import json
+    from synergy_v7.trade_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_2_1_trade_ledger_demo.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    result=evaluate_document(document)
+    assert result["totals_by_side_and_currency"]=={"PAYABLE::USD":30000,"RECEIVABLE::USD":60000}
+    ar=result["documents"][0]
+    assert ar["disputed_outstanding"]==10000
+    buyer=next(x for x in result["counterparty_exposure"] if x["counterparty_id"]=="buyer-01")
+    assert buyer["expected_credit_loss"]==pytest.approx(810)
+
+
+from synergy_v7 import (BankStatementLine, CashAllocation, reconcile_bank_statement)
+
+
+def test_bank_reconciliation_matches_partial_receipt_to_invoice():
+    doc=trade_doc("ar1","RECEIVABLE",1000,"buyer")
+    line=BankStatementLine("bank1","usd-account","2026-02-01",600,"USD","ref-1","bank:line:1")
+    alloc=CashAllocation("alloc1","bank1","ar1",600,"operator:match:1")
+    r=reconcile_bank_statement([doc],[],[line],[alloc],"2026-02-02")
+    assert r["fully_reconciled"]
+    assert r["trade_ledger"]["documents"][0]["outstanding"]==400
+    assert r["currency_control_totals"]["USD"]["allocated_net"]==600
+
+
+def test_bank_reconciliation_reports_unmatched_residual_without_guessing():
+    doc=trade_doc("ar1","RECEIVABLE",1000,"buyer")
+    line=BankStatementLine("bank1","usd-account","2026-02-01",700,"USD","ref-1","bank:line:1")
+    alloc=CashAllocation("alloc1","bank1","ar1",500,"operator:match:1")
+    r=reconcile_bank_statement([doc],[],[line],[alloc],"2026-02-02")
+    assert not r["fully_reconciled"]
+    assert r["bank_lines"][0]["unmatched_amount"]==200
+    assert r["bank_lines"][0]["status"]=="PARTIALLY_RECONCILED"
+
+
+def test_bank_reconciliation_rejects_overallocation_and_wrong_direction():
+    doc=trade_doc("ap1","PAYABLE",1000,"supplier")
+    line=BankStatementLine("bank1","usd-account","2026-02-01",500,"USD","ref-1","bank:line:1")
+    alloc=CashAllocation("alloc1","bank1","ap1",100,"operator:match:1")
+    with pytest.raises(ValueError,match="Inflow cannot settle payable"):
+        reconcile_bank_statement([doc],[],[line],[alloc],"2026-02-02")
+    ar=trade_doc("ar1","RECEIVABLE",1000,"buyer")
+    too_much=CashAllocation("alloc2","bank1","ar1",600,"operator:match:2")
+    with pytest.raises(ValueError,match="Allocations exceed"):
+        reconcile_bank_statement([ar],[],[line],[too_much],"2026-02-02")
+
+
+def test_bank_reconciliation_handles_supplier_outflow_and_payable_balance():
+    doc=trade_doc("ap1","PAYABLE",900,"supplier")
+    line=BankStatementLine("bank1","usd-account","2026-02-01",-300,"USD","ref-1","bank:line:1")
+    alloc=CashAllocation("alloc1","bank1","ap1",300,"operator:match:1")
+    r=reconcile_bank_statement([doc],[],[line],[alloc],"2026-02-02")
+    assert r["fully_reconciled"]
+    assert r["trade_ledger"]["documents"][0]["outstanding"]==600
+    assert r["currency_control_totals"]["USD"]["allocated_net"]==-300
+
+
+def test_bank_reconciliation_ignores_future_bank_lines_and_allocations():
+    doc=trade_doc("ar1","RECEIVABLE",1000,"buyer")
+    line=BankStatementLine("bank1","usd-account","2026-02-01",500,"USD","ref-1","bank:line:1")
+    alloc=CashAllocation("alloc1","bank1","ar1",500,"operator:match:1")
+    r=reconcile_bank_statement([doc],[],[line],[alloc],"2026-01-31")
+    assert r["bank_lines"]==[]
+    assert r["trade_ledger"]["documents"][0]["outstanding"]==1000
+
+
+def test_bank_reconciliation_cli_fixture_is_schema_valid_and_balances_gross_cash():
+    import json
+    from synergy_v7.reconciliation_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_2_2_reconciliation_demo.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    result=evaluate_document(document)
+    assert result["fully_reconciled"]
+    assert result["currency_control_totals"]["USD"]["statement_net"]==35000
+    assert result["currency_control_totals"]["USD"]["allocated_net"]==35000
+    balances={x["document_id"]:x["outstanding"] for x in result["trade_ledger"]["documents"]}
+    assert balances=={"AR-FACTORY-001":40000,"AP-FACTORY-001":15000}
+
+
+def test_bank_reconciliation_rejects_duplicate_statement_and_allocations():
+    doc=trade_doc("ar1","RECEIVABLE",1000,"buyer")
+    line=BankStatementLine("bank1","account","2026-02-01",500,"USD","ref","bank:1")
+    alloc=CashAllocation("alloc1","bank1","ar1",500,"match:1")
+    with pytest.raises(ValueError,match="Duplicate bank line"):
+        reconcile_bank_statement([doc],[],[line,line],[alloc],"2026-02-02")
+    with pytest.raises(ValueError,match="Duplicate cash allocation"):
+        reconcile_bank_statement([doc],[],[line],[alloc,alloc],"2026-02-02")
+
+
+from synergy_v7 import (OutputObservation, DeliveryAcceptance, InvoiceDeliveryAllocation,
+    CollectionAttribution, CostObservation, evaluate_realization_chain)
+
+
+def realization_fixture():
+    output=OutputObservation("out1","factory","project1","energy-efficiency","2026-Q1",
+      "machine_part",100,80,"unit","PRE_POST","meter:output","OBSERVED")
+    delivery=DeliveryAcceptance("del1","out1","buyer","2026-02-01",90,"unit","acceptance:del1")
+    invoice=trade_doc("invoice1","RECEIVABLE",9000,"buyer")
+    allocation=InvoiceDeliveryAllocation("ial1","del1","invoice1",80,"unit",8000,"USD","erp:invoice-line")
+    settlement=SettlementEvent("settle1","invoice1","2026-02-10",5000,"USD","bank-usd","bank:line")
+    collection=CollectionAttribution("ca1","settle1","ial1",5000,"USD","bank:allocation")
+    costs=[CostObservation("cost1","factory","project1","energy-efficiency","2026-Q1","DIRECT_COST",2000,"USD","erp:cost"),
+      CostObservation("cost2","factory","project1","energy-efficiency","2026-Q1","INCREMENTAL_OPEX",500,"USD","erp:opex"),
+      CostObservation("cost3","factory","project1","energy-efficiency","2026-Q1","REPLACEMENT_OBLIGATION",300,"USD","asset:replacement")]
+    return output,delivery,invoice,allocation,settlement,collection,costs
+
+
+def test_realization_chain_links_output_acceptance_invoice_and_collected_cash():
+    o,d,i,a,s,c,costs=realization_fixture()
+    r=evaluate_realization_chain([o],[d],[a],[i],[s],[c],costs,"2026-02-15")
+    report=r["benefit_stream_reports"][0]
+    assert report["observed_delta_vs_baseline"]==20
+    assert report["accepted_quantity"]==90
+    assert report["invoiced_quantity"]==80
+    assert report["invoiced_amount_by_currency"]["USD"]==8000
+    assert report["collected_cash_by_currency"]["USD"]==5000
+    assert report["costs_by_currency"]["USD"]["DIRECT_COST"]==2000
+    assert report["output_delta_is_not_causal_proof"]
+
+
+def test_realization_chain_rejects_accepted_delivery_above_observed_output():
+    o,d,i,a,s,c,costs=realization_fixture()
+    bad=DeliveryAcceptance("del2","out1","buyer","2026-02-01",110,"unit","acceptance:bad")
+    with pytest.raises(ValueError,match="exceeds observed output"):
+        evaluate_realization_chain([o],[bad],[a],[i],[s],[c],costs,"2026-02-15")
+
+
+def test_realization_chain_rejects_invoicing_more_than_customer_accepted():
+    o,d,i,a,s,c,costs=realization_fixture()
+    bad=InvoiceDeliveryAllocation("ial2","del1","invoice1",91,"unit",8000,"USD","erp:bad")
+    with pytest.raises(ValueError,match="exceeds accepted delivery"):
+        evaluate_realization_chain([o],[d],[bad],[i],[s],[c],costs,"2026-02-15")
+
+
+def test_realization_chain_rejects_invoice_value_above_invoice_document():
+    o,d,i,a,s,c,costs=realization_fixture()
+    bad=InvoiceDeliveryAllocation("ial2","del1","invoice1",80,"unit",9500,"USD","erp:bad")
+    with pytest.raises(ValueError,match="exceeds document amount"):
+        evaluate_realization_chain([o],[d],[bad],[i],[s],[c],costs,"2026-02-15")
+
+
+def test_realization_chain_rejects_collection_attribution_above_bank_settlement():
+    o,d,i,a,s,c,costs=realization_fixture()
+    bad=CollectionAttribution("ca2","settle1","ial1",6000,"USD","bank:bad")
+    with pytest.raises(ValueError,match="exceeds settlement"):
+        evaluate_realization_chain([o],[d],[a],[i],[s],[bad],costs,"2026-02-15")
+
+
+def test_realization_chain_rejects_collection_attribution_above_invoiced_line():
+    o,d,i,a,s,c,costs=realization_fixture()
+    bad=CollectionAttribution("ca2","settle1","ial1",8500,"USD","bank:bad")
+    settlement=SettlementEvent("settle1","invoice1","2026-02-10",9000,"USD","bank-usd","bank:line")
+    with pytest.raises(ValueError,match="exceeds invoice allocation"):
+        evaluate_realization_chain([o],[d],[a],[i],[settlement],[bad],costs,"2026-02-15")
+
+
+def test_realization_chain_rejects_future_delivery_invoicing_and_unknown_links():
+    o,d,i,a,s,c,costs=realization_fixture()
+    future=DeliveryAcceptance("del2","out1","buyer","2026-03-01",5,"unit","acceptance:future")
+    future_allocation=InvoiceDeliveryAllocation("ial2","del2","invoice1",1,"unit",100,"USD","erp:future")
+    with pytest.raises(ValueError,match="exceeds accepted delivery"):
+        evaluate_realization_chain([o],[future],[future_allocation],[i],[],[],[],"2026-02-15")
+    orphan=InvoiceDeliveryAllocation("ial3","missing","invoice1",1,"unit",100,"USD","erp:orphan")
+    with pytest.raises(ValueError,match="Unknown delivery"):
+        evaluate_realization_chain([o],[d],[orphan],[i],[],[],[],"2026-02-15")
+
+
+def test_realization_chain_excludes_future_collections_from_cash_metric():
+    o,d,i,a,s,c,costs=realization_fixture()
+    future=SettlementEvent("future-settle","invoice1","2026-03-01",1000,"USD","bank","bank:future")
+    future_attr=CollectionAttribution("future-ca","future-settle","ial1",1000,"USD","bank:future")
+    r=evaluate_realization_chain([o],[d],[a],[i],[future],[future_attr],costs,"2026-02-15")
+    assert r["benefit_stream_reports"][0]["collected_cash_by_currency"]["USD"]==0
+
+
+def test_realization_chain_rejects_cost_without_matching_output_group():
+    o,d,i,a,s,c,costs=realization_fixture()
+    orphan=CostObservation("orphan","factory","other-project","stream","2026-Q1","DIRECT_COST",10,"USD","erp:orphan")
+    with pytest.raises(ValueError,match="no matching output"):
+        evaluate_realization_chain([o],[d],[a],[i],[s],[c],costs+[orphan],"2026-02-15")
+
+
+def test_realization_chain_cli_fixture_is_schema_valid_and_reproducible():
+    import json
+    from synergy_v7.realization_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_3_realization_chain_demo.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    r=evaluate_document(document)
+    report=r["benefit_stream_reports"][0]
+    assert report["observed_delta_vs_baseline"]==20
+    assert report["invoiced_amount_by_currency"]["USD"]==8000
+    assert report["collected_cash_by_currency"]["USD"]==5000
+    assert report["costs_by_currency"]["USD"]["REPLACEMENT_OBLIGATION"]==300
+
+
+from synergy_v7 import CausalObservation, matched_pair_difference_in_differences
+
+
+def did_fixture():
+    rows=[]
+    effects=[5,4,6,5]
+    for idx,effect in enumerate(effects):
+        pair=f"pair{idx}"
+        rows.extend([
+          CausalObservation(f"{pair}-tp",pair,f"treated-{idx}","TREATED","PRE",100,"meter:t0"),
+          CausalObservation(f"{pair}-tq",pair,f"treated-{idx}","TREATED","POST",110+effect,"meter:t1"),
+          CausalObservation(f"{pair}-cp",pair,f"control-{idx}","CONTROL","PRE",90,"meter:c0"),
+          CausalObservation(f"{pair}-cq",pair,f"control-{idx}","CONTROL","POST",100,"meter:c1")])
+    return rows
+
+
+def test_matched_pair_did_estimates_average_treatment_effect():
+    r=matched_pair_difference_in_differences(did_fixture())
+    assert r["matched_pair_count"]==4
+    assert r["effect_estimate"]==pytest.approx(5)
+    assert r["beneficial_effect_estimate"]==pytest.approx(5)
+    assert r["confidence_interval"][0]<=5<=r["confidence_interval"][1]
+    assert r["parallel_trends_testable_with_one_pre_period"] is False
+
+
+def test_matched_pair_did_reverses_benefit_sign_for_lower_is_better():
+    r=matched_pair_difference_in_differences(did_fixture(),0.95,"LOWER_IS_BETTER")
+    assert r["effect_estimate"]==pytest.approx(5)
+    assert r["beneficial_effect_estimate"]==pytest.approx(-5)
+
+
+def test_matched_pair_did_rejects_incomplete_and_duplicate_observations():
+    rows=did_fixture()
+    with pytest.raises(ValueError,match="Incomplete"):
+        matched_pair_difference_in_differences(rows[:-1])
+    with pytest.raises(ValueError,match="Duplicate observation"):
+        matched_pair_difference_in_differences(rows+[rows[0]])
+
+
+def test_matched_pair_did_rejects_changed_unit_identity():
+    rows=did_fixture()
+    rows[1]=CausalObservation("pair0-tq","pair0","different-treated","TREATED","POST",115,"meter:t1")
+    with pytest.raises(ValueError,match="identity"):
+        matched_pair_difference_in_differences(rows)
+
+
+def test_matched_pair_did_requires_multiple_pairs_and_valid_confidence():
+    rows=did_fixture()[:4]
+    with pytest.raises(ValueError,match="At least two"):
+        matched_pair_difference_in_differences(rows)
+    with pytest.raises(ValueError,match="confidence_level"):
+        matched_pair_difference_in_differences(did_fixture(),1.0)
+
+
+def test_matched_pair_did_cli_fixture_is_schema_valid_and_returns_expected_effect():
+    import json
+    from synergy_v7.causal_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_3_1_matched_did_demo.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    r=evaluate_document(document)
+    assert r["matched_pair_count"]==4
+    assert r["effect_estimate"]==pytest.approx(5)
+
+
+from synergy_v7 import PlanDemand, optimize_production_schedule
+
+
+def test_v74_milp_optimizer_finds_feasible_integrated_factory_schedule():
+    recipes=[
+      ProductionRecipe("smelt","steel",80,"kg",(MaterialRequirement("ore",100,"kg"),),
+        (ResourceRequirement("electricity",40,"MWh"),),1),
+      ProductionRecipe("machine","machine_part",4,"unit",(MaterialRequirement("steel",20,"kg"),),
+        (ResourceRequirement("electricity",10,"MWh"),),1)]
+    demands=[PlanDemand("customer","machine_part",12,"unit",2,100,"USD")]
+    receipts=[InventoryReceipt("ore1","ore",100,"kg",0,"OBSERVED")]
+    caps=[ResourceCapacity("electricity","0",40,"MWh","OBSERVED","meter:p0"),
+      ResourceCapacity("electricity","1",30,"MWh","OBSERVED","meter:p1")]
+    r=optimize_production_schedule(recipes,demands,receipts,caps,3,
+      {"smelt":1,"machine":3},{"smelt":10,"machine":5},{"steel":0.1},"USD")
+    assert r["feasible"] and r["optimality_proven"]
+    assert r["demand"][0]["fulfilled"]==12
+    assert {x["recipe_id"]:x["batch_count"] for x in r["schedule"]}=={"smelt":1,"machine":3}
+    assert r["resource_usage"][0]["used"]==40
+    assert r["objective_value"]==pytest.approx(1171)
+
+
+def test_v74_milp_optimizer_respects_shared_resource_scarcity():
+    recipe=ProductionRecipe("machine","parts",1,"unit",(),
+      (ResourceRequirement("power",10,"MWh"),),1)
+    demand=[PlanDemand("d1","parts",2,"unit",1,100,"USD")]
+    caps=[ResourceCapacity("power","0",10,"MWh","OBSERVED","meter")]
+    r=optimize_production_schedule([recipe],demand,[],caps,2,{"machine":2},{"machine":1})
+    assert r["feasible"]
+    assert r["demand"][0]["fulfilled"]==1
+    assert r["resource_usage"][0]["used"]==10
+
+
+def test_v74_milp_optimizer_excludes_nonfirm_inventory_and_capacity():
+    recipe=ProductionRecipe("r","finished",1,"unit",(MaterialRequirement("raw",1,"kg"),),
+      (ResourceRequirement("power",1,"MWh"),),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,100,"USD")]
+    receipts=[InventoryReceipt("i1","raw",1,"kg",0,"PLANNED")]
+    caps=[ResourceCapacity("power","0",1,"MWh","PLANNED","plan")]
+    r=optimize_production_schedule([recipe],demand,receipts,caps,2,{"r":1})
+    assert r["feasible"] and r["schedule"]==[]
+    assert r["demand"][0]["fulfilled"]==0
+    assert r["excluded_nonfirm_receipts"]==["i1"]
+
+
+def test_v74_milp_optimizer_does_not_produce_when_economic_value_is_below_cost():
+    recipe=ProductionRecipe("r","finished",1,"unit",(),(),1)
+    demand=[PlanDemand("d1","finished",10,"unit",1,1,"USD")]
+    r=optimize_production_schedule([recipe],demand,[],[],2,{"r":10},{"r":100})
+    assert r["feasible"] and r["schedule"]==[]
+    assert r["demand"][0]["fulfilled"]==0
+
+
+def test_v74_milp_optimizer_rejects_missing_limits_and_unit_mismatch():
+    recipe=ProductionRecipe("r","finished",1,"unit",(),(ResourceRequirement("power",1,"MWh"),),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
+    with pytest.raises(ValueError,match="batch_limits"):
+        optimize_production_schedule([recipe],demand,[],[],2,{})
+    caps=[ResourceCapacity("power","0",1,"kWh","OBSERVED","meter")]
+    with pytest.raises(ValueError,match="unit mismatch"):
+        optimize_production_schedule([recipe],demand,[],caps,2,{"r":1})
+
+
+def test_v74_milp_cli_fixture_is_schema_valid_and_reproducible():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_4_milp_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    r=evaluate_document(document)
+    assert r["feasible"] and r["optimality_proven"]
+    assert r["demand"][0]["fulfilled"]==12
+    assert r["objective_value"]==pytest.approx(1168)
+
+
+def test_v74_milp_optimizer_rejects_non_numeric_capacity_period():
+    recipe=ProductionRecipe("r","finished",1,"unit",(),(ResourceRequirement("power",1,"MWh"),),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
+    cap=[ResourceCapacity("power","2026-Q1",10,"MWh","OBSERVED","meter")]
+    with pytest.raises(ValueError,match="integer bucket"):
+        optimize_production_schedule([recipe],demand,[],cap,2,{"r":1})
+
+
+def test_v741_milp_optimizer_enforces_safety_stock_and_storage_limits():
+    recipe=ProductionRecipe("r","finished",1,"unit",(MaterialRequirement("raw",1,"kg"),),(),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
+    receipts=[InventoryReceipt("i1","raw",2,"kg",0,"OBSERVED")]
+    r=optimize_production_schedule([recipe],demand,receipts,[],2,{"r":1},
+      minimum_inventory={"raw":1},storage_limits={"raw":1})
+    assert r["feasible"] and r["demand"][0]["fulfilled"]==1
+    assert all(x["ending_quantity"]==pytest.approx(1) for x in r["inventory"] if x["product_id"]=="raw")
+    assert all(x["ending_quantity"]<=x["storage_limit"]+1e-9 for x in r["inventory"] if x["storage_limit"] is not None)
+
+
+def test_v741_milp_optimizer_reports_infeasible_unfunded_safety_stock():
+    recipe=ProductionRecipe("r","finished",1,"unit",(),(),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
+    r=optimize_production_schedule([recipe],demand,[],[],2,{"r":1},minimum_inventory={"finished":1})
+    assert not r["feasible"] and r["schedule"]==[]
+
+
+def test_v741_milp_optimizer_rejects_storage_limit_below_safety_stock():
+    recipe=ProductionRecipe("r","finished",1,"unit",(),(),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
+    with pytest.raises(ValueError,match="below safety stock"):
+        optimize_production_schedule([recipe],demand,[],[],2,{"r":1},
+          minimum_inventory={"finished":2},storage_limits={"finished":1})
+
+
+def test_v741_milp_optimizer_rejects_unknown_holding_cost_product():
+    recipe=ProductionRecipe("r","finished",1,"unit",(),(),1)
+    demand=[PlanDemand("d1","finished",1,"unit",1,10,"USD")]
+    with pytest.raises(ValueError,match="holding_costs contains unknown"):
+        optimize_production_schedule([recipe],demand,[],[],2,{"r":1},holding_costs={"ghost":1})
+
+
+def test_matched_pair_did_rejects_reusing_same_unit_in_multiple_pairs():
+    rows=did_fixture()
+    rows[4]=CausalObservation(rows[4].observation_id,rows[4].matched_pair_id,"treated-0","TREATED","PRE",rows[4].outcome,rows[4].evidence_id)
+    rows[5]=CausalObservation(rows[5].observation_id,rows[5].matched_pair_id,"treated-0","TREATED","POST",rows[5].outcome,rows[5].evidence_id)
+    with pytest.raises(ValueError,match="exactly one matched pair"):
+        matched_pair_difference_in_differences(rows)
+
+
+from synergy_v7 import ResourceShock, ReceiptDelay, stress_test_fixed_schedule
+
+
+def stress_fixture():
+    recipe=ProductionRecipe("r","finished",1,"unit",(MaterialRequirement("raw",1,"kg"),),
+      (ResourceRequirement("power",1,"MWh"),),1)
+    order=[ProductionOrder("o1","r",0,1)]
+    receipts=[InventoryReceipt("raw1","raw",1,"kg",0,"OBSERVED")]
+    demand=[ProductDemand("d1","finished",1,"unit",1)]
+    caps=[ResourceCapacity("power","0",1,"MWh","OBSERVED","meter")]
+    return [recipe],order,receipts,demand,caps
+
+
+def test_v75_stress_test_baseline_schedule_has_full_service():
+    args=stress_fixture()
+    r=stress_test_fixed_schedule(*args,scenarios=20,seed=7)
+    assert r["mean_weighted_service_level"]==1
+    assert r["probability_full_demand_service"]==1
+    assert r["empirical_cvar_service_shortfall"]==0
+
+
+def test_v75_stress_test_correlated_power_shock_causes_service_loss():
+    args=stress_fixture()
+    r=stress_test_fixed_schedule(*args,scenarios=20,seed=7,
+      common_shock_probability=1,common_capacity_factor=0)
+    assert r["mean_weighted_service_level"]==0
+    assert r["probability_full_demand_service"]==0
+    assert r["common_shock_count"]==20
+    assert r["empirical_cvar_service_shortfall"]==1
+
+
+def test_v75_stress_test_supplier_delay_is_visible_and_reproducible():
+    args=stress_fixture()
+    delay=[ReceiptDelay("raw1",1,1)]
+    a=stress_test_fixed_schedule(*args,scenarios=30,seed=42,receipt_delays=delay)
+    b=stress_test_fixed_schedule(*args,scenarios=30,seed=42,receipt_delays=delay)
+    assert a==b
+    assert a["receipt_delay_counts"]["raw1"]==30
+    assert a["mean_weighted_service_level"]==0
+
+
+def test_v75_stress_test_rejects_unknown_shocks_and_invalid_weights():
+    args=stress_fixture()
+    with pytest.raises(ValueError,match="unknown receipt"):
+        stress_test_fixed_schedule(*args,receipt_delays=[ReceiptDelay("missing",1,1)])
+    with pytest.raises(ValueError,match="Demand weight"):
+        stress_test_fixed_schedule(*args,demand_weights={"d1":0})
+
+
+def test_v75_stress_cli_fixture_is_schema_valid_and_reproducible():
+    import json
+    from synergy_v7.stress_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_5_stress_test_demo.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    a=evaluate_document(document); b=evaluate_document(document)
+    assert a==b
+    assert a["scenario_count"]==250
+    assert 0<=a["mean_weighted_service_level"]<=1
+    assert 0<=a["empirical_cvar_service_shortfall"]<=1
+
+
+def cash_planner_fixture():
+    recipe=ProductionRecipe("make","finished",1,"unit",(),(),1)
+    demand=[PlanDemand("sale","finished",1,"unit",1,100,"USD")]
+    return [recipe],demand,[],[]
+
+
+def test_v76_cash_constraint_prevents_unfunded_production_before_collection():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_opening_balance=0,collection_lag_by_demand={"sale":1})
+    assert r["feasible"]
+    assert r["schedule"]==[]
+    assert r["demand"][0]["fulfilled"]==0
+
+
+def test_v76_cash_constraint_allows_production_when_opening_working_capital_exists():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_opening_balance=20,collection_lag_by_demand={"sale":1})
+    assert r["feasible"] and r["optimality_proven"]
+    assert r["schedule"][0]["start_period"]==0
+    assert r["demand"][0]["fulfilled"]==1
+    assert r["ending_cash_by_period"]==pytest.approx([0,0,100])
+    assert r["deferred_collection_demands"]==[]
+
+
+def test_v76_cash_constraint_includes_external_funding_and_minimum_cash_floor():
+    args=cash_planner_fixture()
+    funded=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_inflows_by_period={0:20},collection_lag_by_demand={"sale":1})
+    assert funded["demand"][0]["fulfilled"]==1
+    constrained=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_opening_balance=20,cash_minimum_balance=5,collection_lag_by_demand={"sale":1})
+    assert constrained["feasible"] and constrained["schedule"]==[]
+    assert constrained["demand"][0]["fulfilled"]==0
+
+
+def test_v76_cash_constraint_reports_receipts_beyond_horizon_and_fractional_collection():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,2,{"make":1},{"make":20},
+      cash_opening_balance=20,collection_lag_by_demand={"sale":4})
+    assert r["feasible"] and r["demand"][0]["fulfilled"]==1
+    assert r["deferred_collection_demands"]==["sale"]
+    assert r["ending_cash_by_period"]==pytest.approx([0,0])
+
+
+def test_v76_cash_constraint_rejects_invalid_periods_lags_and_fractions():
+    args=cash_planner_fixture()
+    with pytest.raises(ValueError,match="outside horizon"):
+        optimize_production_schedule(*args,3,{"make":1},cash_inflows_by_period={3:10})
+    with pytest.raises(ValueError,match="non-negative integer"):
+        optimize_production_schedule(*args,3,{"make":1},collection_lag_by_demand={"sale":-1})
+    with pytest.raises(ValueError,match=r"in \[0,1\]"):
+        optimize_production_schedule(*args,3,{"make":1},collection_fraction_by_demand={"sale":1.5})
+
+
+def test_v76_cash_constrained_cli_fixture_is_schema_valid_and_reproducible():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_cash_constrained_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    a=evaluate_document(document); b=evaluate_document(document)
+    assert a==b and a["feasible"] and a["optimality_proven"]
+    assert a["schedule"][0]["batch_count"]==1
+    assert a["ending_cash_by_period"]==pytest.approx([0,0,100])
+    assert a["cash_constraint_enabled"]
+
+
+def test_v76_cash_constraint_rejects_cash_floor_beyond_available_funding():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_opening_balance=20,cash_minimum_balance={0:1,1:0,2:0},
+      collection_lag_by_demand={"sale":1})
+    assert r["feasible"] and r["schedule"]==[]
+    assert r["demand"][0]["fulfilled"]==0
+
+
+from synergy_v7 import SupplierPaymentCommitment, aggregate_supplier_payment_commitments
+
+
+def supplier_payment_fixture():
+    return [
+      SupplierPaymentCommitment("deposit","supplier1","po1","steel",0,10,"USD","DEPOSIT","COMMITTED","po:deposit"),
+      SupplierPaymentCommitment("receipt","supplier1","po1","steel",1,30,"USD","RECEIPT","OBSERVED","po:receipt"),
+      SupplierPaymentCommitment("planned","supplier2","po2","ore",0,50,"USD","FINAL","PLANNED","plan:po2"),
+      SupplierPaymentCommitment("scenario","supplier3","po3","power",2,20,"USD","MILESTONE","SCENARIO","scenario:po3"),
+    ]
+
+
+def test_v761_supplier_payment_calendar_aggregates_only_firm_obligations():
+    r=aggregate_supplier_payment_commitments(supplier_payment_fixture(),3,"USD")
+    assert r["cash_outflows_by_period"]=={0:10,1:30}
+    assert r["excluded_nonfirm_payment_ids"]==["planned","scenario"]
+    assert r["payment_commitments_are_not_bank_settlements"]
+
+
+def test_v761_supplier_payment_calendar_can_include_scenario_payments_explicitly():
+    r=aggregate_supplier_payment_commitments(supplier_payment_fixture(),3,"USD",include_scenarios=True)
+    assert r["cash_outflows_by_period"]=={0:10,1:30,2:20}
+    assert r["excluded_nonfirm_payment_ids"]==["planned"]
+
+
+def test_v761_supplier_payment_calendar_reports_out_of_horizon_and_rejects_duplicates():
+    payment=SupplierPaymentCommitment("late","supplier","po","raw",5,100,"USD","FINAL","COMMITTED","po:late")
+    r=aggregate_supplier_payment_commitments([payment],2,"USD")
+    assert r["out_of_horizon_payment_ids"]==["late"]
+    with pytest.raises(ValueError,match="Duplicate supplier payment_id"):
+        aggregate_supplier_payment_commitments([payment,payment],2,"USD")
+
+
+def test_v761_supplier_payment_calendar_rejects_wrong_currency():
+    payment=SupplierPaymentCommitment("p","supplier","po","raw",0,100,"EUR","FINAL","COMMITTED","po:p")
+    with pytest.raises(ValueError,match="currency mismatch"):
+        aggregate_supplier_payment_commitments([payment],2,"USD")
+
+
+def test_v761_supplier_payment_commitments_reduce_cash_available_for_production():
+    args=cash_planner_fixture()
+    payments=supplier_payment_fixture()
+    report=aggregate_supplier_payment_commitments(payments,3,"USD")
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_opening_balance=40,cash_outflows_by_period=report["cash_outflows_by_period"],
+      collection_lag_by_demand={"sale":1})
+    assert r["feasible"] and r["schedule"]==[], r
+    assert r["demand"][0]["fulfilled"]==0
+
+
+def test_v761_supplier_payment_cli_aggregates_calendar_and_runs_cash_optimizer():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_cash_constrained_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    document["supplier_payment_commitments"]=[
+      {"payment_id":"supplier-deposit","supplier_id":"steelco","purchase_order_id":"po-1","input_product_id":"steel","period":0,
+       "amount":20,"currency":"USD","payment_stage":"DEPOSIT","status":"COMMITTED","evidence_id":"po:deposit"}
+    ]
+    document["cash_opening_balance"]=40
+    result=evaluate_document(document)
+    assert result["supplier_payment_commitments"]["cash_outflows_by_period"]=={0:20}
+    assert result["schedule"], result
+    assert result["ending_cash_by_period"]==pytest.approx([0,0,100])
+
+
+def test_v762_revolving_credit_funds_pre_collection_production_and_charges_interest():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      credit_limit=20,credit_draw_limits_by_period={0:20},
+      credit_interest_rates_by_period={2:0.1},collection_lag_by_demand={"sale":1},
+      terminal_credit_balance_limit=0)
+    assert r["feasible"] and r["schedule"]
+    assert r["credit_facility"]["draws_by_period"]==pytest.approx([20,0,0])
+    assert r["credit_facility"]["ending_balance_by_period"]==pytest.approx([20,20,0])
+    assert r["credit_facility"]["total_interest_cost"]==pytest.approx(2)
+    assert r["ending_cash_by_period"]==pytest.approx([0,0,78])
+    assert r["objective_value"]==pytest.approx(78)
+
+
+def test_v762_credit_draw_limit_and_facility_limit_block_unfunded_batch():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      credit_limit=20,credit_draw_limits_by_period={0:10},
+      collection_lag_by_demand={"sale":1})
+    assert r["feasible"] and r["schedule"]==[]
+    assert r["demand"][0]["fulfilled"]==0
+
+
+def test_v762_repayment_cannot_exceed_prior_period_debt_or_repay_same_period_draw():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      credit_limit=20,credit_draw_limits_by_period={0:20},
+      credit_repayment_limits_by_period={0:20},collection_lag_by_demand={"sale":1})
+    assert r["feasible"] and r["schedule"]
+    assert r["credit_facility"]["draws_by_period"][0]==pytest.approx(20)
+    assert r["credit_facility"]["repayments_by_period"][0]==pytest.approx(0)
+
+
+def test_v762_credit_facility_rejects_invalid_limit_opening_balance_and_rate():
+    args=cash_planner_fixture()
+    with pytest.raises(ValueError,match="between zero and credit_limit"):
+        optimize_production_schedule(*args,3,{"make":1},credit_limit=10,credit_opening_balance=11)
+    with pytest.raises(ValueError,match="outside horizon"):
+        optimize_production_schedule(*args,3,{"make":1},credit_limit=10,credit_interest_rates_by_period={3:0.1})
+    with pytest.raises(ValueError,match="require credit_limit"):
+        optimize_production_schedule(*args,3,{"make":1},credit_opening_balance=1)
+
+
+def test_v762_credit_cli_schema_and_period_maps():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_2_credit_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    result=evaluate_document(document)
+    assert result["feasible"] and result["schedule"]
+    assert result["credit_facility"]["total_interest_cost"]==pytest.approx(2)
+    assert result["ending_cash_by_period"]==pytest.approx([0,0,78])
+
+
+def test_v763_credit_maturity_forces_repayment_by_declared_period():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      cash_opening_balance=20,cash_inflows_by_period={1:20},
+      credit_limit=20,credit_opening_balance=20,
+      collection_lag_by_demand={"sale":1},credit_maturity_period=1)
+    assert r["feasible"] and r["schedule"]
+    assert r["credit_facility"]["ending_balance_by_period"][1:]==pytest.approx([0,0])
+    assert (sum(r["credit_facility"]["repayments_by_period"])
+      -sum(r["credit_facility"]["draws_by_period"]))==pytest.approx(20)
+
+
+def test_v763_unfunded_credit_maturity_blocks_production_that_cannot_repay():
+    args=cash_planner_fixture()
+    r=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      credit_limit=20,credit_draw_limits_by_period={0:20},
+      collection_lag_by_demand={"sale":1},credit_maturity_period=1)
+    assert r["feasible"] and r["schedule"]==[]
+    assert r["demand"][0]["fulfilled"]==0
+    assert r["credit_facility"]["ending_balance_by_period"]==pytest.approx([0,0,0])
+
+
+def test_v763_credit_maturity_validation_and_cli_fixture():
+    args=cash_planner_fixture()
+    with pytest.raises(ValueError,match="inside the planning horizon"):
+        optimize_production_schedule(*args,3,{"make":1},credit_limit=20,credit_maturity_period=3)
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_2_credit_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    document["credit_maturity_period"]=2
+    result=evaluate_document(document)
+    assert result["feasible"] and result["credit_facility"]["ending_balance_by_period"][-1]==pytest.approx(0)
+
+
+def test_v764_borrowing_base_caps_drawn_debt_and_reports_headroom():
+    args=cash_planner_fixture()
+    blocked=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      credit_limit=20,credit_draw_limits_by_period={0:20},
+      credit_borrowing_base_by_period={0:10,1:10,2:10},
+      collection_lag_by_demand={"sale":1})
+    assert blocked["feasible"] and blocked["schedule"]==[]
+    funded=optimize_production_schedule(*args,3,{"make":1},{"make":20},
+      credit_limit=20,credit_draw_limits_by_period={0:20},
+      credit_borrowing_base_by_period={0:20,1:20,2:20},
+      collection_lag_by_demand={"sale":1},terminal_credit_balance_limit=0)
+    assert funded["feasible"] and funded["schedule"]
+    assert funded["credit_facility"]["borrowing_base_headroom_by_period"][0]==pytest.approx(0)
+    assert funded["credit_facility"]["borrowing_base_headroom_by_period"][2]==pytest.approx(20)
+
+
+def test_v764_borrowing_base_rejects_invalid_period_or_amount():
+    args=cash_planner_fixture()
+    with pytest.raises(ValueError,match="outside horizon"):
+        optimize_production_schedule(*args,3,{"make":1},credit_limit=20,credit_borrowing_base_by_period={3:10})
+    with pytest.raises(ValueError,match="Invalid borrowing base"):
+        optimize_production_schedule(*args,3,{"make":1},credit_limit=20,credit_borrowing_base_by_period={0:21})
+
+
+def test_v764_borrowing_base_cli_schema_and_report():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_2_credit_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    document["credit_borrowing_base_by_period"]={"0":20,"1":20,"2":20}
+    result=evaluate_document(document)
+    assert result["feasible"] and result["credit_facility"]["borrowing_base_by_period"]=={0:20,1:20,2:20}
+
+
+from synergy_v7 import (ReceivableCollateral,InventoryCollateral,BorrowingBasePolicy,
+    calculate_borrowing_base)
+
+
+def collateral_fixture():
+    ar=[
+      ReceivableCollateral("ar-a","buyer-a",0,100,"USD",0,"VERIFIED",False,False,"erp:ar-a"),
+      ReceivableCollateral("ar-b","buyer-b",0,50,"USD",5,"OBSERVED",False,False,"erp:ar-b"),
+      ReceivableCollateral("ar-disputed","buyer-c",0,40,"USD",0,"VERIFIED",True,False,"erp:ar-disputed"),
+      ReceivableCollateral("ar-related","owner-co",0,30,"USD",0,"VERIFIED",False,True,"erp:ar-related"),
+      ReceivableCollateral("ar-old","buyer-d",0,20,"USD",91,"VERIFIED",False,False,"erp:ar-old"),
+    ]
+    stock=[
+      InventoryCollateral("lot-1","steel",0,200,"USD","VERIFIED",True,True,False,"wms:lot-1"),
+      InventoryCollateral("lot-consigned","ore",0,100,"USD","VERIFIED",True,True,True,"wms:consigned"),
+      InventoryCollateral("lot-wip","part",0,80,"USD","WIP",True,True,False,"wms:wip"),
+    ]
+    policy=BorrowingBasePolicy(0.8,0.5,60,0.5,10)
+    return ar,stock,policy
+
+
+def test_v765_borrowing_base_calculates_advance_rates_concentration_and_reserves():
+    ar,stock,policy=collateral_fixture()
+    r=calculate_borrowing_base(ar,stock,policy,"USD")
+    row=r["periods"][0]
+    assert row["eligible_receivables_gross"]==150
+    assert row["receivables_after_concentration_caps"]==125
+    assert row["receivable_advance_amount"]==pytest.approx(100)
+    assert row["eligible_inventory_gross"]==200
+    assert row["inventory_advance_amount"]==pytest.approx(100)
+    assert row["gross_borrowing_base"]==pytest.approx(200)
+    assert row["net_borrowing_base"]==pytest.approx(190)
+    assert set(row["excluded_receivable_ids"])=={"ar-disputed","ar-related","ar-old"}
+    assert set(row["excluded_inventory_lot_ids"])=={"lot-consigned","lot-wip"}
+
+
+def test_v765_borrowing_base_excludes_scenario_and_underwritten_unless_enabled():
+    ar,stock,policy=collateral_fixture()
+    ar.append(ReceivableCollateral("ar-scenario","buyer-x",0,100,"USD",0,"SCENARIO",False,False,"model:ar"))
+    default=calculate_borrowing_base(ar,stock,policy,"USD")
+    inclusive=calculate_borrowing_base(ar,stock,BorrowingBasePolicy(0.8,0.5,60,0.5,10,include_scenarios=True),"USD")
+    assert default["periods"][0]["eligible_receivables_gross"]==150
+    assert inclusive["periods"][0]["eligible_receivables_gross"]==250
+
+
+def test_v765_borrowing_base_rejects_duplicate_ids_currency_mismatch_and_invalid_policy():
+    ar,stock,policy=collateral_fixture()
+    with pytest.raises(ValueError,match="Duplicate receivable_id"):
+        calculate_borrowing_base(ar+[ar[0]],stock,policy,"USD")
+    with pytest.raises(ValueError,match="currency mismatch"):
+        calculate_borrowing_base(ar,stock,policy,"EUR")
+    with pytest.raises(ValueError,match=r"in \[0,1\]"):
+        BorrowingBasePolicy(1.2,0.5,60,0.5,0)
+
+
+def test_v765_collateral_cli_uses_calculated_base_to_constrain_credit():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_2_credit_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    document["collateral_policy"]={"receivable_advance_rate":0.5,"inventory_advance_rate":0.5,
+      "max_days_past_due":60,"counterparty_concentration_limit":1.0,"reserve_amount":0}
+    document["receivable_collateral"]=[{"receivable_id":"ar-1","counterparty_id":"buyer","period":0,
+      "outstanding_amount":20,"currency":"USD","days_past_due":0,"status":"VERIFIED",
+      "disputed":False,"related_party":False,"evidence_id":"erp:ar-1"}]
+    result=evaluate_document(document)
+    assert result["collateral_borrowing_base"]["periods"][0]["net_borrowing_base"]==pytest.approx(10)
+    assert result["credit_facility"]["borrowing_base_by_period"]=={0:10,1:0.0,2:0.0}
+    assert result["schedule"]==[]
+
+
+def test_v766_aging_haircuts_dilution_and_category_reserves_reduce_borrowing_base():
+    ar=[
+      ReceivableCollateral("ar-aged","buyer-a",0,100,"USD",40,"VERIFIED",False,False,"erp:aged"),
+      ReceivableCollateral("ar-current","buyer-b",0,50,"USD",0,"VERIFIED",False,False,"erp:current"),
+    ]
+    stock=[InventoryCollateral("lot-aged","steel",0,200,"USD","VERIFIED",True,True,False,"wms:aged",age_days=200)]
+    policy=BorrowingBasePolicy(
+      receivable_advance_rate=0.8,inventory_advance_rate=0.5,max_days_past_due=60,
+      counterparty_concentration_limit=1.0,reserve_amount=5,
+      receivable_aging_haircuts=((30,0.2),(60,0.5)),
+      inventory_aging_haircuts=((90,0.25),(180,0.5)),
+      receivable_dilution_reserve_rate=0.1,receivable_reserve_amount=2,
+      inventory_reserve_amount=3)
+    r=calculate_borrowing_base(ar,stock,policy,"USD")["periods"][0]
+    assert r["receivables_after_aging_haircuts"]==pytest.approx(130)
+    assert r["receivables_after_concentration_caps"]==pytest.approx(130)
+    assert r["receivable_dilution_reserve"]==pytest.approx(13)
+    assert r["receivable_advance_amount"]==pytest.approx(93.6)
+    assert r["inventory_after_aging_haircuts"]==pytest.approx(100)
+    assert r["inventory_advance_amount"]==pytest.approx(50)
+    assert r["reserve_deduction"]==pytest.approx(23)
+    assert r["net_borrowing_base"]==pytest.approx(120.6)
+    audit={x["asset_id"]:x for x in r["asset_audit_trail"]}
+    assert audit["ar-aged"]["aging_haircut_amount"]==pytest.approx(20)
+    assert audit["lot-aged"]["aging_haircut_rate"]==pytest.approx(0.5)
+    assert audit["ar-aged"]["evidence_id"]=="erp:aged"
+
+
+def test_v766_haircut_tiers_require_sorted_thresholds_and_valid_rates():
+    with pytest.raises(ValueError,match="strictly increasing"):
+        BorrowingBasePolicy(0.8,0.5,60,1.0,0,receivable_aging_haircuts=((60,0.2),(30,0.3)))
+    with pytest.raises(ValueError,match="haircut rates"):
+        BorrowingBasePolicy(0.8,0.5,60,1.0,0,inventory_aging_haircuts=((90,1.2),))
+
+
+def test_v766_cli_accepts_age_and_risk_reserve_policy():
+    import json
+    from synergy_v7.planner_cli import evaluate_document
+    fixture=ROOT/"examples"/"synergy_v7_6_2_credit_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        document=json.load(stream)
+    document["collateral_policy"]={"receivable_advance_rate":0.8,"inventory_advance_rate":0.5,
+      "max_days_past_due":60,"counterparty_concentration_limit":1.0,"reserve_amount":0,
+      "receivable_aging_haircuts":[[30,0.2]],"inventory_aging_haircuts":[[90,0.25]],
+      "receivable_dilution_reserve_rate":0.05,"receivable_reserve_amount":1,"inventory_reserve_amount":2}
+    document["receivable_collateral"]=[{"receivable_id":"ar-age","counterparty_id":"buyer","period":0,
+      "outstanding_amount":20,"currency":"USD","days_past_due":40,"status":"VERIFIED",
+      "disputed":False,"related_party":False,"evidence_id":"erp:ar-age"}]
+    result=evaluate_document(document)
+    assert result["collateral_borrowing_base"]["periods"][0]["receivables_after_aging_haircuts"]==pytest.approx(16)
+    assert result["collateral_borrowing_base"]["periods"][0]["reserve_deduction"]==pytest.approx(3.8)
+
+
+from synergy_v7 import EconomicShockScenario, apply_scenario, weighted_cvar, evaluate_scenario_set
+
+
+def test_v77_weighted_cvar_uses_discrete_tail_probabilities():
+    result=weighted_cvar([(0.0,0.7),(50.0,0.3)],0.95)
+    assert result["cvar"]==pytest.approx(50)
+    assert result["var_threshold"]==pytest.approx(50)
+
+
+def test_v77_scenario_application_scales_demand_and_cash_without_mutating_base():
+    base={"demands":[{"demand_id":"d1","quantity":100}],
+      "cash_inflows_by_period":{"0":50},"resource_capacities":[]}
+    scenario=EconomicShockScenario("demand-shock",1.0,
+      demand_quantity_multipliers={"d1":0.5},cash_inflow_multipliers={"0":0.2})
+    changed=apply_scenario(base,scenario)
+    assert changed["demands"][0]["quantity"]==pytest.approx(50)
+    assert changed["cash_inflows_by_period"]["0"]==pytest.approx(10)
+    assert base["demands"][0]["quantity"]==100
+
+
+def test_v77_scenario_recourse_reports_expected_loss_and_tail_risk():
+    import json
+    fixture=ROOT/"examples"/"synergy_v7_6_2_credit_factory_plan.json"
+    with fixture.open(encoding="utf-8") as stream:
+        base=json.load(stream)
+    scenarios=[
+      {"scenario_id":"normal","probability":0.7},
+      {"scenario_id":"demand-contraction","probability":0.3,
+       "demand_quantity_multipliers":{"sale":0.5}},
+    ]
+    result=evaluate_scenario_set(base,scenarios,risk_alpha=0.95,risk_weight=0.5)
+    assert result["complete"] and result["risk_metrics"] is not None
+    assert result["non_anticipativity_enforced"] is False
+    assert result["formal_two_stage_stochastic_milp"] is False
+    assert result["risk_metrics"]["expected_loss_vs_baseline"]==pytest.approx(15)
+    assert result["risk_metrics"]["cvar_loss"]==pytest.approx(50)
+    assert result["risk_metrics"]["mean_cvar_loss"]==pytest.approx(32.5)
+    assert len(result["input_sha256"])==64
+    assert len(result["scenarios"][0]["scenario_input_sha256"])==64
+    assert result["risk_metrics"]["cvar_loss"]>=result["risk_metrics"]["expected_loss_vs_baseline"]
+
+
+def test_v77_scenario_set_rejects_non_normalized_probabilities_and_unknown_ids():
+    with pytest.raises(ValueError,match="sum to 1.0"):
+        evaluate_scenario_set({},[{"scenario_id":"a","probability":0.8}])
+    base={"resource_capacities":[],"demands":[],"inventory_receipts":[]}
+    scenario=EconomicShockScenario("bad",1.0,demand_quantity_multipliers={"missing":0.5})
+    with pytest.raises(ValueError,match="Unknown demand_id"):
+        apply_scenario(base,scenario)
+
+
+def test_v77_scenario_cli_example_validates_schema_and_runs(capsys):
+    from synergy_v7.scenario_recourse_cli import main
+    fixture=ROOT/"examples"/"synergy_v7_7_scenario_recourse.json"
+    code=main([str(fixture)])
+    captured=capsys.readouterr()
+    assert code==0
+    assert '"formal_two_stage_stochastic_milp": false' in captured.out
+    assert '"complete": true' in captured.out
+
+
+def test_v77_credit_borrowing_base_shock_uses_facility_limit_as_explicit_base():
+    scenario=EconomicShockScenario("collateral-haircut",1.0,credit_borrowing_base_multipliers={"0":0.5})
+    changed=apply_scenario({"credit_limit":100},scenario)
+    assert changed["credit_borrowing_base_by_period"]=={"0":50}
+    with pytest.raises(ValueError,match="require credit_limit"):
+        apply_scenario({},scenario)
+
+
+from synergy_v7.two_stage_optimizer import TwoStageScenario, optimize_two_stage_recourse
+
+
+def test_v78_two_stage_milp_uses_one_shared_commitment_and_scenario_recourse():
+    scenarios=[
+      TwoStageScenario("normal",0.8,100,100),
+      TwoStageScenario("capacity_shock",0.2,100,40),
+    ]
+    result=optimize_two_stage_recourse(100,2,1,5,20,scenarios,
+      risk_alpha=0.95,risk_weight=0.5)
+    assert result["complete"] and result["non_anticipativity_enforced"]
+    assert result["risk_aware_solution"]["common_commitment_quantity"]==40
+    assert result["risk_neutral_solution"]["common_commitment_quantity"]==100
+    assert result["risk_aware_solution"]["cvar_recourse_cost"]==pytest.approx(340)
+    assert result["risk_aware_solution"]["total_mean_cvar_objective"]==pytest.approx(420)
+    assert result["risk_neutral_solution"]["total_mean_cvar_objective"]==pytest.approx(348)
+    assert result["wait_and_see_expected_cost"]==pytest.approx(324)
+    assert result["expected_value_of_perfect_information"]==pytest.approx(24)
+    assert len({x["common_commitment"] for x in result["risk_aware_solution"]["scenario_recourse"]})==1
+
+
+def test_v78_two_stage_milp_rejects_invalid_probabilities_and_policy_parameters():
+    scenarios=[{"scenario_id":"a","probability":0.7,"demand_quantity":10,"available_capacity":10}]
+    with pytest.raises(ValueError,match="sum to 1.0"):
+        optimize_two_stage_recourse(10,1,1,2,5,scenarios)
+    with pytest.raises(ValueError,match="risk_weight"):
+        optimize_two_stage_recourse(10,1,1,2,5,[{"scenario_id":"a","probability":1,"demand_quantity":10,"available_capacity":10}],risk_weight=1.2)
+
+
+def test_v78_two_stage_cli_validates_and_solves_reference_example(capsys):
+    from synergy_v7.two_stage_optimizer_cli import main
+    fixture=ROOT/"examples"/"synergy_v7_8_two_stage_milp.json"
+    code=main([str(fixture)])
+    captured=capsys.readouterr()
+    assert code==0
+    assert '"non_anticipativity_enforced": true' in captured.out
+    assert '"common_commitment_quantity": 40' in captured.out
