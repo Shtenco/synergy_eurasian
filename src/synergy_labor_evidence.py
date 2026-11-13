@@ -187,8 +187,8 @@ def score_verified_contributions(
 
     if not isinstance(records, list) or not records:
         raise EvidenceVerificationError("records must be a non-empty list")
-    verified: list[dict[str, Any]] = []
-    verified_ids: set[str] = set()
+    verified: dict[str, dict[str, Any]] = {}
+    verified_streams: dict[str, tuple[str, str]] = {}
 
     for record in records:
         if not isinstance(record, dict):
@@ -205,8 +205,6 @@ def score_verified_contributions(
             if not isinstance(item, dict):
                 raise EvidenceVerificationError("evidence item must be an object")
             evidence_id = _text(item.get("evidence_id"), "evidence.evidence_id")
-            if evidence_id in verified_ids:
-                raise EvidenceVerificationError("evidence_id cannot be replayed within a scoring batch")
             envelope = evidence_envelopes.get(evidence_id)
             blob = evidence_blobs.get(evidence_id)
             if envelope is None or blob is None:
@@ -216,10 +214,14 @@ def score_verified_contributions(
                 raise EvidenceVerificationError("envelope evidence_id does not match contribution reference")
             if result["content_sha256"] != _hex64(item.get("sha256"), "evidence.sha256"):
                 raise EvidenceVerificationError("envelope digest does not match contribution evidence digest")
+            benefit_stream_id = _text(record.get("benefit_stream_id"), "benefit_stream_id")
+            identity = (result["content_sha256"], benefit_stream_id)
+            previous_identity = verified_streams.setdefault(evidence_id, identity)
+            if previous_identity != identity:
+                raise EvidenceVerificationError("one evidence_id cannot support different benefit streams")
             if item.get("independent") is True and result["signer_id"] == declared_verifier:
                 independent_signer_found = True
-            verified_ids.add(evidence_id)
-            verified.append(result)
+            verified[evidence_id] = result
 
         if not independent_signer_found:
             raise EvidenceVerificationError(
@@ -228,5 +230,5 @@ def score_verified_contributions(
 
     result = score_contributions(records)
     result["verification_scope"] = "CRYPTOGRAPHICALLY_VERIFIED_ED25519"
-    result["verified_evidence"] = sorted(verified, key=lambda item: item["evidence_id"])
+    result["verified_evidence"] = [verified[key] for key in sorted(verified)]
     return result
