@@ -138,3 +138,11 @@ def test_award_schema_is_strict_and_matches_signed_envelope():
     )
     jsonschema.Draft202012Validator.check_schema(schema)
     jsonschema.validate(instance=envelope, schema=schema)
+
+
+@pytest.mark.parametrize("quantity", [".5", "01", "1e2", " 2 ", "+2", "2."])
+def test_quantity_syntax_matches_json_schema_exactly(quantity):
+    envelope, registry = fixture()
+    envelope["quantity"] = quantity
+    with pytest.raises(AwardAuthorizationError, match="schema"):
+        verify_award_authorization(envelope, registry, now=NOW)
