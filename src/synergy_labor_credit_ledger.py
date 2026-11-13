@@ -520,6 +520,192 @@ class LaborCreditLedger:
                 return {"valid": False, "events_checked": len(rows), "failed_seq": None}
             return {"valid": True, "events_checked": len(rows), "head_hash": head}
 
+    def verify_projection_consistency(self) -> dict[str, Any]:
+        """Replay the append-only event log and compare it with mutable projections."""
+        with self._lock:
+            chain = self.verify_event_chain()
+            if not chain["valid"]:
+                return {"valid": False, "issues": ["event hash chain is invalid"], "events_replayed": 0}
+
+            policies: dict[tuple[str, str, str], dict[str, Any]] = {}
+            capacities: dict[str, dict[str, Any]] = {}
+            credits: dict[str, dict[str, Any]] = {}
+            issues: list[str] = []
+
+            rows = self._db.execute("SELECT * FROM events ORDER BY seq").fetchall()
+            for event in rows:
+                try:
+                    payload = json.loads(event["payload_json"])
+                    request = payload["request"]
+                    event_type = event["event_type"]
+
+                    if event_type == "ISSUER_REGISTERED":
+                        key = (request["issuer_id"], request["service_code"], request["unit"])
+                        if key in policies:
+                            raise ValueError("duplicate issuer policy event")
+                        policies[key] = {
+                            "issuer_id": key[0], "service_code": key[1], "unit": key[2],
+                            "max_outstanding": request["max_outstanding"],
+                            "enabled": 1, "frozen": 0,
+                        }
+
+                    elif event_type == "CAPACITY_REGISTERED":
+                        cid = request["capacity_id"]
+                        if cid in capacities:
+                            raise ValueError("duplicate capacity registration event")
+                        capacities[cid] = {
+                            "capacity_id": cid, "issuer_id": request["issuer_id"],
+                            "service_code": request["service_code"], "unit": request["unit"],
+                            "total_units": request["total_units"], "reserved_units": "0",
+                            "fulfilled_units": "0", "evidence_sha256": request["evidence_sha256"],
+                            "verifier_id": request["verifier_id"], "status": "OPEN",
+                        }
+
+                    elif event_type == "CREDIT_ISSUED":
+                        credit_id = request["credit_id"]
+                        contribution_id = request["source_contribution_id"]
+                        award_ref = request["award_authorization_ref"]
+                        if credit_id in credits:
+                            raise ValueError("duplicate credit issue event")
+                        if any(x["source_contribution_id"] == contribution_id for x in credits.values()):
+                            raise ValueError("source contribution replay in event log")
+                        if any(x["award_authorization_ref"] == award_ref for x in credits.values()):
+                            raise ValueError("award authorization replay in event log")
+                        capacity = capacities[request["capacity_id"]]
+                        amount = Decimal(request["units"])
+                        available = Decimal(capacity["total_units"]) - Decimal(capacity["reserved_units"]) - Decimal(capacity["fulfilled_units"])
+                        if amount > available:
+                            raise ValueError("event log oversubscribes capacity")
+                        policy_key = (request["issuer_id"], request["service_code"], request["unit"])
+                        policy = policies[policy_key]
+                        outstanding = sum((
+                            Decimal(x["remaining_units"]) for x in credits.values()
+                            if (x["issuer_id"], x["service_code"], x["unit"]) == policy_key
+                            and x["status"] in {ACTIVE, OVERDUE, DEFAULTED}
+                        ), ZERO)
+                        if policy["frozen"] or outstanding + amount > Decimal(policy["max_outstanding"]):
+                            raise ValueError("event log exceeds issuer policy")
+                        capacity["reserved_units"] = _fmt(Decimal(capacity["reserved_units"]) + amount)
+                        credits[credit_id] = {
+                            "credit_id": credit_id, "issuer_id": request["issuer_id"],
+                            "holder_id": request["holder_id"],
+                            "source_contribution_id": contribution_id,
+                            "award_authorization_ref": award_ref,
+                            "result_digest": request["result_digest"],
+                            "service_code": request["service_code"], "unit": request["unit"],
+                            "capacity_id": request["capacity_id"],
+                            "issued_units": _fmt(amount), "remaining_units": _fmt(amount),
+                            "due_at": request["due_at"], "status": ACTIVE, "version": 0,
+                        }
+
+                    elif event_type == "CREDIT_TRANSFERRED":
+                        credit = credits[request["credit_id"]]
+                        if credit["holder_id"] != request["from_holder"] or credit["version"] != request["expected_version"] or credit["status"] != ACTIVE:
+                            raise ValueError("invalid transfer transition in event log")
+                        credit["holder_id"] = request["to_holder"]
+                        credit["version"] += 1
+
+                    elif event_type == "CREDIT_REDEEMED":
+                        credit = credits[request["credit_id"]]
+                        amount = Decimal(request["units"])
+                        if credit["holder_id"] != request["holder_id"] or credit["version"] != request["expected_version"] or credit["status"] not in {ACTIVE, OVERDUE}:
+                            raise ValueError("invalid redemption transition in event log")
+                        remaining = Decimal(credit["remaining_units"])
+                        capacity = capacities[credit["capacity_id"]]
+                        reserved = Decimal(capacity["reserved_units"])
+                        if amount <= ZERO or amount > remaining or amount > reserved:
+                            raise ValueError("invalid redemption quantity in event log")
+                        next_remaining = remaining - amount
+                        capacity["reserved_units"] = _fmt(reserved - amount)
+                        capacity["fulfilled_units"] = _fmt(Decimal(capacity["fulfilled_units"]) + amount)
+                        credit["remaining_units"] = _fmt(next_remaining)
+                        if next_remaining == ZERO:
+                            credit["status"] = SETTLED
+                        credit["version"] += 1
+
+                    elif event_type == "CREDIT_OVERDUE":
+                        credit = credits[request["credit_id"]]
+                        if credit["status"] != ACTIVE or request["as_of"] < credit["due_at"]:
+                            raise ValueError("invalid overdue transition in event log")
+                        credit["status"] = OVERDUE
+                        credit["version"] += 1
+
+                    elif event_type == "CREDIT_DEFAULTED_ISSUER_FROZEN":
+                        credit = credits[request["credit_id"]]
+                        if credit["status"] != OVERDUE or request["as_of"] < credit["due_at"]:
+                            raise ValueError("invalid default transition in event log")
+                        credit["status"] = DEFAULTED
+                        credit["version"] += 1
+                        policy_key = (credit["issuer_id"], credit["service_code"], credit["unit"])
+                        policies[policy_key]["frozen"] = 1
+
+                    elif event_type == "CREDIT_CANCELLED_BY_BOTH_PARTIES":
+                        credit = credits[request["credit_id"]]
+                        if credit["status"] not in {ACTIVE, OVERDUE} or credit["version"] != request["expected_version"]:
+                            raise ValueError("invalid cancellation transition in event log")
+                        remaining = Decimal(credit["remaining_units"])
+                        capacity = capacities[credit["capacity_id"]]
+                        reserved = Decimal(capacity["reserved_units"])
+                        if remaining > reserved:
+                            raise ValueError("cancellation exceeds reserved capacity in event log")
+                        capacity["reserved_units"] = _fmt(reserved - remaining)
+                        credit["remaining_units"] = "0"
+                        credit["status"] = CANCELLED
+                        credit["version"] += 1
+
+                    else:
+                        raise ValueError(f"unsupported event type: {event_type}")
+
+                except (KeyError, TypeError, ValueError, InvalidOperation) as exc:
+                    issues.append(f"event seq {event['seq']}: replay failed: {exc}")
+                    break
+
+            if not issues:
+                actual_policies = {
+                    (row["issuer_id"], row["service_code"], row["unit"]): dict(row)
+                    for row in self._db.execute("SELECT * FROM issuer_policies").fetchall()
+                }
+                actual_capacities = {
+                    row["capacity_id"]: dict(row)
+                    for row in self._db.execute("SELECT * FROM capacity").fetchall()
+                }
+                actual_credits = {
+                    row["credit_id"]: dict(row)
+                    for row in self._db.execute("SELECT * FROM credits").fetchall()
+                }
+                if policies != actual_policies:
+                    issues.append("issuer policy projection differs from event replay")
+                if capacities != actual_capacities:
+                    issues.append("capacity projection differs from event replay")
+                if credits != actual_credits:
+                    issues.append("credit projection differs from event replay")
+
+            if not issues:
+                for capacity_id, capacity in capacities.items():
+                    expected_reserved = sum((
+                        Decimal(credit["remaining_units"]) for credit in credits.values()
+                        if credit["capacity_id"] == capacity_id
+                        and credit["status"] in {ACTIVE, OVERDUE, DEFAULTED}
+                    ), ZERO)
+                    if Decimal(capacity["reserved_units"]) != expected_reserved:
+                        issues.append(f"capacity {capacity_id}: reserved units do not equal outstanding claims")
+                    if Decimal(capacity["reserved_units"]) + Decimal(capacity["fulfilled_units"]) > Decimal(capacity["total_units"]):
+                        issues.append(f"capacity {capacity_id}: total capacity is over-allocated")
+                for key, policy in policies.items():
+                    outstanding = sum((
+                        Decimal(credit["remaining_units"]) for credit in credits.values()
+                        if (credit["issuer_id"], credit["service_code"], credit["unit"]) == key
+                        and credit["status"] in {ACTIVE, OVERDUE, DEFAULTED}
+                    ), ZERO)
+                    if outstanding > Decimal(policy["max_outstanding"]):
+                        issues.append(f"issuer {key[0]}: outstanding obligation exceeds policy limit")
+
+            return {
+                "valid": not issues,
+                "issues": issues,
+                "events_replayed": len(rows) if not issues else max(0, int(rows[len(issues) - 1]["seq"]) - 1) if rows else 0,
+            }
+
     def list_events(self) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._db.execute("SELECT * FROM events ORDER BY seq").fetchall()
