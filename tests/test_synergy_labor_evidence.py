@@ -190,3 +190,16 @@ def test_signed_evidence_envelope_matches_strict_json_schema():
     schema = json.loads((ROOT / "interfaces" / "sle_evidence_envelope.schema.json").read_text(encoding="utf-8"))
     jsonschema.Draft202012Validator.check_schema(schema)
     jsonschema.validate(instance=envelope, schema=schema)
+
+
+def test_verified_scoring_binds_evidence_subject_to_contributor():
+    envelope, blob, registry = signed_fixture()
+    envelope["subject_id"] = "different-person"
+    envelope["signature"] = base64.b64encode(
+        Ed25519PrivateKey.generate().sign(canonical_evidence_payload(envelope))
+    ).decode("ascii")
+    record = contribution_record(hashlib.sha256(blob).hexdigest())
+    with pytest.raises(EvidenceVerificationError, match="subject_id"):
+        score_verified_contributions(
+            [record], {"evidence-001": envelope}, {"evidence-001": blob}, registry, now=NOW
+        )
