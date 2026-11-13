@@ -5,8 +5,8 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version", "credit_id", "issuer_id", "holder_id",
-    "service_code", "unit", "capacity_id", "issued_units",
+    "schema_version", "credit_id", "issuer_id", "holder_id", "source_contribution_id",
+    "award_authorization_ref", "result_digest", "service_code", "unit", "capacity_id", "issued_units",
     "remaining_units", "due_at", "status", "version"
   ],
   "properties": {
@@ -14,6 +14,9 @@
     "credit_id": { "type": "string", "minLength": 1, "maxLength": 128 },
     "issuer_id": { "type": "string", "minLength": 1, "maxLength": 128 },
     "holder_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "source_contribution_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "award_authorization_ref": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "result_digest": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
     "service_code": { "type": "string", "minLength": 1, "maxLength": 128 },
     "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
     "capacity_id": { "type": "string", "minLength": 1, "maxLength": 128 },
