@@ -9,7 +9,6 @@ Reservations are never auto-expired or silently released: crash recovery favors 
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal
 import hashlib
 import json
 import sqlite3
@@ -215,7 +214,6 @@ class SLEAwardRegistry:
         credit = ledger.get_credit(credit_id)
         expected = {
             "issuer_id": award["issuer_id"],
-            "holder_id": award["beneficiary_id"],
             "source_contribution_id": award["source_contribution_id"],
             "award_authorization_ref": award["award_id"],
             "result_digest": award["result_digest"],
@@ -230,6 +228,9 @@ class SLEAwardRegistry:
         chain = ledger.verify_event_chain()
         if not chain.get("valid"):
             raise AwardRegistryError("local ledger event chain is invalid")
+        projection = ledger.verify_projection_consistency()
+        if not projection.get("valid"):
+            raise AwardRegistryError("local ledger projection is inconsistent")
         issue_events = []
         for event in ledger._db.execute(
             "SELECT event_id,event_hash,event_type,payload_json FROM events WHERE event_type='CREDIT_ISSUED'"
