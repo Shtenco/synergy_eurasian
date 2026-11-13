@@ -448,7 +448,7 @@ def test_remediation_requires_two_distinct_signed_current_parties_and_same_diges
     with pytest.raises(DisputeError, match="issuer remediation signature"):
         disputes.acknowledge_remediation("case-1", "remediation-agreement-1",
             "issuer-ref", "holder-ref", "wrong-issuer", holder, holder)
-    with pytest.raises(DisputeError, match="distinct issuer and holder"):
+    with pytest.raises(DisputeError, match="holder remediation signature"):
         same_key_holder = dict(holder)
         same_key_holder["principal_id"] = "coop-a"
         # A valid issuer signature cannot be re-labelled as the holder.
