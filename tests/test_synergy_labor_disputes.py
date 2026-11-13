@@ -16,6 +16,7 @@ from synergy_labor_disputes import (
     DisputeError,
     LaborCreditDisputes,
     canonical_decision_payload,
+    canonical_party_authorization_payload,
 )
 
 NOW = datetime(2026, 11, 14, 12, 0, tzinfo=timezone.utc)
@@ -47,7 +48,27 @@ def setup():
             "revoked_at": None,
         }
         private[resolver] = (key, key_id)
-    return ledger, LaborCreditDisputes(ledger, keys), private
+    party_keys = {}
+    private["party"] = {}
+    for principal in ("coop-a", "member-b"):
+        key = Ed25519PrivateKey.generate()
+        public = key.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+        key_id = f"{principal}-party-key"
+        party_keys[key_id] = {
+            "principal_id": principal,
+            "roles": ["SLE_CREDIT_PARTY"],
+            "public_key_b64": base64.b64encode(public).decode("ascii"),
+            "valid_from": "2026-01-01T00:00:00Z",
+            "valid_until": "2028-01-01T00:00:00Z",
+            "revoked_at": None,
+        }
+        private["party"][principal] = (key, key_id)
+    disputes = LaborCreditDisputes(ledger, keys, party_keys)
+    disputes._test_party_private = private["party"]
+    return ledger, disputes, private
 
 
 def signed_decision(private, *, case="case-1", credit="credit-1",
@@ -70,9 +91,59 @@ def signed_decision(private, *, case="case-1", credit="credit-1",
     return envelope
 
 
+
+def signed_party(private, *, action, case, credit="credit-1", principal,
+                 payload, version=0):
+    key, key_id = private["party"][principal]
+    digest = hashlib.sha256(json.dumps(
+        {"action": action, "payload": payload}, sort_keys=True,
+        separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    ).encode("utf-8")).hexdigest()
+    envelope = {
+        "schema": "sle.dispute-party-authorization/v1",
+        "action": action,
+        "case_id": case,
+        "credit_id": credit,
+        "principal_id": principal,
+        "expected_version": version,
+        "action_digest": digest,
+        "signed_at": "2026-11-14T11:00:00Z",
+        "key_id": key_id,
+    }
+    envelope["signature"] = base64.b64encode(
+        key.sign(canonical_party_authorization_payload(envelope))
+    ).decode("ascii")
+    return envelope
+
+
+def appeal_authorization(private, *, case="case-1", principal="coop-a", version=1,
+                         appeal_ref="appeal-ref-1", reason="NEW_EVIDENCE",
+                         evidence_refs=None):
+    payload = {"appellant_id": principal, "appeal_ref": appeal_ref,
+               "reason_code": reason, "evidence_refs": evidence_refs or ["evidence://appeal/1"]}
+    return signed_party(private, action="APPEAL_DISPUTE", case=case,
+                        principal=principal, payload=payload, version=version)
+
+
+def remediation_authorizations(private, *, case="case-1", version=1,
+                               remediation_ref="remediation-agreement-1"):
+    payload = {"remediation_ref": remediation_ref}
+    return (
+        signed_party(private, action="ACKNOWLEDGE_REMEDIATION", case=case,
+                     principal="coop-a", payload=payload, version=version),
+        signed_party(private, action="ACKNOWLEDGE_REMEDIATION", case=case,
+                     principal="member-b", payload=payload, version=version),
+    )
+
 def open_case(ledger, disputes, *, case="case-1", actor="member-b"):
+    auth = signed_party(
+        {"party": disputes._test_party_private},
+        action="OPEN_DISPUTE", case=case, principal=actor,
+        payload={"opened_by": actor, "reason_code": "SERVICE_QUALITY",
+                 "evidence_refs": ["evidence://inspection/1"]},
+    )
     return disputes.open_dispute(case, "credit-1", actor, "SERVICE_QUALITY",
-                                 ["evidence://inspection/1"], f"open-{case}")
+                                 ["evidence://inspection/1"], f"open-{case}", auth)
 
 
 def test_open_dispute_freezes_transfer_redemption_and_cancellation():
@@ -123,6 +194,7 @@ def test_dispute_upheld_does_not_automatically_cancel_or_release_capacity():
     released = disputes.acknowledge_remediation(
         "case-1", "remediation-agreement-1", "issuer-signed-ack-1",
         "holder-signed-ack-1", "remediation-ack",
+        *remediation_authorizations(private),
     )
     assert released["frozen"] is False
     assert released["obligation_cancelled"] is False
@@ -139,7 +211,8 @@ def test_appeal_refreezes_and_requires_a_different_resolver():
     open_case(ledger, disputes)
     disputes.decide(signed_decision(private), NOW, "decision-1")
     appeal = disputes.appeal("case-1", "coop-a", "appeal-ref-1", "NEW_EVIDENCE",
-                             ["evidence://appeal/1"], 1, "appeal-1")
+                             ["evidence://appeal/1"], 1, "appeal-1",
+                             appeal_authorization(private))
     assert appeal["status"] == "APPEALED" and appeal["frozen"] is True
     case = disputes.get_dispute("case-1")
     assert case["appeal_ref"] == "appeal-ref-1"
@@ -158,6 +231,7 @@ def test_appeal_refreezes_and_requires_a_different_resolver():
     disputes.acknowledge_remediation(
         "case-1", "appeal-remediation-1", "issuer-ack-appeal",
         "holder-ack-appeal", "appeal-remediation",
+        *remediation_authorizations(private, remediation_ref="appeal-remediation-1"),
     )
     assert ledger.verify_projection_consistency()["valid"] is True
     ledger.close()
@@ -183,13 +257,17 @@ def test_only_credit_parties_can_open_or_appeal_and_only_one_appeal_is_allowed()
     open_case(ledger, disputes)
     disputes.decide(signed_decision(private), NOW, "decision-1")
     disputes.appeal("case-1", "member-b", "appeal-ref-1", "NEW_EVIDENCE",
-                     ["evidence://appeal/1"], 1, "appeal-1")
+                     ["evidence://appeal/1"], 1, "appeal-1",
+                     appeal_authorization(private, principal="member-b"))
     disputes.decide(
         signed_decision(private, resolver="resolver-b", version=2), NOW, "appeal-decision"
     )
     with pytest.raises(DisputeError, match="only one appeal"):
         disputes.appeal("case-1", "member-b", "appeal-ref-2", "AGAIN",
-                        ["evidence://appeal/2"], 3, "appeal-2")
+                        ["evidence://appeal/2"], 3, "appeal-2",
+                        appeal_authorization(private, principal="member-b", version=3,
+                                             appeal_ref="appeal-ref-2", reason="AGAIN",
+                                             evidence_refs=["evidence://appeal/2"]))
     ledger.close()
 
 
