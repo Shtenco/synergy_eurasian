@@ -408,6 +408,13 @@ class LaborCreditDisputes:
         The supplied registries remain trust roots managed outside this module.
         """
         with self.ledger._lock:
+            chain = self.ledger.verify_event_chain()
+            if not chain["valid"]:
+                return {
+                    "valid": False, "events_checked": chain.get("events_checked", 0),
+                    "authorizations_checked": 0,
+                    "issues": ["event hash chain is invalid"],
+                }
             events = self.ledger._db.execute(
                 "SELECT seq,event_type,payload_json FROM events ORDER BY seq"
             ).fetchall()
@@ -473,6 +480,7 @@ class LaborCreditDisputes:
                             envelope, self.trusted_resolver_keys, now=decided_at
                         )
                         for field in ("case_id", "credit_id", "resolver_id", "outcome",
+                                      "rationale_digest", "key_id", "decided_at",
                                       "decision_digest", "expected_version"):
                             if verified[field] != req.get(field):
                                 raise DisputeError(f"historical resolver decision {field} mismatch")
