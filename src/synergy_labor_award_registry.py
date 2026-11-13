@@ -219,56 +219,74 @@ class SLEAwardRegistry:
         self, award_id: str, ledger: Any, credit_id: str,
     ) -> dict[str, Any]:
         """Consume only after the local SQLite ledger proves the matching issue event."""
-        registry_audit = self.verify_projection_consistency()
-        if not registry_audit.get("valid"):
-            raise AwardRegistryError("award registry projection is inconsistent")
-        award = self.get_award(award_id)
-        credit = ledger.get_credit(credit_id)
-        expected = {
-            "issuer_id": award["issuer_id"],
-            "source_contribution_id": award["source_contribution_id"],
-            "award_authorization_ref": award["award_id"],
-            "result_digest": award["result_digest"],
-            "service_code": award["service_code"],
-            "unit": award["unit"],
-            "capacity_id": award["capacity_id"],
-            "issued_units": award["quantity"],
-        }
-        for field, value in expected.items():
-            if str(credit[field]) != str(value):
-                raise AwardRegistryError(f"local credit {field} does not match reserved award")
-        chain = ledger.verify_event_chain()
-        if not chain.get("valid"):
-            raise AwardRegistryError("local ledger event chain is invalid")
-        projection = ledger.verify_projection_consistency()
-        if not projection.get("valid"):
-            raise AwardRegistryError("local ledger projection is inconsistent")
-        issue_events = []
-        for event in ledger._db.execute(
-            "SELECT event_id,event_hash,event_type,payload_json FROM events WHERE event_type='CREDIT_ISSUED'"
-        ).fetchall():
-            payload = json.loads(event["payload_json"])
-            if payload.get("request", {}).get("credit_id") == credit_id:
-                issue_events.append((event, payload.get("request", {})))
-        if len(issue_events) != 1:
-            raise AwardRegistryError("exactly one local CREDIT_ISSUED event is required")
-        event, request = issue_events[0]
-        for field, value in (
-            ("issuer_id", award["issuer_id"]),
-            ("holder_id", award["beneficiary_id"]),
-            ("source_contribution_id", award["source_contribution_id"]),
-            ("award_authorization_ref", award["award_id"]),
-            ("result_digest", award["result_digest"]),
-            ("service_code", award["service_code"]),
-            ("unit", award["unit"]),
-            ("capacity_id", award["capacity_id"]),
-            ("units", award["quantity"]),
-        ):
-            if str(request.get(field)) != str(value):
-                raise AwardRegistryError(f"local issue event {field} does not match reserved award")
         with self._lock:
             self._db.execute("BEGIN IMMEDIATE")
             try:
+                registry_audit = self.verify_projection_consistency()
+                if not registry_audit.get("valid"):
+                    raise AwardRegistryError("award registry projection is inconsistent")
+                award_row = self._db.execute(
+                    "SELECT * FROM awards WHERE award_id=?", (award_id,)
+                ).fetchone()
+                if award_row is None:
+                    raise AwardRegistryError("award reservation not found")
+                award = dict(award_row)
+
+                # Hold the local ledger lock while checking its current projection and
+                # locating the immutable issuance event, so a concurrent command cannot
+                # interleave between those reads.
+                with ledger._lock:
+                    credit = ledger.get_credit(credit_id)
+                    expected = {
+                        "issuer_id": award["issuer_id"],
+                        "source_contribution_id": award["source_contribution_id"],
+                        "award_authorization_ref": award["award_id"],
+                        "result_digest": award["result_digest"],
+                        "service_code": award["service_code"],
+                        "unit": award["unit"],
+                        "capacity_id": award["capacity_id"],
+                        "issued_units": award["quantity"],
+                    }
+                    for field, value in expected.items():
+                        if str(credit[field]) != str(value):
+                            raise AwardRegistryError(
+                                f"local credit {field} does not match reserved award"
+                            )
+                    chain = ledger.verify_event_chain()
+                    if not chain.get("valid"):
+                        raise AwardRegistryError("local ledger event chain is invalid")
+                    projection = ledger.verify_projection_consistency()
+                    if not projection.get("valid"):
+                        raise AwardRegistryError("local ledger projection is inconsistent")
+                    issue_events = []
+                    for event in ledger._db.execute(
+                        "SELECT event_id,event_hash,event_type,payload_json FROM events "
+                        "WHERE event_type='CREDIT_ISSUED'"
+                    ).fetchall():
+                        payload = json.loads(event["payload_json"])
+                        if payload.get("request", {}).get("credit_id") == credit_id:
+                            issue_events.append((event, payload.get("request", {})))
+                    if len(issue_events) != 1:
+                        raise AwardRegistryError(
+                            "exactly one local CREDIT_ISSUED event is required"
+                        )
+                    event, request = issue_events[0]
+                    for field, value in (
+                        ("issuer_id", award["issuer_id"]),
+                        ("holder_id", award["beneficiary_id"]),
+                        ("source_contribution_id", award["source_contribution_id"]),
+                        ("award_authorization_ref", award["award_id"]),
+                        ("result_digest", award["result_digest"]),
+                        ("service_code", award["service_code"]),
+                        ("unit", award["unit"]),
+                        ("capacity_id", award["capacity_id"]),
+                        ("units", award["quantity"]),
+                    ):
+                        if str(request.get(field)) != str(value):
+                            raise AwardRegistryError(
+                                f"local issue event {field} does not match reserved award"
+                            )
+
                 current = self._db.execute(
                     "SELECT * FROM awards WHERE award_id=?", (award_id,)
                 ).fetchone()
@@ -278,7 +296,11 @@ class SLEAwardRegistry:
                         and current["ledger_event_hash"] == event["event_hash"]):
                         self._db.execute("COMMIT")
                         return {**dict(current), "idempotent_replay": True}
-                    raise AwardRegistryError("award reservation was already consumed by another ledger event")
+                    raise AwardRegistryError(
+                        "award reservation was already consumed by another ledger event"
+                    )
+                if current["status"] != "RESERVED":
+                    raise AwardRegistryError("award reservation is not consumable")
                 consumed_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
                 self._db.execute(
                     """UPDATE awards SET status='CONSUMED',credit_id=?,ledger_event_id=?,
@@ -295,7 +317,9 @@ class SLEAwardRegistry:
                 )
                 self._db.execute("COMMIT")
                 return {
-                    **dict(self._db.execute("SELECT * FROM awards WHERE award_id=?", (award_id,)).fetchone()),
+                    **dict(self._db.execute(
+                        "SELECT * FROM awards WHERE award_id=?", (award_id,)
+                    ).fetchone()),
                     **registry_event, "idempotent_replay": False,
                 }
             except Exception:
