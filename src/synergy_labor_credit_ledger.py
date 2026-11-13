@@ -663,6 +663,9 @@ class LaborCreditLedger:
                             raise ValueError("credit already has an active dispute")
                         if request["opened_by"] not in {credits[credit_id]["issuer_id"], credits[credit_id]["holder_id"]}:
                             raise ValueError("dispute opener is not a credit party")
+                        refs = request["evidence_refs"]
+                        if not isinstance(refs, list) or not refs or len(set(refs)) != len(refs) or not request["reason_code"]:
+                            raise ValueError("dispute evidence or reason is invalid")
                         disputes[case_id] = {
                             "case_id": case_id, "credit_id": credit_id,
                             "opened_by": request["opened_by"], "reason_code": request["reason_code"],
@@ -681,6 +684,8 @@ class LaborCreditLedger:
                             raise ValueError("invalid dispute decision transition")
                         if request["resolver_id"] in {credits[case["credit_id"]]["issuer_id"], credits[case["credit_id"]]["holder_id"]}:
                             raise ValueError("dispute resolver is a party")
+                        if request["outcome"] not in {"CLAIM_UPHELD", "DISPUTE_UPHELD"} or len(request["decision_digest"]) != 64:
+                            raise ValueError("dispute decision outcome or digest is invalid")
                         if case["resolver_id"] == request["resolver_id"]:
                             raise ValueError("same resolver cannot decide an appeal")
                         case["status"] = "DECIDED"
@@ -696,6 +701,9 @@ class LaborCreditLedger:
                             raise ValueError("invalid or repeated dispute appeal")
                         if request["appellant_id"] not in {credit["issuer_id"], credit["holder_id"]}:
                             raise ValueError("appeal actor is not a credit party")
+                        refs = request["evidence_refs"]
+                        if not request["appeal_ref"] or not request["reason_code"] or not isinstance(refs, list) or not refs or len(set(refs)) != len(refs):
+                            raise ValueError("appeal reason or evidence is invalid")
                         if request["appellant_id"] == case["resolver_id"]:
                             raise ValueError("resolver cannot appeal own decision")
                         case["status"] = "APPEALED"
@@ -709,6 +717,9 @@ class LaborCreditLedger:
                         case = disputes[request["case_id"]]
                         if case["status"] != "DECIDED" or case["outcome"] != "DISPUTE_UPHELD" or case["remediation_closed"] != 0:
                             raise ValueError("invalid dispute remediation acknowledgement")
+                        refs = [request["issuer_ack_ref"], request["holder_ack_ref"]]
+                        if not all(refs) or refs[0] == refs[1] or not request["remediation_ref"]:
+                            raise ValueError("bilateral remediation references are invalid")
                         case["remediation_closed"] = 1
                         case["remediation_ref"] = request["remediation_ref"]
                         case["issuer_ack_ref"] = request["issuer_ack_ref"]
