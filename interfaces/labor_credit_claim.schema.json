@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/labor_credit_claim.schema.json",
+  "title": "SYNERGY Labor Service Credit Claim V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "credit_id", "issuer_id", "holder_id",
+    "service_code", "unit", "capacity_id", "issued_units",
+    "remaining_units", "due_at", "status", "version"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "credit_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "issuer_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "holder_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "service_code": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "capacity_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "issued_units": { "type": "string", "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$" },
+    "remaining_units": { "type": "string", "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$" },
+    "due_at": { "type": "string", "format": "date-time" },
+    "status": { "enum": ["ACTIVE", "OVERDUE", "DEFAULTED", "SETTLED", "CANCELLED"] },
+    "version": { "type": "integer", "minimum": 0 }
+  }
+}
