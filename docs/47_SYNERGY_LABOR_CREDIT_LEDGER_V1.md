@@ -51,7 +51,7 @@ SQLite `BEGIN IMMEDIATE` serializes state-changing commands. Each command requir
 
 Every successful state transition appends a canonical event with a SHA-256 hash chained to its predecessor. Event rows have update/delete guards. `verify_event_chain()` detects gaps, altered event fields and broken links.
 
-The hash chain is tamper-evident, not tamper-proof: an administrator able to rewrite the entire database can recompute the chain. Production needs signed checkpoints anchored outside the database, authenticated actor identities, key rotation and independent backups. The mutable projection tables are not yet reconstructed from the event log; production recovery must add deterministic replay and projection reconciliation before this kernel can be treated as an authoritative ledger.
+The hash chain is tamper-evident, not tamper-proof: an administrator able to rewrite the entire database can recompute the chain. Production needs signed checkpoints anchored outside the database, authenticated actor identities, key rotation and independent backups. The reference kernel now replays the supported event types into deterministic expected issuer/capacity/credit projections and compares them with the mutable SQLite tables via `verify_projection_consistency()`. This detects direct projection mutation and checks capacity/issuer limits. It is still an in-process audit, not crash-safe disaster recovery or a distributed consensus protocol.
 
 ## 6. Financial firewall and V6.6 boundary
 
