@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/sle_dispute_party_authorization.schema.json",
+  "title": "SYNERGY SLE Signed Dispute Party Authorization V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "action",
+    "case_id",
+    "credit_id",
+    "principal_id",
+    "expected_version",
+    "action_digest",
+    "signed_at",
+    "key_id",
+    "signature"
+  ],
+  "properties": {
+    "schema": {
+      "const": "sle.dispute-party-authorization/v1"
+    },
+    "action": {
+      "enum": [
+        "OPEN_DISPUTE",
+        "APPEAL_DISPUTE",
+        "ACKNOWLEDGE_REMEDIATION"
+      ]
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "credit_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "principal_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "expected_version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "action_digest": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
+    "signed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "key_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "signature": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "minLength": 1
+    }
+  }
+}
