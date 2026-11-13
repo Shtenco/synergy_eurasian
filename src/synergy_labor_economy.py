@@ -13,7 +13,7 @@ from typing import Any, Iterable
 POLICY_VERSION = "SLE-SCORE-1.0"
 MIN_COMPLEXITY = Decimal("0.5")
 MAX_COMPLEXITY = Decimal("2.0")
-MIN_OUTCOME = Decimal("0.5")
+MIN_OUTCOME = Decimal("0")
 MAX_OUTCOME = Decimal("2.0")
 ZERO = Decimal("0")
 ONE = Decimal("1")
@@ -120,6 +120,7 @@ def _validate_record(record: dict[str, Any]) -> dict[str, Any]:
         "contribution_id": contribution_id,
         "contributor_id": contributor_id,
         "benefit_stream_id": benefit_stream_id,
+        "effort_unit": record["effort_unit"],
         "effort_units": effort,
         "complexity_factor": complexity,
         "quality_factor": quality,
@@ -142,6 +143,10 @@ def score_contributions(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
     ids = [item["contribution_id"] for item in validated]
     if len(ids) != len(set(ids)):
         raise ValueError("contribution_id values must be unique within a batch")
+
+    effort_units = {item["effort_unit"] for item in validated}
+    if len(effort_units) != 1:
+        raise ValueError("mixed effort_unit values cannot be aggregated in one scoring batch")
 
     attribution_by_benefit: dict[str, Decimal] = defaultdict(lambda: ZERO)
     for item in validated:
@@ -171,6 +176,7 @@ def score_contributions(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "contribution_id": item["contribution_id"],
             "contributor_id": item["contributor_id"],
             "benefit_stream_id": item["benefit_stream_id"],
+            "effort_unit": item["effort_unit"],
             "labor_score": _format_decimal(score),
         })
 
@@ -178,6 +184,7 @@ def score_contributions(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "policy_version": POLICY_VERSION,
         "status": "NON_MONETARY_SCORE_ONLY",
         "total_labor_score": _format_decimal(total_score),
+        "effort_unit": next(iter(effort_units)),
         "contributions": scored,
         "attribution_totals": {
             key: _format_decimal(value) for key, value in sorted(attribution_by_benefit.items())
