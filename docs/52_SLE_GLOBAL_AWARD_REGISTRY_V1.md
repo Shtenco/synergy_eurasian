@@ -39,7 +39,7 @@ This deliberately favors duplicate prevention over liveness. Operational deploym
 
 ## Audit
 
-The registry maintains an append-only SHA-256 event chain for reservation and consumption transitions. `verify_event_chain()` checks sequence, previous hashes, event hashes and the head. `verify_projection_consistency()` replays registry events and compares the result with the mutable award table. `verify_authorization_history()` re-verifies the original signed envelope at the reservation event timestamp (not merely at the signer's `issued_at`), so a key revoked after signing but before acceptance is rejected while a later revocation does not retroactively invalidate an accepted award.
+The registry maintains an append-only SHA-256 event chain for reservation and consumption transitions. `verify_event_chain()` checks sequence, previous hashes, event hashes and the head. `verify_projection_consistency()` replays registry events and compares every material projection field, including reservation and consumption timestamps, with the mutable award table. `verify_authorization_history()` re-verifies the original signed envelope at the reservation event timestamp (not merely at the signer's `issued_at`), so a key revoked after signing but before acceptance is rejected while a later revocation does not retroactively invalidate an accepted award.
 
 Consumption also verifies the local ledger's event chain and `verify_projection_consistency()` before accepting a local issuance reference. Registry and local event hashes are linked in the `AWARD_CONSUMED` record.
 
@@ -56,4 +56,4 @@ The event chain is tamper-evident, not tamper-proof. External checkpoints, backu
 
 ## Status
 
-Research/reference implementation under PR #17. Focused tests cover global source/award/result uniqueness across registry instances sharing one database, signature verification, idempotent issuance and post-expiry replay, crash recovery after local issue, rejection of substituted recovery envelopes, stranded reservation safety, local term mismatch and projection tampering. This is not a production distributed consensus service.
+Research/reference implementation under PR #17. Focused tests cover global source/award/result uniqueness across registry instances sharing one database, concurrent competing and identical reservations, concurrent idempotent consumption, signature verification, idempotent issuance and post-expiry replay, crash recovery after local issue, rejection of substituted recovery envelopes, stranded reservation safety, local term mismatch, timestamp/projection tampering and configured SQLite lock timeouts. This is not a production distributed consensus service.
