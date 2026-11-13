@@ -43,7 +43,7 @@
     "hours_observed": { "type": ["number", "null"], "minimum": 0 },
     "complexity_factor": { "type": "number", "minimum": 0.5, "maximum": 2.0 },
     "quality_factor": { "type": "number", "minimum": 0, "maximum": 1 },
-    "outcome_factor": { "type": "number", "minimum": 0.5, "maximum": 2.0 },
+    "outcome_factor": { "type": "number", "minimum": 0, "maximum": 2.0 },
     "reliability_factor": { "type": "number", "minimum": 0, "maximum": 1 },
     "attribution_share": { "type": "number", "minimum": 0, "maximum": 1 },
     "evidence": {
