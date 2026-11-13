@@ -108,7 +108,7 @@ def signed_party(private, *, action, case, credit="credit-1", principal,
         "principal_id": principal,
         "expected_version": version,
         "action_digest": digest,
-        "signed_at": "2026-11-14T11:00:00Z",
+        "signed_at": "2026-11-13T19:00:00Z",
         "key_id": key_id,
     }
     envelope["signature"] = base64.b64encode(
@@ -425,7 +425,7 @@ def test_party_key_role_revocation_and_identity_binding_are_enforced():
         disputes.open_dispute("case-1", "credit-1", "member-b", "SERVICE_QUALITY",
                               ["evidence://inspection/1"], "wrong-role", auth)
     disputes.trusted_party_keys["member-b-party-key"]["roles"] = ["SLE_CREDIT_PARTY"]
-    disputes.trusted_party_keys["member-b-party-key"]["revoked_at"] = "2026-11-14T10:00:00Z"
+    disputes.trusted_party_keys["member-b-party-key"]["revoked_at"] = "2026-11-13T10:00:00Z"
     with pytest.raises(DisputeError, match="revoked"):
         disputes.open_dispute("case-1", "credit-1", "member-b", "SERVICE_QUALITY",
                               ["evidence://inspection/1"], "revoked", auth)
