@@ -199,3 +199,13 @@ def test_verified_scoring_binds_evidence_subject_to_contributor():
         score_verified_contributions(
             [record], {"evidence-001": envelope}, {"evidence-001": blob}, registry, now=NOW
         )
+
+
+def test_duplicate_evidence_id_inside_one_contribution_is_rejected():
+    envelope, blob, registry = signed_fixture()
+    record = contribution_record(hashlib.sha256(blob).hexdigest())
+    record["evidence"].append(dict(record["evidence"][0]))
+    with pytest.raises(EvidenceVerificationError, match="duplicate evidence_id"):
+        score_verified_contributions(
+            [record], {"evidence-001": envelope}, {"evidence-001": blob}, registry, now=NOW
+        )
