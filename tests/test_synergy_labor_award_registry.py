@@ -434,3 +434,24 @@ def test_concurrent_consumption_is_single_transition_and_idempotent_replay(tmp_p
     registry_b.close()
     close_all(ledger, registry_a)
 
+@pytest.mark.parametrize("timestamp_field", ["reserved_at", "consumed_at"])
+def test_registry_projection_replay_detects_timestamp_tampering(tmp_path, timestamp_field):
+    ledger, registry, private, keys = setup(tmp_path / f"timestamp-{timestamp_field}.sqlite")
+    envelope = signed_award(private)
+    registry.reserve(envelope, keys, now=NOW)
+    if timestamp_field == "consumed_at":
+        ledger.issue(
+            "issuer-a", "worker-b", "contribution-global-1", "award-global-1",
+            envelope["result_digest"], "field-service", "service-hour", "capacity-a",
+            "5", "2030-01-01T00:00:00Z", "credit-global-1", "issue-for-timestamp-audit",
+        )
+        registry.consume_from_ledger("award-global-1", ledger, "credit-global-1")
+    registry._db.execute(
+        f"UPDATE awards SET {timestamp_field}='2099-01-01T00:00:00+00:00' "
+        "WHERE award_id='award-global-1'"
+    )
+    audit = registry.verify_projection_consistency()
+    assert audit["valid"] is False
+    assert "projection differs" in audit["issues"][0]
+    close_all(ledger, registry)
+
