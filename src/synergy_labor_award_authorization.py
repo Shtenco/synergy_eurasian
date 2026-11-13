@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 SCHEMA = "sle.award-authorization/v1"
 POLICY_VERSION = "SLE-AWARD-AUTH-ED25519-1.0"
-DOMAIN = b"SYNERGY_SLE_AWARD_AUTHORIZATION_V1\\x00"
+DOMAIN = b"SYNERGY_SLE_AWARD_AUTHORIZATION_V1\x00"
 FIELDS = frozenset({
     "schema", "award_id", "source_contribution_id", "result_digest",
     "beneficiary_id", "issuer_id", "service_code", "unit", "quantity",
