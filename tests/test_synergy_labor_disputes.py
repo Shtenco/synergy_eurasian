@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import base64
 import hashlib
+import json
 from pathlib import Path
 import sys
 
@@ -138,7 +139,7 @@ def remediation_authorizations(private, *, case="case-1", version=1,
 def open_case(ledger, disputes, *, case="case-1", actor="member-b"):
     auth = signed_party(
         {"party": disputes._test_party_private},
-        action="OPEN_DISPUTE", case=case, principal=actor,
+        action="OPEN_DISPUTE", case=case, principal="member-b",
         payload={"opened_by": actor, "reason_code": "SERVICE_QUALITY",
                  "evidence_refs": ["evidence://inspection/1"]},
     )
@@ -190,7 +191,11 @@ def test_dispute_upheld_does_not_automatically_cancel_or_release_capacity():
         ledger.redeem("credit-1", "member-b", "1", 0, "blocked-after-upheld-dispute")
     with pytest.raises(DisputeError, match="already has an active dispute"):
         disputes.open_dispute("case-2", "credit-1", "coop-a", "SECOND",
-                              ["evidence://second"], "second-open")
+                              ["evidence://second"], "second-open",
+                              signed_party({"party": disputes._test_party_private},
+                                  action="OPEN_DISPUTE", case="case-2", principal="coop-a",
+                                  payload={"opened_by": "coop-a", "reason_code": "SECOND",
+                                           "evidence_refs": ["evidence://second"]}))
     released = disputes.acknowledge_remediation(
         "case-1", "remediation-agreement-1", "issuer-signed-ack-1",
         "holder-signed-ack-1", "remediation-ack",
@@ -200,7 +205,11 @@ def test_dispute_upheld_does_not_automatically_cancel_or_release_capacity():
     assert released["obligation_cancelled"] is False
     assert ledger.get_capacity("capacity-1")["reserved_units"] == "20"
     second = disputes.open_dispute("case-2", "credit-1", "coop-a", "FOLLOW_UP",
-                                   ["evidence://follow-up"], "second-open-after-remediation")
+                                   ["evidence://follow-up"], "second-open-after-remediation",
+                                   signed_party({"party": disputes._test_party_private},
+                                       action="OPEN_DISPUTE", case="case-2", principal="coop-a",
+                                       payload={"opened_by": "coop-a", "reason_code": "FOLLOW_UP",
+                                                "evidence_refs": ["evidence://follow-up"]}))
     assert second["status"] == "OPEN"
     assert ledger.verify_projection_consistency()["valid"] is True
     ledger.close()
@@ -231,7 +240,7 @@ def test_appeal_refreezes_and_requires_a_different_resolver():
     disputes.acknowledge_remediation(
         "case-1", "appeal-remediation-1", "issuer-ack-appeal",
         "holder-ack-appeal", "appeal-remediation",
-        *remediation_authorizations(private, remediation_ref="appeal-remediation-1"),
+        *remediation_authorizations(private, version=3, remediation_ref="appeal-remediation-1"),
     )
     assert ledger.verify_projection_consistency()["valid"] is True
     ledger.close()
@@ -252,7 +261,7 @@ def test_decision_tampering_and_untrusted_or_wrong_role_resolver_are_rejected():
 
 def test_only_credit_parties_can_open_or_appeal_and_only_one_appeal_is_allowed():
     ledger, disputes, private = setup()
-    with pytest.raises(DisputeError, match="only issuer or current holder"):
+    with pytest.raises(DisputeError, match="signed party principal does not match"):
         open_case(ledger, disputes, actor="intruder")
     open_case(ledger, disputes)
     disputes.decide(signed_decision(private), NOW, "decision-1")
