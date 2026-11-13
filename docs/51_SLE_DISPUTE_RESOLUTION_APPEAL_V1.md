@@ -4,8 +4,9 @@
 
 This reference workflow adds a dispute state machine to the SLE service-credit ledger. It is not a court, legal arbitration service, monetary dispute rail or production identity system.
 
-Implementation: `src/synergy_labor_disputes.py` (including bilateral remediation acknowledgement)
+Implementation: `src/synergy_labor_disputes.py` (including signed party authorization and bilateral remediation acknowledgement)
 Decision schema: `interfaces/sle_dispute_decision.schema.json`
+Party authorization schema: `interfaces/sle_dispute_party_authorization.schema.json`
 Ledger integration: `src/synergy_labor_credit_ledger.py`
 Tests: `tests/test_synergy_labor_disputes.py`
 
@@ -22,6 +23,22 @@ OPEN -> DECIDED -> APPEALED -> DECIDED
 - The appeal must be decided by a different resolver key/principal than the first decision.
 
 A dispute is active and freezes the underlying credit while `OPEN` or `APPEALED`. The ledger rejects transfer, redemption and bilateral cancellation during those states. The SQLite dispute row, ledger event and credit mutation guard share the same transaction and database.
+
+## Signed party authorization
+
+Opening a dispute, filing an appeal and acknowledging remediation now require Ed25519 party authorization envelopes. Unsigned party commands fail closed; caller-supplied actor IDs and acknowledgement references are not accepted as proof of authority.
+
+Party authorization signatures use canonical JSON and the domain separator `SYNERGY_SLE_DISPUTE_PARTY_AUTHORIZATION_V1\\0`. Each envelope binds:
+- action (`OPEN_DISPUTE`, `APPEAL_DISPUTE` or `ACKNOWLEDGE_REMEDIATION`);
+- case ID and credit ID;
+- principal ID and trusted key ID;
+- expected dispute version;
+- SHA-256 digest of the exact action payload;
+- signing timestamp.
+
+The trusted party key registry must bind each key to one principal, grant `SLE_CREDIT_PARTY`, and provide validity/revocation metadata. Opening and appeal require the signer to be the stated current issuer or holder. Remediation requires two valid signatures over the same remediation digest and version: one from the issuer and one from the current holder. Different principal and key identities are required. Signed envelopes and their digests are included in the append-only ledger event request.
+
+This closes the earlier reference-only authorization gap at the module boundary, but does not establish real-world identity proofing or registry governance. The party registry is supplied by the caller; production still needs controlled enrollment, rotation, recovery, revocation governance and secure key custody. The module also does not independently establish that the referenced remediation actually occurred.
 
 ## Signed resolver decision
 
@@ -43,8 +60,9 @@ The trusted key registry must authorize `DISPUTE_RESOLVER`, bind the principal t
 - Bilateral remediation acknowledgement does not itself cancel, reduce or restructure the claim. Any cancellation still requires the existing bilateral cancellation command; restructuring remains a separate workflow.
 - An appeal re-freezes transfer, redemption and cancellation until its final decision.
 - Default is not automatically reversed by a dispute decision. A defaulted claim remains subject to the existing default restrictions.
-- The workflow records party IDs and evidence references but does not authenticate the person submitting an open/appeal command. Production must add signed party authorization and identity proofing.
-- Remediation acknowledgement references are caller-supplied metadata, not cryptographically verified issuer/holder approvals. The reference method demonstrates the state transition only; production must verify both parties' signatures/authority before allowing the freeze to be released.
+- Party commands are cryptographically authenticated against the configured trusted-key registry; this is key-based authorization, not legal identity proofing.
+- The trusted party/resolver registries remain caller-supplied and have no built-in governance, enrollment or secure key custody.
+- Remediation approvals prove that both configured party keys signed the same remediation reference and dispute version; they do not prove that the remediation was performed or independently verified.
 - No appeal deadline or legal standard is inferred; the reference implementation permits one appeal per case.
 
 ## Audit and recovery
@@ -55,4 +73,4 @@ The hash chain is tamper-evident, not tamper-proof. External signed checkpoints,
 
 ## Status
 
-Research/reference implementation under PR #17. The dispute freeze is enforced inside the current SQLite credit ledger, not merely in a UI or sidecar registry. Focused adversarial tests are part of CI. This does not establish legal enforceability or production readiness.
+Research/reference implementation under PR #17. The dispute freeze is enforced inside the current SQLite credit ledger, not merely in a UI or sidecar registry. Focused adversarial tests cover action/case/version binding, signature tampering, role and revocation checks, and two-party remediation authorization. This does not establish legal enforceability or production readiness.
