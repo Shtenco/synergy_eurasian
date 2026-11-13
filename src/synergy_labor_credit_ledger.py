@@ -131,14 +131,6 @@ class LaborCreditLedger:
             FOREIGN KEY (issuer_id, service_code, unit)
                 REFERENCES issuer_policies(issuer_id, service_code, unit)
         );
-        CREATE TRIGGER IF NOT EXISTS events_no_update
-        BEFORE UPDATE ON events BEGIN
-            SELECT RAISE(ABORT, 'events are append-only');
-        END;
-        CREATE TRIGGER IF NOT EXISTS events_no_delete
-        BEFORE DELETE ON events BEGIN
-            SELECT RAISE(ABORT, 'events are append-only');
-        END;
         CREATE INDEX IF NOT EXISTS credits_issuer_status
             ON credits(issuer_id, service_code, unit, status);
         CREATE TABLE IF NOT EXISTS events (
@@ -152,6 +144,14 @@ class LaborCreditLedger:
             event_hash TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
+        CREATE TRIGGER IF NOT EXISTS events_no_update
+        BEFORE UPDATE ON events BEGIN
+            SELECT RAISE(ABORT, 'events are append-only');
+        END;
+        CREATE TRIGGER IF NOT EXISTS events_no_delete
+        BEFORE DELETE ON events BEGIN
+            SELECT RAISE(ABORT, 'events are append-only');
+        END;
         """)
 
     def _event_head(self) -> tuple[int, str]:
