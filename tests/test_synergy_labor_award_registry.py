@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import base64
 import hashlib
@@ -344,4 +345,91 @@ def test_award_authorization_history_detects_revocation_before_reservation_time(
     assert audit["valid"] is False
     assert "revoked" in audit["issues"][0]
     close_all(ledger, registry)
+
+def test_concurrent_competing_reservations_across_connections_have_one_winner(tmp_path):
+    path = tmp_path / "racing-awards.sqlite"
+    ledger, registry_a, private, keys = setup(path)
+    registry_b = SLEAwardRegistry(path)
+    envelopes = [
+        signed_award(private, award_id="award-race-a"),
+        signed_award(private, award_id="award-race-b"),
+    ]
+    barrier = __import__("threading").Barrier(2)
+
+    def reserve(registry, envelope):
+        barrier.wait()
+        try:
+            return registry.reserve(envelope, keys, now=NOW)
+        except AwardRegistryError as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(
+            lambda pair: reserve(*pair),
+            [(registry_a, envelopes[0]), (registry_b, envelopes[1])],
+        ))
+
+    winners = [result for result in results if isinstance(result, dict)]
+    losers = [result for result in results if isinstance(result, AwardRegistryError)]
+    assert len(winners) == 1
+    assert len(losers) == 1
+    assert "already reserved" in str(losers[0])
+    assert registry_a.verify_event_chain()["events_checked"] == 1
+    assert registry_a.verify_projection_consistency()["valid"] is True
+    registry_b.close()
+    close_all(ledger, registry_a)
+
+
+def test_concurrent_identical_reservations_are_idempotent_across_connections(tmp_path):
+    path = tmp_path / "racing-identical-awards.sqlite"
+    ledger, registry_a, private, keys = setup(path)
+    registry_b = SLEAwardRegistry(path)
+    envelope = signed_award(private)
+    barrier = __import__("threading").Barrier(2)
+
+    def reserve(registry):
+        barrier.wait()
+        return registry.reserve(envelope, keys, now=NOW)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(reserve, [registry_a, registry_b]))
+
+    assert all(result["status"] == "RESERVED" for result in results)
+    assert sorted(result["idempotent_replay"] for result in results) == [False, True]
+    assert registry_a.verify_event_chain()["events_checked"] == 1
+    assert registry_a.verify_projection_consistency()["valid"] is True
+    registry_b.close()
+    close_all(ledger, registry_a)
+
+
+def test_concurrent_consumption_is_single_transition_and_idempotent_replay(tmp_path):
+    path = tmp_path / "racing-consume.sqlite"
+    ledger, registry_a, private, keys = setup(path)
+    registry_b = SLEAwardRegistry(path)
+    envelope = signed_award(private)
+    registry_a.reserve(envelope, keys, now=NOW)
+    ledger.issue(
+        "issuer-a", "worker-b", "contribution-global-1", "award-global-1",
+        envelope["result_digest"], "field-service", "service-hour", "capacity-a",
+        "5", "2030-01-01T00:00:00Z", "credit-global-1", "issue-before-racing-consume",
+    )
+    barrier = __import__("threading").Barrier(2)
+
+    def consume(registry):
+        barrier.wait()
+        return registry.consume_from_ledger(
+            "award-global-1", ledger, "credit-global-1"
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(consume, [registry_a, registry_b]))
+
+    assert sorted(result["idempotent_replay"] for result in results) == [False, True]
+    award = registry_a.get_award("award-global-1")
+    assert award["status"] == "CONSUMED"
+    assert award["credit_id"] == "credit-global-1"
+    assert registry_a.verify_event_chain()["events_checked"] == 2
+    assert registry_a.verify_projection_consistency()["valid"] is True
+    registry_b.close()
+    close_all(ledger, registry_a)
 
