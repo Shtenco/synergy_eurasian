@@ -50,13 +50,14 @@ def setup(database=":memory:"):
 
 def signed_award(private, *, award_id="award-global-1",
                  contribution_id="contribution-global-1",
-                 result_digest=None, expires_at="2026-12-01T00:00:00Z"):
+                 result_digest=None, expires_at="2026-12-01T00:00:00Z",
+                 beneficiary_id="worker-b"):
     envelope = {
         "schema": "sle.award-authorization/v1",
         "award_id": award_id,
         "source_contribution_id": contribution_id,
         "result_digest": result_digest or hashlib.sha256(b"verified labor result").hexdigest(),
-        "beneficiary_id": "worker-b",
+        "beneficiary_id": beneficiary_id,
         "issuer_id": "issuer-a",
         "service_code": "field-service",
         "unit": "service-hour",
@@ -290,5 +291,47 @@ def test_registry_reconciles_original_issue_after_credit_is_transferred():
     assert consumed["status"] == "CONSUMED"
     assert ledger.get_credit("credit-global-1")["holder_id"] == "worker-c"
     assert registry.verify_projection_consistency()["valid"] is True
+    close_all(ledger, registry)
+
+
+def test_completed_issue_retry_after_authorization_expiry_is_idempotent():
+    ledger, registry, private, keys = setup()
+    envelope = signed_award(private, expires_at="2026-11-15T00:00:00Z")
+    args = dict(
+        due_at="2030-01-01T00:00:00Z",
+        credit_id="credit-global-1",
+        idempotency_key="issue-global-1",
+    )
+    first = issue_authorized_credit(
+        ledger, registry, envelope, keys, now=NOW, **args
+    )
+    after_expiry = datetime(2026, 11, 16, 12, 0, tzinfo=timezone.utc)
+    replay = issue_authorized_credit(
+        ledger, registry, envelope, keys, now=after_expiry, **args
+    )
+    assert first["registry_status"] == "CONSUMED"
+    assert replay["registry_status"] == "CONSUMED"
+    assert replay["idempotent_replay"] is True
+    assert replay["reconciled_after_local_issue"] is False
+    assert ledger.verify_event_chain()["events_checked"] == 3
+    close_all(ledger, registry)
+
+
+def test_recovery_rejects_different_signed_envelope_for_existing_award_id():
+    ledger, registry, private, keys = setup()
+    original = signed_award(private)
+    issue_authorized_credit(
+        ledger, registry, original, keys, now=NOW,
+        due_at="2030-01-01T00:00:00Z", credit_id="credit-global-1",
+        idempotency_key="issue-global-1",
+    )
+    substituted = signed_award(private, beneficiary_id="attacker")
+    with pytest.raises(AwardRegistryError, match="does not match"):
+        issue_authorized_credit(
+            ledger, registry, substituted, keys, now=NOW,
+            due_at="2030-01-01T00:00:00Z", credit_id="credit-global-1",
+            idempotency_key="issue-global-1",
+        )
+    assert registry.get_award("award-global-1")["status"] == "CONSUMED"
     close_all(ledger, registry)
 
