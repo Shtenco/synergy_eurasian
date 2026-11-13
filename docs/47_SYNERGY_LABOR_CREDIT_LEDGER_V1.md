@@ -11,6 +11,9 @@ The issuer's obligation is matched one-for-one by the holder's remaining claim. 
 ## 2. Issuance conditions
 
 An issuer must have a registered policy for the exact `(issuer, service_code, unit)` tuple. The policy defines a maximum aggregate outstanding amount. Before issuance:
+- a unique source contribution ID must be bound to the award;
+- a unique reward-engine authorization reference must be supplied;
+- the source result digest must be recorded;
 - a unique capacity lot must exist for that issuer, service and unit;
 - capacity evidence digest must be unique in this ledger;
 - capacity must be open and independently reviewed by a named verifier;
@@ -18,7 +21,7 @@ An issuer must have a registered policy for the exact `(issuer, service_code, un
 - aggregate outstanding claims, including overdue and defaulted claims, must remain at or below the issuer cap;
 - the issuer must not be frozen.
 
-The reference kernel checks declared evidence metadata only. It does not fetch capacity evidence, authenticate the verifier or cryptographically verify a signature. A trusted evidence-verification adapter is a production prerequisite.
+The reference kernel checks declared evidence metadata only. Award authorization references are also assertions, not authenticated signatures; the future Reward Engine must authorize them and the Financial OS must share the award reservation ID before any cross-ledger reward. It does not fetch capacity evidence, authenticate the verifier or cryptographically verify a signature. A trusted evidence-verification adapter is a production prerequisite.
 
 ## 3. Capacity conservation
 
@@ -30,7 +33,7 @@ For each capacity lot:
 
 Issuance moves quantity from available to reserved. Redemption moves quantity from reserved to fulfilled. Bilateral cancellation releases only the unfulfilled reserved quantity. Fulfilled capacity is never recycled.
 
-A capacity evidence SHA-256 digest is globally unique within this ledger to prevent the same declared evidence object being registered as multiple lots. This does not prove that distinct evidence documents do not describe the same physical asset or service capacity; semantic asset identity checks remain necessary.
+A source contribution ID and reward authorization reference can each back only one credit issue within this ledger. This prevents replaying one contribution/award through multiple issue commands in this database. Cross-system double reward (for example, a separate SDU award in Financial OS) is **not** prevented until both systems consume the same globally unique award reservation through an atomic/idempotent adapter. A capacity evidence SHA-256 digest is globally unique within this ledger to prevent the same declared evidence object being registered as multiple lots. This does not prove that distinct evidence documents do not describe the same physical asset or service capacity; semantic asset identity checks remain necessary.
 
 ## 4. Claim lifecycle
 
@@ -65,7 +68,7 @@ The hash chain is tamper-evident, not tamper-proof: an administrator able to rew
 `src/synergy_labor_credit_ledger.py` implements:
 - issuer policy registration;
 - capacity lot registration;
-- issue, transfer, partial/full redeem;
+- issue only against one unique contribution ID and reward authorization reference, transfer, partial/full redeem;
 - overdue and default state transitions;
 - bilateral cancellation of unfulfilled quantity;
 - persistent SQLite transactions, idempotency and event-chain verification.
