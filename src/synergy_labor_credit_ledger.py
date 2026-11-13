@@ -147,7 +147,10 @@ class LaborCreditLedger:
             resolver_id TEXT,
             outcome TEXT,
             decision_digest TEXT,
-            appeal_count INTEGER NOT NULL DEFAULT 0
+            appeal_count INTEGER NOT NULL DEFAULT 0,
+            appeal_ref TEXT,
+            appeal_reason_code TEXT,
+            appeal_evidence_refs_json TEXT
         );
         CREATE UNIQUE INDEX IF NOT EXISTS disputes_one_active_per_credit
             ON disputes(credit_id) WHERE status IN ('OPEN','APPEALED');
@@ -171,6 +174,17 @@ class LaborCreditLedger:
             SELECT RAISE(ABORT, 'events are append-only');
         END;
         """)
+        # Additive migration for databases created before appeal metadata existed.
+        dispute_columns = {
+            row["name"] for row in self._db.execute("PRAGMA table_info(disputes)").fetchall()
+        }
+        for column, declaration in (
+            ("appeal_ref", "TEXT"),
+            ("appeal_reason_code", "TEXT"),
+            ("appeal_evidence_refs_json", "TEXT"),
+        ):
+            if column not in dispute_columns:
+                self._db.execute(f"ALTER TABLE disputes ADD COLUMN {column} {declaration}")
 
     def _event_head(self) -> tuple[int, str]:
         row = self._db.execute(
@@ -643,6 +657,8 @@ class LaborCreditLedger:
                             "evidence_refs_json": _canonical(request["evidence_refs"]),
                             "status": "OPEN", "version": 0, "resolver_id": None,
                             "outcome": None, "decision_digest": None, "appeal_count": 0,
+                            "appeal_ref": None, "appeal_reason_code": None,
+                            "appeal_evidence_refs_json": None,
                         }
 
                     elif event_type == "DISPUTE_DECIDED":
@@ -671,6 +687,9 @@ class LaborCreditLedger:
                         case["status"] = "APPEALED"
                         case["version"] += 1
                         case["appeal_count"] += 1
+                        case["appeal_ref"] = request["appeal_ref"]
+                        case["appeal_reason_code"] = request["reason_code"]
+                        case["appeal_evidence_refs_json"] = _canonical(request["evidence_refs"])
 
                     elif event_type == "CREDIT_TRANSFERRED":
                         credit = credits[request["credit_id"]]
