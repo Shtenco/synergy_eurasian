@@ -222,3 +222,56 @@ def test_signed_decision_matches_strict_json_schema():
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(instance=invalid, schema=schema)
     ledger.close()
+
+
+def test_second_active_dispute_for_same_credit_is_rejected():
+    ledger, disputes, private = setup()
+    open_case(ledger, disputes)
+    with pytest.raises(DisputeError, match="already has an active dispute"):
+        disputes.open_dispute("case-2", "credit-1", "coop-a", "OTHER",
+                              ["evidence://other"], "open-case-2")
+    assert ledger.verify_projection_consistency()["valid"] is True
+    ledger.close()
+
+
+def test_legacy_dispute_table_is_migrated_additively(tmp_path):
+    import sqlite3
+
+    db = tmp_path / "legacy-sle.sqlite"
+    raw = sqlite3.connect(db)
+    raw.execute("""
+        CREATE TABLE disputes (
+            case_id TEXT PRIMARY KEY,
+            credit_id TEXT NOT NULL,
+            opened_by TEXT NOT NULL,
+            reason_code TEXT NOT NULL,
+            evidence_refs_json TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('OPEN','DECIDED','APPEALED')),
+            version INTEGER NOT NULL,
+            resolver_id TEXT,
+            outcome TEXT,
+            decision_digest TEXT,
+            appeal_count INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    raw.commit()
+    raw.close()
+    ledger = LaborCreditLedger(db)
+    columns = {row["name"] for row in ledger._db.execute("PRAGMA table_info(disputes)")}
+    assert {"appeal_ref", "appeal_reason_code", "appeal_evidence_refs_json",
+            "remediation_closed", "remediation_ref", "issuer_ack_ref",
+            "holder_ack_ref"} <= columns
+    indexes = ledger._db.execute(
+        "SELECT sql FROM sqlite_master WHERE type='index' AND name='disputes_one_active_per_credit'"
+    ).fetchone()
+    assert "remediation_closed=0" in indexes["sql"]
+    ledger.close()
+
+
+def test_revoked_resolver_key_is_rejected():
+    ledger, disputes, private = setup()
+    open_case(ledger, disputes)
+    disputes.trusted_resolver_keys["resolver-a-key"]["revoked_at"] = "2026-11-14T10:00:00Z"
+    with pytest.raises(DisputeError, match="revoked"):
+        disputes.decide(signed_decision(private), NOW, "revoked-decision")
+    ledger.close()
