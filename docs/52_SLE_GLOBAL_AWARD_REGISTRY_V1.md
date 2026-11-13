@@ -6,6 +6,7 @@
 
 The registry enforces, in its own SQLite database:
 - one reservation per `source_contribution_id` across all producers that use the same registry database;
+- one reservation per `result_digest`, preventing the same exact result artifact from being relabelled with a new contribution ID;
 - one reservation per `award_id`;
 - one use of a signed authorization digest;
 - at most one local credit issuance event consumed by a reservation.
