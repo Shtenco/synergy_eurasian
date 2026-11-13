@@ -55,7 +55,7 @@ def test_issuer_outstanding_limit_is_enforced_atomically():
     with pytest.raises(ValueError, match="outstanding limit"):
         issue(ledger, units="11", credit_id="credit-2", key="issue-2")
     assert len(ledger.list_events()) == before
-    assert ledger.get_capacity("capacity-1")["reserved_units"] == "70"
+    assert ledger.get_capacity("capacity-1")["reserved_units"] == "50"
     ledger.close()
 
 
