@@ -455,3 +455,14 @@ def test_registry_projection_replay_detects_timestamp_tampering(tmp_path, timest
     assert "projection differs" in audit["issues"][0]
     close_all(ledger, registry)
 
+def test_registry_honors_configured_sqlite_busy_timeout():
+    registry = SLEAwardRegistry(timeout=0.125)
+    assert registry._db.execute("PRAGMA busy_timeout").fetchone()[0] == 125
+    registry.close()
+
+
+@pytest.mark.parametrize("timeout", [True, -0.1, float("nan"), float("inf"), "1", 2_147_483.648])
+def test_registry_rejects_invalid_busy_timeout(timeout):
+    with pytest.raises(ValueError, match="timeout must be a finite number"):
+        SLEAwardRegistry(timeout=timeout)
+
