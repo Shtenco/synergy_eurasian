@@ -95,7 +95,7 @@ def test_non_independent_reviewer_is_rejected():
     ("effort_units", "0"),
     ("complexity_factor", "2.1"),
     ("quality_factor", "1.1"),
-    ("outcome_factor", "0.4"),
+    ("outcome_factor", "2.1"),
     ("reliability_factor", "-0.1"),
     ("attribution_share", "1.01"),
 ])
@@ -137,3 +137,15 @@ def test_json_schema_accepts_valid_contribution_and_rejects_invalid_bounds():
     invalid = contribution(attribution_share=1.01)
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(instance=invalid, schema=schema)
+
+
+def test_zero_outcome_is_a_valid_zero_score():
+    result = score_contributions([contribution(outcome_factor=0)])
+    assert result["total_labor_score"] == "0"
+
+
+def test_mixed_effort_units_cannot_be_aggregated():
+    first = contribution(contribution_id="a")
+    second = contribution(contribution_id="b", benefit_stream_id="benefit-002", effort_unit="hours")
+    with pytest.raises(ValueError, match="mixed effort_unit"):
+        score_contributions([first, second])
