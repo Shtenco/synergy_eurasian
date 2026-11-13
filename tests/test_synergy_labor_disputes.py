@@ -127,6 +127,9 @@ def test_dispute_upheld_does_not_automatically_cancel_or_release_capacity():
     assert released["frozen"] is False
     assert released["obligation_cancelled"] is False
     assert ledger.get_capacity("capacity-1")["reserved_units"] == "20"
+    second = disputes.open_dispute("case-2", "credit-1", "coop-a", "FOLLOW_UP",
+                                   ["evidence://follow-up"], "second-open-after-remediation")
+    assert second["status"] == "OPEN"
     assert ledger.verify_projection_consistency()["valid"] is True
     ledger.close()
 
