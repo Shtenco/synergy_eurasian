@@ -11,6 +11,7 @@
     "contributor_kind",
     "project_id",
     "benefit_stream_id",
+    "result_digest",
     "category",
     "status",
     "effort_units",
@@ -30,6 +31,7 @@
     "contributor_kind": { "enum": ["HUMAN", "AI_AGENT", "JOINT"] },
     "project_id": { "type": "string", "minLength": 1, "maxLength": 128 },
     "benefit_stream_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "result_digest": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
     "category": {
       "enum": [
         "PRODUCTION", "INTELLECTUAL", "TECHNICAL", "ENTREPRENEURIAL",
