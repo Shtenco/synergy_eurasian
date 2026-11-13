@@ -335,3 +335,13 @@ def test_recovery_rejects_different_signed_envelope_for_existing_award_id():
     assert registry.get_award("award-global-1")["status"] == "CONSUMED"
     close_all(ledger, registry)
 
+
+def test_award_authorization_history_detects_revocation_before_reservation_time():
+    ledger, registry, private, keys = setup()
+    registry.reserve(signed_award(private), keys, now=NOW)
+    keys["reward-key-1"]["revoked_at"] = "2026-11-14T11:00:00Z"
+    audit = registry.verify_authorization_history(keys)
+    assert audit["valid"] is False
+    assert "revoked" in audit["issues"][0]
+    close_all(ledger, registry)
+
