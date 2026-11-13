@@ -45,14 +45,25 @@ def _validate_record(record: dict[str, Any]) -> dict[str, Any]:
     contribution_id = _required_text(record, "contribution_id")
     contributor_id = _required_text(record, "contributor_id")
     _required_text(record, "project_id")
+    _required_text(record, "effort_unit")
     benefit_stream_id = _required_text(record, "benefit_stream_id")
 
     if record.get("status") != "ACCEPTED":
         raise ValueError(f"{contribution_id}: only ACCEPTED contributions can be scored")
     if record.get("contributor_kind") not in {"HUMAN", "AI_AGENT", "JOINT"}:
         raise ValueError(f"{contribution_id}: unsupported contributor_kind")
+    if record.get("category") not in {
+        "PRODUCTION", "INTELLECTUAL", "TECHNICAL", "ENTREPRENEURIAL",
+        "COORDINATION", "CARE_SOCIAL", "INFRASTRUCTURE", "EDUCATION",
+        "MAINTENANCE", "AI_AGENT", "HUMAN_AI_JOINT",
+    }:
+        raise ValueError(f"{contribution_id}: unsupported contribution category")
 
     effort = _decimal(record.get("effort_units"), "effort_units")
+    if record.get("hours_observed") is not None:
+        observed_hours = _decimal(record.get("hours_observed"), "hours_observed")
+        if observed_hours < ZERO:
+            raise ValueError(f"{contribution_id}: hours_observed cannot be negative")
     complexity = _decimal(record.get("complexity_factor"), "complexity_factor")
     quality = _decimal(record.get("quality_factor"), "quality_factor")
     outcome = _decimal(record.get("outcome_factor"), "outcome_factor")
