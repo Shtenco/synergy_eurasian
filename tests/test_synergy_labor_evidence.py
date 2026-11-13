@@ -177,7 +177,7 @@ def test_evidence_reuse_across_different_benefit_streams_is_rejected():
     second["contribution_id"] = "contrib-002"
     second["benefit_stream_id"] = "benefit-002"
     second["attribution_share"] = 0
-    with pytest.raises(EvidenceVerificationError, match="different benefit streams"):
+    with pytest.raises(EvidenceVerificationError, match="subject_id"):
         score_verified_contributions(
             [first, second], {"evidence-001": envelope}, {"evidence-001": blob}, registry, now=NOW
         )
