@@ -20,6 +20,77 @@ SCHEMA = "sle.dispute-decision/v1"
 DOMAIN = b"SYNERGY_SLE_DISPUTE_DECISION_V1\x00"
 OUTCOMES = frozenset({"CLAIM_UPHELD", "DISPUTE_UPHELD"})
 
+PARTY_AUTH_SCHEMA = "sle.dispute-party-authorization/v1"
+PARTY_AUTH_DOMAIN = b"SYNERGY_SLE_DISPUTE_PARTY_AUTHORIZATION_V1\x00"
+PARTY_ROLE = "SLE_CREDIT_PARTY"
+
+
+def canonical_party_authorization_payload(envelope: Mapping[str, Any]) -> bytes:
+    body = dict(envelope)
+    body.pop("signature", None)
+    try:
+        raw = json.dumps(body, sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=False, allow_nan=False).encode("utf-8")
+    except (TypeError, ValueError):
+        raise DisputeError("party authorization is not canonical-JSON compatible") from None
+    return PARTY_AUTH_DOMAIN + raw
+
+
+def _action_digest(action: str, payload: Mapping[str, Any]) -> str:
+    raw = json.dumps({"action": action, "payload": dict(payload)},
+                     sort_keys=True, separators=(",", ":"),
+                     ensure_ascii=False, allow_nan=False).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def verify_party_authorization(envelope, key_registry, *, action, case_id, credit_id,
+                               action_digest, expected_version, now):
+    required = {"schema", "action", "case_id", "credit_id", "principal_id",
+                "expected_version", "action_digest", "signed_at", "key_id", "signature"}
+    if not isinstance(envelope, Mapping) or set(envelope) != required:
+        raise DisputeError("party authorization envelope fields mismatch")
+    if envelope["schema"] != PARTY_AUTH_SCHEMA or envelope["action"] != action:
+        raise DisputeError("party authorization schema or action mismatch")
+    if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
+        raise DisputeError("party authorization verification time must be timezone-aware")
+    principal, key_id = _text(envelope["principal_id"], "principal_id"), _text(envelope["key_id"], "key_id")
+    if _text(envelope["case_id"], "case_id") != case_id or _text(envelope["credit_id"], "credit_id") != credit_id:
+        raise DisputeError("party authorization is bound to another case or credit")
+    if envelope["expected_version"] != expected_version or isinstance(envelope["expected_version"], bool):
+        raise DisputeError("party authorization version mismatch")
+    if _text(envelope["action_digest"], "action_digest") != action_digest:
+        raise DisputeError("party authorization action digest mismatch")
+    signed_at = _time(envelope["signed_at"], "signed_at")
+    instant = now.astimezone(timezone.utc)
+    if signed_at > instant:
+        raise DisputeError("party authorization cannot be future-dated")
+    record = key_registry.get(key_id)
+    if not isinstance(record, Mapping) or _text(record.get("principal_id"), "principal_id") != principal:
+        raise DisputeError("party authorization key does not match principal")
+    roles = record.get("roles")
+    if not isinstance(roles, (list, tuple, set, frozenset)) or PARTY_ROLE not in {str(x).upper() for x in roles}:
+        raise DisputeError("trusted key lacks SLE_CREDIT_PARTY role")
+    valid_from, valid_until = _time(record.get("valid_from"), "key valid_from"), _time(record.get("valid_until"), "key valid_until")
+    if not (valid_from <= instant < valid_until) or signed_at < valid_from or signed_at >= valid_until:
+        raise DisputeError("party authorization key is outside its validity interval")
+    revoked_at = record.get("revoked_at")
+    if revoked_at is not None and instant >= _time(revoked_at, "key revoked_at"):
+        raise DisputeError("party authorization key is revoked")
+    try:
+        public = base64.b64decode(_text(record.get("public_key_b64"), "public_key_b64"), validate=True)
+        signature = base64.b64decode(_text(envelope["signature"], "signature"), validate=True)
+    except (binascii.Error, ValueError):
+        raise DisputeError("invalid party authorization key or signature encoding") from None
+    if len(public) != 32 or len(signature) != 64:
+        raise DisputeError("invalid Ed25519 party authorization key or signature length")
+    try:
+        Ed25519PublicKey.from_public_bytes(public).verify(signature, canonical_party_authorization_payload(envelope))
+    except (InvalidSignature, ValueError):
+        raise DisputeError("party authorization signature verification failed") from None
+    return {"principal_id": principal, "key_id": key_id,
+            "authorization_digest": hashlib.sha256(canonical_party_authorization_payload(envelope)).hexdigest(),
+            "envelope": dict(envelope)}
+
 
 class DisputeError(ValueError):
     """Invalid dispute command, authority, or signed decision."""
@@ -129,15 +200,20 @@ def verify_resolver_decision(
 class LaborCreditDisputes:
     """Dispute state machine sharing the ledger transaction/event log."""
 
-    def __init__(self, ledger: Any, trusted_resolver_keys: Mapping[str, Mapping[str, Any]]):
+    def __init__(self, ledger: Any, trusted_resolver_keys: Mapping[str, Mapping[str, Any]],
+                 trusted_party_keys: Mapping[str, Mapping[str, Any]] | None = None):
         if not isinstance(trusted_resolver_keys, Mapping):
             raise DisputeError("trusted_resolver_keys must be a mapping")
+        if not isinstance(trusted_party_keys, Mapping):
+            raise DisputeError("trusted_party_keys mapping is required; unsigned party actions are disabled")
         self.ledger = ledger
         self.trusted_resolver_keys = trusted_resolver_keys
+        self.trusted_party_keys = trusted_party_keys
 
     def open_dispute(
         self, case_id: str, credit_id: str, opened_by: str, reason_code: str,
         evidence_refs: list[str], idempotency_key: str,
+        authorization_envelope: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         case, credit = _text(case_id, "case_id"), _text(credit_id, "credit_id")
         actor, reason = _text(opened_by, "opened_by"), _text(reason_code, "reason_code")
@@ -146,8 +222,18 @@ class LaborCreditDisputes:
         refs = [_text(x, "evidence_ref") for x in evidence_refs]
         if len(set(refs)) != len(refs):
             raise DisputeError("duplicate evidence references are not allowed")
+        action_payload = {"opened_by": actor, "reason_code": reason, "evidence_refs": refs}
+        digest = _action_digest("OPEN_DISPUTE", action_payload)
+        verified_party = verify_party_authorization(
+            authorization_envelope, self.trusted_party_keys, action="OPEN_DISPUTE",
+            case_id=case, credit_id=credit, action_digest=digest,
+            expected_version=0, now=datetime.now(timezone.utc))
+        if verified_party["principal_id"] != actor:
+            raise DisputeError("signed party principal does not match dispute opener")
         request = {"case_id": case, "credit_id": credit, "opened_by": actor,
-                   "reason_code": reason, "evidence_refs": refs}
+                   "reason_code": reason, "evidence_refs": refs,
+                   "party_authorization": verified_party["envelope"],
+                   "party_authorization_digest": verified_party["authorization_digest"]}
 
         def apply():
             row = self.ledger._credit(credit)
@@ -208,6 +294,7 @@ class LaborCreditDisputes:
     def appeal(
         self, case_id: str, appellant_id: str, appeal_ref: str, reason_code: str,
         evidence_refs: list[str], expected_version: int, idempotency_key: str,
+        authorization_envelope: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         case, appellant = _text(case_id, "case_id"), _text(appellant_id, "appellant_id")
         ref, reason = _text(appeal_ref, "appeal_ref"), _text(reason_code, "reason_code")
@@ -218,8 +305,20 @@ class LaborCreditDisputes:
         refs = [_text(x, "appeal_evidence_ref") for x in evidence_refs]
         if len(set(refs)) != len(refs):
             raise DisputeError("duplicate appeal evidence references are not allowed")
+        action_payload = {"appellant_id": appellant, "appeal_ref": ref,
+                          "reason_code": reason, "evidence_refs": refs}
+        digest = _action_digest("APPEAL_DISPUTE", action_payload)
+        case_credit_id = _text(self._case(case)["credit_id"], "credit_id")
+        verified_party = verify_party_authorization(
+            authorization_envelope, self.trusted_party_keys, action="APPEAL_DISPUTE",
+            case_id=case, credit_id=case_credit_id, action_digest=digest,
+            expected_version=expected_version, now=datetime.now(timezone.utc))
+        if verified_party["principal_id"] != appellant:
+            raise DisputeError("signed party principal does not match appellant")
         request = {"case_id": case, "appellant_id": appellant, "appeal_ref": ref,
-                   "reason_code": reason, "evidence_refs": refs, "expected_version": expected_version}
+                   "reason_code": reason, "evidence_refs": refs, "expected_version": expected_version,
+                   "party_authorization": verified_party["envelope"],
+                   "party_authorization_digest": verified_party["authorization_digest"]}
 
         def apply():
             row = self._case(case)
@@ -244,6 +343,8 @@ class LaborCreditDisputes:
     def acknowledge_remediation(
         self, case_id: str, remediation_ref: str, issuer_ack_ref: str,
         holder_ack_ref: str, idempotency_key: str,
+        issuer_authorization: Mapping[str, Any] | None = None,
+        holder_authorization: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         case = _text(case_id, "case_id")
         remediation = _text(remediation_ref, "remediation_ref")
@@ -251,11 +352,36 @@ class LaborCreditDisputes:
         holder_ack = _text(holder_ack_ref, "holder_ack_ref")
         if issuer_ack == holder_ack:
             raise DisputeError("issuer and holder acknowledgements must be distinct")
+        row_snapshot = self._case(case)
+        credit_snapshot = self.ledger._credit(row_snapshot["credit_id"])
+        digest = _action_digest("ACKNOWLEDGE_REMEDIATION", {"remediation_ref": remediation})
+        expected_version = int(row_snapshot["version"])
+        issuer_proof = verify_party_authorization(
+            issuer_authorization, self.trusted_party_keys, action="ACKNOWLEDGE_REMEDIATION",
+            case_id=case, credit_id=row_snapshot["credit_id"], action_digest=digest,
+            expected_version=expected_version, now=datetime.now(timezone.utc))
+        holder_proof = verify_party_authorization(
+            holder_authorization, self.trusted_party_keys, action="ACKNOWLEDGE_REMEDIATION",
+            case_id=case, credit_id=row_snapshot["credit_id"], action_digest=digest,
+            expected_version=expected_version, now=datetime.now(timezone.utc))
+        if issuer_proof["principal_id"] != credit_snapshot["issuer_id"]:
+            raise DisputeError("issuer remediation signature is not from the credit issuer")
+        if holder_proof["principal_id"] != credit_snapshot["holder_id"]:
+            raise DisputeError("holder remediation signature is not from the current credit holder")
+        if issuer_proof["principal_id"] == holder_proof["principal_id"] or issuer_proof["key_id"] == holder_proof["key_id"]:
+            raise DisputeError("remediation requires distinct issuer and holder principals and keys")
         request = {"case_id": case, "remediation_ref": remediation,
-                   "issuer_ack_ref": issuer_ack, "holder_ack_ref": holder_ack}
+                   "issuer_ack_ref": issuer_ack, "holder_ack_ref": holder_ack,
+                   "expected_version": expected_version,
+                   "issuer_authorization": issuer_proof["envelope"],
+                   "holder_authorization": holder_proof["envelope"],
+                   "issuer_authorization_digest": issuer_proof["authorization_digest"],
+                   "holder_authorization_digest": holder_proof["authorization_digest"]}
 
         def apply():
             row = self._case(case)
+            if row["version"] != expected_version:
+                raise DisputeError("stale remediation authorization version")
             if row["status"] != "DECIDED" or row["outcome"] != "DISPUTE_UPHELD":
                 raise DisputeError("bilateral remediation is only required after DISPUTE_UPHELD")
             if row["remediation_closed"]:
