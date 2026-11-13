@@ -55,7 +55,7 @@ where:
 
 The V1 reference policy uses (C_i\in[0.5,2.0]), (O_i\in[0.5,2.0]). These are explicit MODEL_ASSUMPTION bounds, not empirical constants or universal fairness coefficients. Quality and reliability must be supported by evidence. A score of zero is valid when quality or reliability is zero.
 
-Effort units are work-package units, not automatically hours. If hours are recorded by a source system, they remain a separate measured field and must not be silently converted into wages. The score is dimensionless relative contribution, not an objective measure of human worth.
+Effort units are work-package units, not automatically hours. If hours are recorded by a source system, they remain a separate measured field and must not be silently converted into wages. All records in one scoring batch must use the same standardized effort unit; mixed units are rejected rather than added. Separate batches cannot be compared until an empirically calibrated conversion policy exists. The score is a policy-relative contribution index, not an objective measure of human worth.
 
 ### Attribution conservation
 
