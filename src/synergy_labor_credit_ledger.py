@@ -136,6 +136,21 @@ class LaborCreditLedger:
         );
         CREATE INDEX IF NOT EXISTS credits_issuer_status
             ON credits(issuer_id, service_code, unit, status);
+        CREATE TABLE IF NOT EXISTS disputes (
+            case_id TEXT PRIMARY KEY,
+            credit_id TEXT NOT NULL REFERENCES credits(credit_id),
+            opened_by TEXT NOT NULL,
+            reason_code TEXT NOT NULL,
+            evidence_refs_json TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('OPEN','DECIDED','APPEALED')),
+            version INTEGER NOT NULL,
+            resolver_id TEXT,
+            outcome TEXT,
+            decision_digest TEXT,
+            appeal_count INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS disputes_one_active_per_credit
+            ON disputes(credit_id) WHERE status IN ('OPEN','APPEALED');
         CREATE TABLE IF NOT EXISTS events (
             seq INTEGER PRIMARY KEY AUTOINCREMENT,
             event_id TEXT NOT NULL UNIQUE,
@@ -338,6 +353,8 @@ class LaborCreditLedger:
                 raise ValueError("transfer sender is not current holder")
             if row["version"] != expected_version:
                 raise ValueError("stale credit version")
+            if self._has_active_dispute(credit):
+                raise ValueError("credit is frozen by an active dispute")
             if row["status"] != ACTIVE:
                 raise ValueError("only active credits may be transferred")
             self._db.execute("UPDATE credits SET holder_id=?,version=version+1 WHERE credit_id=?", (recipient, credit))
@@ -361,6 +378,8 @@ class LaborCreditLedger:
                 raise ValueError("only current holder may redeem")
             if row["version"] != expected_version:
                 raise ValueError("stale credit version")
+            if self._has_active_dispute(credit):
+                raise ValueError("credit is frozen by an active dispute")
             if row["status"] not in {ACTIVE, OVERDUE}:
                 raise ValueError("credit is not redeemable in its current state")
             remaining = Decimal(row["remaining_units"])
@@ -436,6 +455,8 @@ class LaborCreditLedger:
             row = self._credit(credit)
             if row["version"] != expected_version:
                 raise ValueError("stale credit version")
+            if self._has_active_dispute(credit):
+                raise ValueError("credit is frozen by an active dispute")
             if row["status"] not in {ACTIVE, OVERDUE}:
                 raise ValueError("credit cannot be cancelled in its current state")
             remaining = Decimal(row["remaining_units"])
@@ -455,6 +476,13 @@ class LaborCreditLedger:
                     "units_outstanding": "0", "status": CANCELLED,
                     "version": expected_version + 1}
         return self._command("CREDIT_CANCELLED_BY_BOTH_PARTIES", idempotency_key, request, apply)
+
+    def _has_active_dispute(self, credit_id: str) -> bool:
+        row = self._db.execute(
+            "SELECT 1 FROM disputes WHERE credit_id=? AND status IN ('OPEN','APPEALED') LIMIT 1",
+            (credit_id,),
+        ).fetchone()
+        return row is not None
 
     def _policy(self, issuer: str, service: str, unit: str) -> sqlite3.Row:
         row = self._db.execute(
