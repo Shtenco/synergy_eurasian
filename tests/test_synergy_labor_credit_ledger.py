@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+import json
 from pathlib import Path
 import sys
 
@@ -263,4 +264,20 @@ def test_award_reference_cannot_be_reused_for_another_contribution():
             "10", DUE, "credit-2", "issue-2",
         )
     assert ledger.get_capacity("capacity-1")["reserved_units"] == "10"
+    ledger.close()
+
+
+def test_credit_claim_schema_accepts_ledger_projection_and_rejects_missing_award_link():
+    import jsonschema
+
+    ledger = prepared_ledger()
+    issue(ledger, units="4")
+    claim = ledger.get_credit("credit-1")
+    schema = json.loads((ROOT / "interfaces" / "labor_credit_claim.schema.json").read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.validate(instance=claim, schema=schema)
+    invalid = dict(claim)
+    del invalid["award_authorization_ref"]
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(instance=invalid, schema=schema)
     ledger.close()
