@@ -119,6 +119,9 @@ class LaborCreditLedger:
             credit_id TEXT PRIMARY KEY,
             issuer_id TEXT NOT NULL,
             holder_id TEXT NOT NULL,
+            source_contribution_id TEXT NOT NULL UNIQUE,
+            award_authorization_ref TEXT NOT NULL UNIQUE,
+            result_digest TEXT NOT NULL,
             service_code TEXT NOT NULL,
             unit TEXT NOT NULL,
             capacity_id TEXT NOT NULL REFERENCES capacity(capacity_id),
@@ -266,19 +269,27 @@ class LaborCreditLedger:
         return self._command("CAPACITY_REGISTERED", idempotency_key, request, apply)
 
     def issue(
-        self, issuer_id: str, holder_id: str, service_code: str, unit: str,
-        capacity_id: str, units: Any, due_at: str, credit_id: str,
+        self, issuer_id: str, holder_id: str, source_contribution_id: str,
+        award_authorization_ref: str, result_digest: str, service_code: str,
+        unit: str, capacity_id: str, units: Any, due_at: str, credit_id: str,
         idempotency_key: str,
     ) -> dict[str, Any]:
         issuer, holder = _text(issuer_id, "issuer_id"), _text(holder_id, "holder_id")
+        contribution = _text(source_contribution_id, "source_contribution_id")
+        award_ref = _text(award_authorization_ref, "award_authorization_ref")
+        digest = _text(result_digest, "result_digest").lower()
+        if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+            raise ValueError("result_digest must be a 64-character SHA-256 hex digest")
         service, measure = _text(service_code, "service_code"), _text(unit, "unit")
         cid, credit = _text(capacity_id, "capacity_id"), _text(credit_id, "credit_id")
         if issuer == holder:
             raise ValueError("issuer cannot be the initial holder of its own claim")
         amount = _decimal(units, "units", positive=True)
         due = _timestamp(due_at, "due_at")
-        request = {"issuer_id": issuer, "holder_id": holder, "service_code": service, "unit": measure,
-                   "capacity_id": cid, "units": _fmt(amount), "due_at": due, "credit_id": credit}
+        request = {"issuer_id": issuer, "holder_id": holder, "source_contribution_id": contribution,
+                   "award_authorization_ref": award_ref, "result_digest": digest,
+                   "service_code": service, "unit": measure, "capacity_id": cid,
+                   "units": _fmt(amount), "due_at": due, "credit_id": credit}
 
         def apply() -> dict[str, Any]:
             policy = self._policy(issuer, service, measure)
@@ -298,10 +309,12 @@ class LaborCreditLedger:
                 (_fmt(Decimal(cap["reserved_units"]) + amount), cid),
             )
             self._db.execute(
-                "INSERT INTO credits VALUES (?,?,?,?,?,?,?,?,?,?,0)",
-                (credit, issuer, holder, service, measure, cid, _fmt(amount), _fmt(amount), due, ACTIVE),
+                "INSERT INTO credits VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0)",
+                (credit, issuer, holder, contribution, award_ref, digest, service, measure,
+                 cid, _fmt(amount), _fmt(amount), due, ACTIVE),
             )
             return {"credit_id": credit, "issuer_id": issuer, "holder_id": holder,
+                    "source_contribution_id": contribution, "award_authorization_ref": award_ref,
                     "units_issued": _fmt(amount), "units_outstanding": _fmt(amount),
                     "status": ACTIVE, "capacity_id": cid}
         return self._command("CREDIT_ISSUED", idempotency_key, request, apply)
