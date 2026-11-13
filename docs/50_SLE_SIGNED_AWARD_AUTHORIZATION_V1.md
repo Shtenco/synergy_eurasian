@@ -6,7 +6,8 @@ A signed award authorization binds a reward decision to one exact contribution r
 
 Implementation: `src/synergy_labor_award_authorization.py`
 Schema: `interfaces/sle_award_authorization.schema.json`
-Tests: `tests/test_synergy_labor_award_authorization.py`
+Shared registry: `src/synergy_labor_award_registry.py` and `docs/52_SLE_GLOBAL_AWARD_REGISTRY_V1.md`
+Tests: `tests/test_synergy_labor_award_authorization.py`, `tests/test_synergy_labor_award_registry.py`
 
 ## Signed fields
 
@@ -39,7 +40,7 @@ The returned authorization digest is a stable SHA-256 fingerprint of the signed 
 
 - This module does not issue service credits, reserve capacity, transfer claims, mint SDU, post accounting entries, or authorize payments.
 - It does not prove that the contribution is truthful; it binds an authorization to a supplied contribution/result reference.
-- It does not provide cross-system duplicate prevention. A globally shared award registry with atomic reserve/consume/release semantics is still required across SLE, Financial OS and other reward engines.
+- The signature verifier alone does not provide cross-system duplicate prevention. The companion shared registry reserves globally unique contribution and award IDs before local issuance and consumes only after local ledger proof. Its uniqueness guarantee applies only to participants using the same authoritative registry database; disconnected registries remain uncoordinated. Reservations are not auto-released.
 - A caller-supplied key registry is not itself authenticated or governed here. Registry governance, key ceremony, rotation, revocation distribution and audit remain external dependencies.
 - `budget_ref` is a reference only; the verifier does not inspect a budget or establish that funds/capacity exist.
 - `capacity_id` is a reference only; the verifier does not reserve or validate actual capacity.
@@ -47,4 +48,4 @@ The returned authorization digest is a stable SHA-256 fingerprint of the signed 
 
 ## Status
 
-Reference verification component under PR #17. Not production-ready and not a cross-repository integration. Focused tests are included in the PR's dedicated CI step; repository-wide CI must be assessed separately.
+Reference verification component under PR #17, paired with the shared SQLite award registry. The registry adapter is a same-repository reference integration, not yet a cross-repository Financial OS integration. Not production-ready. Focused tests are included in the PR's dedicated CI step; repository-wide CI must be assessed separately.
