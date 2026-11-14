@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from synergy_labor_checkpoints import CheckpointError, GENESIS_HASH, create_registry_checkpoint, verify_registry_checkpoints, _digest
+from synergy_labor_checkpoints import CheckpointError, GENESIS_HASH, InMemoryCheckpointAnchorStore, create_registry_checkpoint, verify_registry_checkpoints, check_registry_checkpoint_freshness, _digest
 from synergy_labor_award_registry import SLEAwardRegistry
 from synergy_labor_checkpoint_http import HttpCheckpointAnchorStore
 
@@ -87,6 +87,16 @@ def test_remote_anchor_round_trip_and_recovery_with_new_client(service_url):
     result = verify_registry_checkpoints(registry, recovered, keys, registry_id="registry-a")
     assert result["valid"] is True and result["checkpoints_checked"] == 1
     assert checkpoint["checkpoint_digest"] == _digest(service.records["registry-a"][0])
+    assert check_registry_checkpoint_freshness(
+        recovered, registry_id="registry-a",
+        now=datetime(2026,11,14,12,30,tzinfo=timezone.utc),
+        max_age_seconds=3600,
+    )["fresh"] is True
+    assert check_registry_checkpoint_freshness(
+        recovered, registry_id="registry-a",
+        now=datetime(2026,11,14,14,0,tzinfo=timezone.utc),
+        max_age_seconds=3600,
+    )["fresh"] is False
     registry.close()
 
 def test_remote_compare_and_append_rejects_stale_competing_writers(service_url):
@@ -113,3 +123,12 @@ def test_remote_adapter_fails_closed_when_authentication_token_is_missing(servic
     store = HttpCheckpointAnchorStore(url, lambda:"")
     with pytest.raises(CheckpointError, match="token"):
         store.list_checkpoints("registry-auth")
+
+def test_freshness_check_fails_closed_when_anchor_chain_is_missing():
+    result = check_registry_checkpoint_freshness(
+        InMemoryCheckpointAnchorStore(), registry_id="missing",
+        now=datetime(2026,11,14,12,0,tzinfo=timezone.utc),
+        max_age_seconds=3600,
+    )
+    assert result["fresh"] is False
+    assert "no external checkpoints" in result["issues"][0]
