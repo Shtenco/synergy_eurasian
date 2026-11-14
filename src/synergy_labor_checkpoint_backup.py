@@ -5,6 +5,7 @@ retained outside the anchor host. A backup's own manifest is not a trust anchor.
 """
 from __future__ import annotations
 import hashlib
+from contextlib import closing
 import json
 import os
 from pathlib import Path
@@ -43,7 +44,7 @@ def validate_anchor_database(
     if not isinstance(expected_tail_digest, str) or len(expected_tail_digest) != 64:
         raise AnchorBackupError("expected_tail_digest must be a SHA-256 digest")
     try:
-        with _readonly_connection(path) as db:
+        with closing(_readonly_connection(path)) as db:
             rows = db.execute(
                 """SELECT event_seq,checkpoint_digest,previous_digest,checkpoint_json
                    FROM anchor_checkpoints WHERE registry_id=? ORDER BY event_seq""",
@@ -113,6 +114,8 @@ def backup_anchor_database(
         validation = validate_anchor_database(
             temp, registry_id=registry_id, expected_tail_digest=expected_tail_digest
         )
+        for suffix in ("-wal", "-shm"):
+            Path(str(target) + suffix).unlink(missing_ok=True)
         os.replace(temp, target)
     except Exception:
         temp.unlink(missing_ok=True)
