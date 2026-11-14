@@ -27,3 +27,8 @@ A new client instance recovers by enumerating the durable remote chain. If the r
 ## Security limitations
 
 A valid signature proves only that an authorized key signed the checkpoint bytes, not that the labor event was truthful. Events after the newest checkpoint remain unanchored until publication. The client alone does not establish service independence, availability, legal enforceability or distributed consensus. A real endpoint, identity policy, secret manager, independent operator and tested backup/restore evidence remain required before production activation.
+
+
+## Freshness policy
+
+The core checkpoint verifier establishes cryptographic validity but does not decide whether the latest anchor is recent enough for a particular deployment. The separate check_registry_checkpoint_freshness helper evaluates a timezone-aware current time against a deployment-supplied maximum age. Production callers must combine a fresh result with a successful verify_registry_checkpoints result and alert/fail closed when either fails. Choose the maximum age from the acceptable unanchored-event exposure window; it is an operational risk limit, not a cryptographic constant.
