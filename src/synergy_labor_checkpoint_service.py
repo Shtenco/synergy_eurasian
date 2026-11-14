@@ -7,6 +7,7 @@ independent Ed25519 verification by auditors.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 from contextlib import closing
 import hmac
@@ -15,6 +16,7 @@ import os
 import re
 import sqlite3
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import parse_qs, unquote
@@ -196,6 +198,12 @@ class SQLiteCheckpointAnchorApplication:
             expected = payload["expected_previous_checkpoint_digest"]
             if not isinstance(record, dict) or not isinstance(expected, str):
                 raise ValueError
+            required = {
+                "schema", "registry_id", "event_seq", "event_hash", "created_at",
+                "signer_key_id", "previous_checkpoint_digest", "signature",
+            }
+            if set(record) != required:
+                raise ValueError
             if record.get("registry_id") != registry_id or record.get("schema") != "sle.registry-checkpoint/v1":
                 raise ValueError
             seq = record.get("event_seq")
@@ -205,7 +213,20 @@ class SQLiteCheckpointAnchorApplication:
                 raise ValueError
             if not re.fullmatch(r"[0-9a-f]{64}", expected):
                 raise ValueError
-            if not isinstance(record.get("signature"), str) or not record["signature"]:
+            if record.get("previous_checkpoint_digest") != expected:
+                raise ValueError
+            if not isinstance(record.get("signer_key_id"), str) or not record["signer_key_id"].strip():
+                raise ValueError
+            created_at = record.get("created_at")
+            if not isinstance(created_at, str):
+                raise ValueError
+            parsed_time = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            if parsed_time.tzinfo is None:
+                raise ValueError
+            signature = record.get("signature")
+            if not isinstance(signature, str):
+                raise ValueError
+            if len(base64.b64decode(signature, validate=True)) != 64:
                 raise ValueError
             record_digest = _digest(record)
             idem = environ.get("HTTP_IDEMPOTENCY_KEY")
