@@ -920,3 +920,173 @@ def test_sqlite_online_backups_restore_registry_and_ledger_for_idempotent_recove
         assert restored_ledger.verify_projection_consistency()["valid"] is True
     finally:
         close_all(restored_ledger, restored_registry)
+
+
+def _checkpoint_keys():
+    from synergy_labor_checkpoints import InMemoryCheckpointAnchorStore
+    private = Ed25519PrivateKey.generate()
+    public = private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    trusted = {
+        "checkpoint-key-1": {
+            "principal_id": "registry-auditor-1",
+            "roles": ["REGISTRY_CHECKPOINTER"],
+            "public_key_b64": base64.b64encode(public).decode("ascii"),
+        }
+    }
+    return private, trusted, InMemoryCheckpointAnchorStore()
+
+
+def test_external_signed_checkpoints_verify_and_extend_monotonic_history():
+    from synergy_labor_checkpoints import (
+        create_registry_checkpoint, verify_registry_checkpoints,
+    )
+    ledger, registry, private_award, award_keys = setup()
+    private, trusted, anchors = _checkpoint_keys()
+    registry.reserve(signed_award(private_award), award_keys, now=NOW)
+    first = create_registry_checkpoint(
+        registry, anchors, private, registry_id="registry-prod-a",
+        signer_key_id="checkpoint-key-1", created_at=NOW,
+    )
+    assert first["event_seq"] == 1
+    assert verify_registry_checkpoints(
+        registry, anchors, trusted, registry_id="registry-prod-a"
+    )["valid"] is True
+
+    second_award = signed_award(
+        private_award, award_id="award-global-2",
+        contribution_id="contribution-global-2",
+        result_digest=hashlib.sha256(b"second verified result").hexdigest(),
+    )
+    registry.reserve(second_award, award_keys, now=NOW)
+    second = create_registry_checkpoint(
+        registry, anchors, private, registry_id="registry-prod-a",
+        signer_key_id="checkpoint-key-1",
+        created_at=datetime(2026, 11, 14, 12, 1, tzinfo=timezone.utc),
+    )
+    assert second["event_seq"] == 2
+    audit = verify_registry_checkpoints(
+        registry, anchors, trusted, registry_id="registry-prod-a"
+    )
+    assert audit["valid"] is True
+    assert audit["checkpoints_checked"] == 2
+    assert audit["latest_event_seq"] == 2
+    with pytest.raises(ValueError, match="has not advanced"):
+        create_registry_checkpoint(
+            registry, anchors, private, registry_id="registry-prod-a",
+            signer_key_id="checkpoint-key-1", created_at=NOW,
+        )
+    close_all(ledger, registry)
+
+
+def test_external_checkpoint_detects_fully_rehashed_registry_history_rewrite(tmp_path):
+    from synergy_labor_checkpoints import (
+        create_registry_checkpoint, verify_registry_checkpoints,
+    )
+    path = tmp_path / "anchored-registry.sqlite"
+    ledger, registry, private_award, award_keys = setup(path)
+    private, trusted, anchors = _checkpoint_keys()
+    registry.reserve(signed_award(private_award), award_keys, now=NOW)
+    create_registry_checkpoint(
+        registry, anchors, private, registry_id="registry-prod-a",
+        signer_key_id="checkpoint-key-1", created_at=NOW,
+    )
+
+    # Simulate a privileged operator rewriting the complete one-event history and
+    # its mutable projection, then recomputing a perfectly valid local hash chain.
+    registry._db.execute("DROP TRIGGER award_events_no_update")
+    registry._db.execute("DROP TRIGGER award_events_no_delete")
+    rewritten_at = "2026-11-14T12:00:01.000000+00:00"
+    registry._db.execute(
+        "UPDATE events SET created_at=? WHERE seq=1", (rewritten_at,)
+    )
+    registry._db.execute(
+        "UPDATE awards SET reserved_at=? WHERE award_id='award-global-1'",
+        (rewritten_at,),
+    )
+    row = registry._db.execute("SELECT * FROM events WHERE seq=1").fetchone()
+    body = {
+        "seq": int(row["seq"]), "event_id": row["event_id"],
+        "event_type": row["event_type"], "payload_json": row["payload_json"],
+        "previous_hash": row["previous_hash"], "created_at": row["created_at"],
+    }
+    rewritten_hash = hashlib.sha256(
+        json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
+    registry._db.execute(
+        "UPDATE events SET event_hash=? WHERE seq=1", (rewritten_hash,)
+    )
+
+    assert registry.verify_event_chain()["valid"] is True
+    assert registry.verify_projection_consistency()["valid"] is True
+    audit = verify_registry_checkpoints(
+        registry, anchors, trusted, registry_id="registry-prod-a"
+    )
+    assert audit["valid"] is False
+    assert "anchored history mismatch" in audit["issues"][0]
+    close_all(ledger, registry)
+
+
+def test_external_checkpoint_detects_registry_rollback_behind_anchor(tmp_path):
+    from synergy_labor_checkpoints import (
+        create_registry_checkpoint, verify_registry_checkpoints,
+    )
+    path = tmp_path / "rollback-registry.sqlite"
+    ledger, registry, private_award, award_keys = setup(path)
+    private, trusted, anchors = _checkpoint_keys()
+    registry.reserve(signed_award(private_award), award_keys, now=NOW)
+    create_registry_checkpoint(
+        registry, anchors, private, registry_id="registry-prod-a",
+        signer_key_id="checkpoint-key-1", created_at=NOW,
+    )
+    registry._db.execute("DELETE FROM awards")
+    registry._db.execute("DELETE FROM events")
+    audit = verify_registry_checkpoints(
+        registry, anchors, trusted, registry_id="registry-prod-a"
+    )
+    assert audit["valid"] is False
+    assert any("event chain" in issue or "rollback" in issue for issue in audit["issues"])
+    close_all(ledger, registry)
+
+
+def test_external_checkpoint_verification_rejects_untrusted_or_tampered_signature():
+    from synergy_labor_checkpoints import (
+        create_registry_checkpoint, verify_registry_checkpoints,
+    )
+    ledger, registry, private_award, award_keys = setup()
+    private, trusted, anchors = _checkpoint_keys()
+    registry.reserve(signed_award(private_award), award_keys, now=NOW)
+    create_registry_checkpoint(
+        registry, anchors, private, registry_id="registry-prod-a",
+        signer_key_id="checkpoint-key-1", created_at=NOW,
+    )
+    anchors._records["registry-prod-a"][0]["event_hash"] = "f" * 64
+    audit = verify_registry_checkpoints(
+        registry, anchors, trusted, registry_id="registry-prod-a"
+    )
+    assert audit["valid"] is False
+    assert "signature" in audit["issues"][0].lower()
+    close_all(ledger, registry)
+
+
+def test_registry_checkpoint_record_matches_strict_schema():
+    import jsonschema
+    from synergy_labor_checkpoints import create_registry_checkpoint
+    ledger, registry, private_award, award_keys = setup()
+    private, trusted, anchors = _checkpoint_keys()
+    registry.reserve(signed_award(private_award), award_keys, now=NOW)
+    checkpoint = create_registry_checkpoint(
+        registry, anchors, private, registry_id="registry-prod-a",
+        signer_key_id="checkpoint-key-1", created_at=NOW,
+    )
+    schema = json.loads(
+        (ROOT / "interfaces" / "sle_registry_checkpoint.schema.json").read_text()
+    )
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.validate(
+        {key: value for key, value in checkpoint.items() if key != "checkpoint_digest"},
+        schema,
+    )
+    close_all(ledger, registry)
