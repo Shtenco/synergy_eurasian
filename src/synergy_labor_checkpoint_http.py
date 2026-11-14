@@ -92,10 +92,14 @@ class HttpCheckpointAnchorStore(CheckpointAnchorStore):
         if not isinstance(registry_id, str) or not registry_id.strip():
             raise CheckpointError("registry_id is required")
         existing = self.list_checkpoints(registry_id)
+        record_digest = _digest(record)
+        # Recover an append whose HTTP response was lost after the service committed it.
+        if any(_digest(item) == record_digest for item in existing):
+            return
         previous = _digest(existing[-1]) if existing else GENESIS_HASH
         if record.get("previous_checkpoint_digest") != previous:
             raise CheckpointError("checkpoint does not extend the latest remote anchor")
         if existing and int(record.get("event_seq", -1)) <= int(existing[-1].get("event_seq", -1)):
             raise CheckpointError("checkpoint sequence must increase monotonically")
         self._request("POST", self._url(registry_id), {"checkpoint": record, "expected_previous_checkpoint_digest": previous},
-                      {"If-Match": previous, "Idempotency-Key": _digest(record)})
+                      {"If-Match": previous, "Idempotency-Key": record_digest})
