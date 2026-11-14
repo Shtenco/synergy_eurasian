@@ -934,6 +934,9 @@ def _checkpoint_keys():
             "principal_id": "registry-auditor-1",
             "roles": ["REGISTRY_CHECKPOINTER"],
             "public_key_b64": base64.b64encode(public).decode("ascii"),
+            "valid_from": "2026-01-01T00:00:00Z",
+            "valid_until": "2028-01-01T00:00:00Z",
+            "revoked_at": None,
         }
     }
     return private, trusted, InMemoryCheckpointAnchorStore()
