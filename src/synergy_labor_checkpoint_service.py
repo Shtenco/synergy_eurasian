@@ -8,6 +8,7 @@ independent Ed25519 verification by auditors.
 from __future__ import annotations
 
 import hashlib
+from contextlib import closing
 import hmac
 import json
 import os
@@ -65,7 +66,7 @@ class SQLiteCheckpointAnchorApplication:
         return db
 
     def _initialize(self):
-        with self._connect() as db:
+        with closing(self._connect()) as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript("""
             CREATE TABLE IF NOT EXISTS anchor_checkpoints (
@@ -132,7 +133,7 @@ class SQLiteCheckpointAnchorApplication:
         if match is None:
             return self._response(start_response, "404 Not Found", {"error": "not_found"})
         registry_id = unquote(match.group(1))
-        if not registry_id or len(registry_id) > 256:
+        if not registry_id or len(registry_id) > 256 or "/" in registry_id or chr(92) in registry_id:
             return self._response(start_response, "400 Bad Request", {"error": "invalid_registry_id"})
         if method == "GET":
             return self._list(environ, start_response, registry_id, principal)
@@ -152,7 +153,7 @@ class SQLiteCheckpointAnchorApplication:
                 raise ValueError
         except (ValueError, TypeError):
             return self._response(start_response, "400 Bad Request", {"error": "invalid_pagination"})
-        with self._connect() as db:
+        with closing(self._connect()) as db:
             rows = db.execute(
                 "SELECT checkpoint_json FROM anchor_checkpoints WHERE registry_id=? ORDER BY event_seq LIMIT ? OFFSET ?",
                 (registry_id, limit + 1, offset),
