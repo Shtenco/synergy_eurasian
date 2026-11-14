@@ -547,3 +547,49 @@ def test_registry_lock_timeout_fails_closed_while_another_connection_holds_write
         registry_a._db.execute("ROLLBACK")
     registry_b.close()
     close_all(ledger, registry_a)
+
+
+def test_public_event_audit_uses_one_snapshot_during_concurrent_commit(tmp_path):
+    path = tmp_path / "audit-snapshot.sqlite"
+    ledger, registry_a, private, keys = setup(path)
+    registry_b = SLEAwardRegistry(path)
+    registry_a.reserve(signed_award(private), keys, now=NOW)
+
+    entered_head = threading.Event()
+    release_head = threading.Event()
+    original_head = registry_a._head
+
+    def delayed_head():
+        entered_head.set()
+        if not release_head.wait(timeout=5):
+            raise RuntimeError("test synchronization timed out")
+        return original_head()
+
+    registry_a._head = delayed_head
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            audit_future = pool.submit(registry_a.verify_event_chain)
+            assert entered_head.wait(timeout=5)
+            write_future = pool.submit(
+                registry_b.reserve,
+                signed_award(private, award_id="award-snapshot-2",
+                             contribution_id="contribution-snapshot-2",
+                             result_digest=hashlib.sha256(b"second result").hexdigest()),
+                keys,
+                now=NOW,
+            )
+            try:
+                write_future.result(timeout=5)
+            finally:
+                release_head.set()
+            audit = audit_future.result(timeout=5)
+        assert audit["valid"] is True
+        assert audit["events_checked"] == 1
+        assert registry_a.verify_event_chain()["events_checked"] == 2
+        assert registry_a.verify_projection_consistency()["valid"] is True
+    finally:
+        release_head.set()
+        registry_a._head = original_head
+        registry_b.close()
+        close_all(ledger, registry_a)
+
