@@ -9,6 +9,7 @@ Reservations are never auto-expired or silently released: crash recovery favors 
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from functools import wraps
 import hashlib
 import json
 import math
@@ -46,6 +47,26 @@ def _text(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise AwardRegistryError(f"{field} must be a non-empty string")
     return value.strip()
+
+
+def _consistent_read(method):
+    """Give public audit reads one SQLite snapshot, including nested audit calls."""
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        with self._lock:
+            owns_transaction = not self._db.in_transaction
+            if owns_transaction:
+                self._db.execute("BEGIN")
+            try:
+                result = method(self, *args, **kwargs)
+            except Exception:
+                if owns_transaction and self._db.in_transaction:
+                    self._db.execute("ROLLBACK")
+                raise
+            if owns_transaction and self._db.in_transaction:
+                self._db.execute("COMMIT")
+            return result
+    return wrapped
 
 
 class SLEAwardRegistry:
@@ -342,6 +363,7 @@ class SLEAwardRegistry:
                     self._db.execute("ROLLBACK")
                 raise
 
+    @_consistent_read
     def verify_event_chain(self) -> dict[str, Any]:
         with self._lock:
             rows = self._db.execute("SELECT * FROM events ORDER BY seq").fetchall()
@@ -365,6 +387,7 @@ class SLEAwardRegistry:
             return {"valid": True, "events_checked": len(rows), "head_hash": head}
 
 
+    @_consistent_read
     def verify_authorization_history(self, key_registry: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
         """Re-verify every signed award envelope retained in reservation events."""
         with self._lock:
@@ -404,6 +427,7 @@ class SLEAwardRegistry:
                     break
             return {"valid": not issues, "authorizations_checked": checked, "issues": issues}
 
+    @_consistent_read
     def verify_projection_consistency(self) -> dict[str, Any]:
         """Replay reservation/consumption events and compare the mutable award projection."""
         with self._lock:
