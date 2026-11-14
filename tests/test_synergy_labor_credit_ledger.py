@@ -304,3 +304,18 @@ def test_projection_replay_detects_capacity_reservation_corruption():
     assert audit["valid"] is False
     assert any("capacity projection differs" in item for item in audit["issues"])
     ledger.close()
+
+
+
+def test_ledger_honors_configured_sqlite_busy_timeout():
+    ledger = LaborCreditLedger(timeout=0.125)
+    assert ledger._db.execute("PRAGMA busy_timeout").fetchone()[0] == 125
+    ledger.close()
+
+
+@pytest.mark.parametrize(
+    "timeout", [True, -0.1, float("nan"), float("inf"), "1", 2_147_483.648, 10 ** 1000]
+)
+def test_ledger_rejects_invalid_sqlite_busy_timeout(timeout):
+    with pytest.raises(ValueError, match="timeout must be a finite number"):
+        LaborCreditLedger(timeout=timeout)
