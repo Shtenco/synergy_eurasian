@@ -1094,3 +1094,24 @@ def test_registry_checkpoint_record_matches_strict_schema():
         schema,
     )
     close_all(ledger, registry)
+
+
+
+def test_external_checkpoint_rejects_signing_key_revoked_at_checkpoint_time():
+    from synergy_labor_checkpoints import (
+        create_registry_checkpoint, verify_registry_checkpoints,
+    )
+    ledger, registry, private_award, award_keys = setup()
+    private, trusted, anchors = _checkpoint_keys()
+    registry.reserve(signed_award(private_award), award_keys, now=NOW)
+    create_registry_checkpoint(
+        registry, anchors, private, registry_id="registry-prod-a",
+        signer_key_id="checkpoint-key-1", created_at=NOW,
+    )
+    trusted["checkpoint-key-1"]["revoked_at"] = "2026-11-14T11:59:59Z"
+    audit = verify_registry_checkpoints(
+        registry, anchors, trusted, registry_id="registry-prod-a"
+    )
+    assert audit["valid"] is False
+    assert "revoked" in audit["issues"][0]
+    close_all(ledger, registry)
