@@ -840,3 +840,83 @@ def test_process_death_after_reservation_keeps_award_locked_fail_closed(tmp_path
     assert recovered.verify_event_chain()["events_checked"] == 1
     assert recovered.verify_projection_consistency()["valid"] is True
     close_all(ledger, recovered)
+
+
+
+def test_sqlite_online_backups_restore_registry_and_ledger_for_idempotent_recovery(tmp_path):
+    """SQLite's backup API must preserve committed WAL state across restore."""
+    source_registry = tmp_path / "source-registry.sqlite"
+    source_ledger = tmp_path / "source-ledger.sqlite"
+    backup_registry = tmp_path / "backup-registry.sqlite"
+    backup_ledger = tmp_path / "backup-ledger.sqlite"
+
+    ledger = LaborCreditLedger(source_ledger)
+    ledger.register_issuer(
+        "issuer-a", "field-service", "service-hour", "100", "issuer-policy"
+    )
+    ledger.add_capacity(
+        "issuer-a", "field-service", "service-hour", "capacity-a",
+        "50", "a" * 64, "independent-verifier", "capacity-a",
+    )
+    registry = SLEAwardRegistry(source_registry)
+    private = Ed25519PrivateKey.generate()
+    public = private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    keys = {
+        "reward-key-1": {
+            "principal_id": "reward-authorizer-1",
+            "roles": ["REWARD_AUTHORIZER"],
+            "public_key_b64": base64.b64encode(public).decode("ascii"),
+            "valid_from": "2026-01-01T00:00:00Z",
+            "valid_until": "2028-01-01T00:00:00Z",
+            "revoked_at": None,
+        }
+    }
+    envelope = signed_award(private, expires_at="2026-11-15T00:00:00Z")
+    issued = issue_authorized_credit(
+        ledger, registry, envelope, keys, now=NOW,
+        due_at="2030-01-01T00:00:00Z", credit_id="credit-backup",
+        idempotency_key="issue-backup",
+    )
+    assert issued["registry_status"] == "CONSUMED"
+
+    # The online backup API includes committed WAL pages; copying only the main
+    # database file while WAL is active is deliberately not used here.
+    for source, target in (
+        (registry._db, backup_registry),
+        (ledger._db, backup_ledger),
+    ):
+        destination = sqlite3.connect(target)
+        try:
+            source.backup(destination)
+        finally:
+            destination.close()
+
+    close_all(ledger, registry)
+    restored_registry = SLEAwardRegistry(backup_registry)
+    restored_ledger = LaborCreditLedger(backup_ledger)
+    try:
+        assert restored_registry.get_award("award-global-1")["status"] == "CONSUMED"
+        assert restored_registry.verify_event_chain()["valid"] is True
+        assert restored_registry.verify_projection_consistency()["valid"] is True
+        assert restored_registry.verify_authorization_history(keys)["valid"] is True
+        assert restored_ledger.get_credit("credit-backup")["status"] == "ACTIVE"
+        assert restored_ledger.verify_event_chain()["valid"] is True
+        assert restored_ledger.verify_projection_consistency()["valid"] is True
+
+        replay = issue_authorized_credit(
+            restored_ledger, restored_registry, envelope, keys,
+            now=datetime(2026, 11, 16, 12, 0, tzinfo=timezone.utc),
+            due_at="2030-01-01T00:00:00Z", credit_id="credit-backup",
+            idempotency_key="issue-backup",
+        )
+        assert replay["registry_status"] == "CONSUMED"
+        assert replay["idempotent_replay"] is True
+        assert restored_ledger.verify_event_chain()["events_checked"] == 3
+        assert restored_registry.verify_event_chain()["events_checked"] == 2
+        assert restored_registry.verify_projection_consistency()["valid"] is True
+        assert restored_ledger.verify_projection_consistency()["valid"] is True
+    finally:
+        close_all(restored_ledger, restored_registry)
