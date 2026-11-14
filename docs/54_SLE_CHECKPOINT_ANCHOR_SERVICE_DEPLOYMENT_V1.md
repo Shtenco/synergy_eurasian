@@ -10,8 +10,8 @@ backup policy and credential lifecycle from the SLE award registry.
 Set the following secrets/configuration in the service environment:
 
 - `SLE_ANCHOR_DATABASE`: durable local database path on the anchor service.
-- `SLE_ANCHOR_PRINCIPAL`: stable service identity used in audit records.
-- `SLE_ANCHOR_BEARER_TOKEN`: random secret with at least 32 characters.
+- `SLE_ANCHOR_WRITER_PRINCIPAL` and `SLE_ANCHOR_WRITER_TOKEN`: publication identity and random secret (at least 32 characters).
+- `SLE_ANCHOR_AUDITOR_PRINCIPAL` and `SLE_ANCHOR_AUDITOR_TOKEN`: distinct read-only auditor identity and random secret (at least 32 characters).
 
 Construct the WSGI application using `create_app_from_environment()`. Run it only
 behind a TLS-terminating reverse proxy with request-size limits, access logging that
@@ -26,7 +26,7 @@ the built-in development WSGI server directly to the public Internet.
 - Unique registry/sequence, registry/digest and registry/idempotency-key constraints.
 - Exact retry recognition after a committed write whose response was lost.
 - Append-only update/delete triggers on checkpoint rows.
-- Bearer authentication, per-principal audit records and no-store responses.
+- Bearer authentication, separate writer/auditor principals, per-principal audit records and no-store responses. The writer may read and publish; the auditor may read only.
 - Bounded request body and bounded pagination size.
 - Restart recovery by reading the durable checkpoint chain.
 
