@@ -249,8 +249,11 @@ def verify_registry_checkpoints(
                             )
                     previous = _digest(record)
                     previous_seq = seq
-                except (KeyError, TypeError, ValueError, InvalidSignature) as exc:
-                    issues.append(f"checkpoint {index}: {exc or 'signature verification failed'}")
+                except InvalidSignature:
+                    issues.append(f"checkpoint {index}: Ed25519 signature verification failed")
+                    break
+                except (KeyError, TypeError, ValueError) as exc:
+                    issues.append(f"checkpoint {index}: {exc}")
                     break
         except Exception:
             if owns_transaction and registry._db.in_transaction:
