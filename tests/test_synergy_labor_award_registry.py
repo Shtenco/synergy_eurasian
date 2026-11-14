@@ -593,3 +593,62 @@ def test_public_event_audit_uses_one_snapshot_during_concurrent_commit(tmp_path)
         registry_b.close()
         close_all(ledger, registry_a)
 
+
+
+def _reserve_award_in_separate_process(database, envelope, key_registry, barrier, result_queue):
+    """Process entry point: exercise SQLite coordination without shared Python locks."""
+    registry = SLEAwardRegistry(database, timeout=10)
+    try:
+        barrier.wait(timeout=15)
+        try:
+            result = registry.reserve(
+                envelope, key_registry,
+                now=datetime(2026, 11, 14, 12, 0, tzinfo=timezone.utc),
+            )
+            result_queue.put(("reserved", result["award_id"]))
+        except AwardRegistryError as exc:
+            result_queue.put(("rejected", str(exc)))
+    finally:
+        registry.close()
+
+
+def test_separate_processes_cannot_reserve_one_contribution_twice(tmp_path):
+    """SQLite uniqueness must hold across OS processes, not just threads/connections."""
+    import multiprocessing
+
+    path = tmp_path / "multiprocess-awards.sqlite"
+    _, registry, private, keys = setup(path)
+    envelopes = [
+        signed_award(private, award_id="award-process-a"),
+        signed_award(private, award_id="award-process-b"),
+    ]
+    context = multiprocessing.get_context("spawn")
+    barrier = context.Barrier(2)
+    result_queue = context.Queue()
+    processes = [
+        context.Process(
+            target=_reserve_award_in_separate_process,
+            args=(str(path), envelope, keys, barrier, result_queue),
+        )
+        for envelope in envelopes
+    ]
+    try:
+        for process in processes:
+            process.start()
+        results = [result_queue.get(timeout=25) for _ in processes]
+        for process in processes:
+            process.join(timeout=25)
+            assert process.exitcode == 0
+        assert sum(result[0] == "reserved" for result in results) == 1
+        assert sum(result[0] == "rejected" for result in results) == 1
+        rejected = next(result[1] for result in results if result[0] == "rejected")
+        assert "already reserved" in rejected
+        assert registry.verify_event_chain()["events_checked"] == 1
+        assert registry.verify_projection_consistency()["valid"] is True
+    finally:
+        for process in processes:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=5)
+        result_queue.close()
+        close_all(_, registry)
