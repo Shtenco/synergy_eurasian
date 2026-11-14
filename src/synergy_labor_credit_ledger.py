@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
+import math
 import sqlite3
 import threading
 import uuid
@@ -72,6 +73,17 @@ class LaborCreditLedger:
     """
 
     def __init__(self, database: str | Path = ":memory:", *, timeout: float = 10.0):
+        try:
+            valid_timeout = (
+                not isinstance(timeout, bool)
+                and isinstance(timeout, (int, float))
+                and math.isfinite(timeout)
+                and 0 <= timeout <= 2_147_483.647
+            )
+        except (OverflowError, TypeError):
+            valid_timeout = False
+        if not valid_timeout:
+            raise ValueError("timeout must be a finite number between 0 and 2147483.647 seconds")
         self.database = str(database)
         self._lock = threading.RLock()
         self._db = sqlite3.connect(
@@ -80,7 +92,7 @@ class LaborCreditLedger:
         )
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA foreign_keys = ON")
-        self._db.execute("PRAGMA busy_timeout = 10000")
+        self._db.execute(f"PRAGMA busy_timeout = {int(timeout * 1000)}")
         if self.database != ":memory:":
             self._db.execute("PRAGMA journal_mode = WAL")
             self._db.execute("PRAGMA synchronous = FULL")
