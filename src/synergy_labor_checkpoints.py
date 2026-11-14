@@ -267,3 +267,43 @@ def verify_registry_checkpoints(
         "latest_event_seq": previous_seq if not issues else None,
         "issues": issues,
     }
+
+
+def check_registry_checkpoint_freshness(
+    anchor_store: CheckpointAnchorStore,
+    *,
+    registry_id: str,
+    now: datetime,
+    max_age_seconds: int,
+) -> dict[str, Any]:
+    """Report whether the newest externally stored checkpoint is recent enough.
+
+    Call only alongside verify_registry_checkpoints: freshness is not a substitute
+    for signature, continuity, key-policy, and live-history verification.
+    """
+    if not isinstance(registry_id, str) or not registry_id.strip():
+        raise CheckpointError("registry_id must be a non-empty string")
+    if not isinstance(now, datetime) or now.tzinfo is None:
+        raise CheckpointError("now must be a timezone-aware datetime")
+    if (isinstance(max_age_seconds, bool) or not isinstance(max_age_seconds, int)
+            or max_age_seconds < 1):
+        raise CheckpointError("max_age_seconds must be a positive integer")
+    records = list(anchor_store.list_checkpoints(registry_id))
+    if not records:
+        return {"fresh": False, "age_seconds": None,
+                "issues": ["no external checkpoints are available"]}
+    try:
+        latest = records[-1]
+        created_at = _timestamp(latest["created_at"])
+    except (KeyError, TypeError, ValueError) as exc:
+        return {"fresh": False, "age_seconds": None,
+                "issues": [f"latest checkpoint timestamp is invalid: {exc}"]}
+    current = now.astimezone(timezone.utc)
+    age = (current - created_at).total_seconds()
+    if age < 0:
+        return {"fresh": False, "age_seconds": age,
+                "issues": ["latest checkpoint timestamp is in the future"]}
+    if age > max_age_seconds:
+        return {"fresh": False, "age_seconds": age,
+                "issues": [f"latest checkpoint is older than {max_age_seconds} seconds"]}
+    return {"fresh": True, "age_seconds": age, "issues": []}
