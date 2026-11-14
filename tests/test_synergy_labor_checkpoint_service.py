@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import sys
@@ -28,7 +29,7 @@ def make_record(registry="r1", seq=1, previous=GENESIS_HASH, marker="a"):
         "created_at": "2026-11-14T12:00:00+00:00",
         "signer_key_id": "checkpoint-key",
         "previous_checkpoint_digest": previous,
-        "signature": "c2lnbmF0dXJl",
+        "signature": base64.b64encode(b"s" * 64).decode("ascii"),
     }
 
 
