@@ -52,9 +52,16 @@ class SLEAwardRegistry:
     """One shared uniqueness authority for all participating award producers."""
 
     def __init__(self, database: str | Path = ":memory:", *, timeout: float = 10.0):
-        if (isinstance(timeout, bool) or not isinstance(timeout, (int, float))
-            or not math.isfinite(timeout) or timeout < 0
-            or timeout > 2_147_483.647):
+        try:
+            valid_timeout = (
+                not isinstance(timeout, bool)
+                and isinstance(timeout, (int, float))
+                and math.isfinite(timeout)
+                and 0 <= timeout <= 2_147_483.647
+            )
+        except (OverflowError, TypeError):
+            valid_timeout = False
+        if not valid_timeout:
             raise ValueError("timeout must be a finite number between 0 and 2147483.647 seconds")
         self.database = str(database)
         self._lock = threading.RLock()
