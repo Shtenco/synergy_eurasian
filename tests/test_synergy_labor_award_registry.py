@@ -652,3 +652,114 @@ def test_separate_processes_cannot_reserve_one_contribution_twice(tmp_path):
                 process.join(timeout=5)
         result_queue.close()
         close_all(_, registry)
+
+
+def _crash_after_durable_local_issue(
+    registry_path, ledger_path, envelope, key_registry, credit_id, idempotency_key,
+):
+    """Commit reservation and local issue, then simulate abrupt process death."""
+    import os
+
+    registry = SLEAwardRegistry(registry_path)
+    ledger = LaborCreditLedger(ledger_path)
+    registry.reserve(
+        envelope, key_registry,
+        now=datetime(2026, 11, 14, 12, 0, tzinfo=timezone.utc),
+    )
+    ledger.issue(
+        "issuer-a", envelope["beneficiary_id"], envelope["source_contribution_id"],
+        envelope["award_id"], envelope["result_digest"], envelope["service_code"],
+        envelope["unit"], envelope["capacity_id"], envelope["quantity"],
+        "2030-01-01T00:00:00Z", credit_id, idempotency_key,
+    )
+    # Both APIs have committed their own SQLite transactions. Do not run Python
+    # cleanup handlers: this models SIGKILL/power-loss timing after local issuance.
+    os._exit(73)
+
+
+def test_process_death_after_local_issue_recovers_from_reopened_wal_databases(tmp_path):
+    """A hard process exit between the two DB commits must not duplicate an award."""
+    import multiprocessing
+
+    registry_path = tmp_path / "crash-recovery-registry.sqlite"
+    ledger_path = tmp_path / "crash-recovery-ledger.sqlite"
+    ledger = LaborCreditLedger(ledger_path)
+    ledger.register_issuer(
+        "issuer-a", "field-service", "service-hour", "100", "issuer-policy"
+    )
+    ledger.add_capacity(
+        "issuer-a", "field-service", "service-hour", "capacity-a",
+        "50", "a" * 64, "independent-verifier", "capacity-a",
+    )
+    ledger.close()
+
+    registry = SLEAwardRegistry(registry_path)
+    private = Ed25519PrivateKey.generate()
+    public = private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    keys = {
+        "reward-key-1": {
+            "principal_id": "reward-authorizer-1",
+            "roles": ["REWARD_AUTHORIZER"],
+            "public_key_b64": base64.b64encode(public).decode("ascii"),
+            "valid_from": "2026-01-01T00:00:00Z",
+            "valid_until": "2028-01-01T00:00:00Z",
+            "revoked_at": None,
+        }
+    }
+    envelope = signed_award(private, expires_at="2026-11-15T00:00:00Z")
+    registry.close()
+
+    context = multiprocessing.get_context("spawn")
+    process = context.Process(
+        target=_crash_after_durable_local_issue,
+        args=(
+            str(registry_path), str(ledger_path), envelope, keys,
+            "credit-crash-recovery", "issue-crash-recovery",
+        ),
+    )
+    process.start()
+    process.join(timeout=25)
+    if process.is_alive():
+        process.terminate()
+        process.join(timeout=5)
+        pytest.fail("crash simulation process did not terminate")
+    assert process.exitcode == 73
+
+    # Reopen both WAL databases in a fresh process context after the unclean exit.
+    recovered_registry = SLEAwardRegistry(registry_path)
+    recovered_ledger = LaborCreditLedger(ledger_path)
+    award_before = recovered_registry.get_award("award-global-1")
+    assert award_before["status"] == "RESERVED"
+    assert recovered_ledger.get_credit("credit-crash-recovery")["status"] == "ACTIVE"
+    assert recovered_registry.verify_event_chain()["valid"] is True
+    assert recovered_registry.verify_projection_consistency()["valid"] is True
+    assert recovered_ledger.verify_event_chain()["valid"] is True
+    assert recovered_ledger.verify_projection_consistency()["valid"] is True
+
+    after_expiry = datetime(2026, 11, 16, 12, 0, tzinfo=timezone.utc)
+    result = issue_authorized_credit(
+        recovered_ledger, recovered_registry, envelope, keys,
+        now=after_expiry, due_at="2030-01-01T00:00:00Z",
+        credit_id="credit-crash-recovery", idempotency_key="issue-crash-recovery",
+    )
+    assert result["registry_status"] == "CONSUMED"
+    assert result["reconciled_after_local_issue"] is True
+    assert recovered_ledger.verify_event_chain()["events_checked"] == 3
+    assert recovered_registry.verify_event_chain()["events_checked"] == 2
+    assert recovered_registry.verify_projection_consistency()["valid"] is True
+    assert recovered_ledger.verify_projection_consistency()["valid"] is True
+
+    # A further retry after recovery is a replay, not a second credit/event.
+    replay = issue_authorized_credit(
+        recovered_ledger, recovered_registry, envelope, keys,
+        now=after_expiry, due_at="2030-01-01T00:00:00Z",
+        credit_id="credit-crash-recovery", idempotency_key="issue-crash-recovery",
+    )
+    assert replay["registry_status"] == "CONSUMED"
+    assert replay["idempotent_replay"] is True
+    assert recovered_ledger.verify_event_chain()["events_checked"] == 3
+    assert recovered_registry.verify_event_chain()["events_checked"] == 2
+    close_all(recovered_ledger, recovered_registry)
