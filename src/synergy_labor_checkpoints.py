@@ -217,6 +217,20 @@ def verify_registry_checkpoints(
                     roles = entry.get("roles", [])
                     if "REGISTRY_CHECKPOINTER" not in roles:
                         raise CheckpointError("trusted key lacks REGISTRY_CHECKPOINTER role")
+                    signed_at = _timestamp(body["created_at"])
+                    try:
+                        valid_from = _timestamp(entry["valid_from"])
+                        valid_until = _timestamp(entry["valid_until"])
+                        revoked_at = (
+                            None if entry.get("revoked_at") is None
+                            else _timestamp(entry["revoked_at"])
+                        )
+                    except KeyError:
+                        raise CheckpointError("trusted checkpoint key validity interval is incomplete") from None
+                    if not valid_from <= signed_at <= valid_until:
+                        raise CheckpointError("checkpoint signing key was outside its validity interval")
+                    if revoked_at is not None and signed_at >= revoked_at:
+                        raise CheckpointError("checkpoint signing key was revoked at signing time")
                     public = _public_key(entry)
                     signature = base64.b64decode(record["signature"], validate=True)
                     public.verify(signature, _canonical(body))
