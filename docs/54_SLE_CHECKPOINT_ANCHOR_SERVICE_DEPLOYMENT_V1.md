@@ -30,12 +30,11 @@ the built-in development WSGI server directly to the public Internet.
 - Bounded request body and bounded pagination size.
 - Restart recovery by reading the durable checkpoint chain.
 
-The server stores signed records but does not independently establish that the
-signature is valid or that labor evidence is truthful. Auditors must continue to
-verify Ed25519 signatures and event-chain correspondence using the trusted key
-registry. A bearer token grants publication/read access to this service; deploy
-separate tokens and a separate auditor endpoint/role policy if read/write separation
-is required.
+The server validates checkpoint shape and Ed25519 signature encoding, but does not
+verify the signature cryptographically or establish that labor evidence is truthful.
+Auditors must verify Ed25519 signatures and event-chain correspondence using the
+trusted key registry. Writer and auditor credentials are separate: only the writer
+can publish, while both can read. Keep both credentials distinct from the award registry.
 
 ## External durability and recovery requirements
 
