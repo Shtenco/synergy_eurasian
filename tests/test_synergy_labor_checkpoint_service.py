@@ -526,3 +526,17 @@ def test_two_independent_service_instances_serialize_competing_writers(tmp_path)
     assert sorted(results) == [201, 409]
     status, page, _ = call(apps[0], "GET", "/v1/registries/r1/checkpoints")
     assert status == 200 and len(page["items"]) == 1
+
+def test_auditor_is_read_only_and_cannot_publish(tmp_path):
+    app = make_app(tmp_path / "anchor.sqlite")
+    status, _, _ = call(app, "GET", "/v1/registries/r1/checkpoints", token=AUDITOR_TOKEN)
+    assert status == 200
+    record = make_record()
+    digest = _digest(record)
+    status, body, _ = call(
+        app, "POST", "/v1/registries/r1/checkpoints",
+        payload={"checkpoint":record,"expected_previous_checkpoint_digest":GENESIS_HASH},
+        token=AUDITOR_TOKEN,
+        headers={"If-Match":GENESIS_HASH,"Idempotency-Key":digest},
+    )
+    assert status == 403 and body["error"] == "write_forbidden"
