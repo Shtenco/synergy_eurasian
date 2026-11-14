@@ -461,8 +461,88 @@ def test_registry_honors_configured_sqlite_busy_timeout():
     registry.close()
 
 
-@pytest.mark.parametrize("timeout", [True, -0.1, float("nan"), float("inf"), "1", 2_147_483.648])
+@pytest.mark.parametrize("timeout", [True, -0.1, float("nan"), float("inf"), "1", 2_147_483.648, 10 ** 1000])
 def test_registry_rejects_invalid_busy_timeout(timeout):
     with pytest.raises(ValueError, match="timeout must be a finite number"):
         SLEAwardRegistry(timeout=timeout)
 
+
+def test_concurrent_identical_end_to_end_issuance_creates_one_credit_event(tmp_path):
+    path = tmp_path / "racing-end-to-end.sqlite"
+    ledger, registry_a, private, keys = setup(path)
+    registry_b = SLEAwardRegistry(path)
+    envelope = signed_award(private)
+    barrier = threading.Barrier(2)
+
+    def issue(registry):
+        barrier.wait()
+        return issue_authorized_credit(
+            ledger, registry, envelope, keys, now=NOW,
+            due_at="2030-01-01T00:00:00Z", credit_id="credit-global-1",
+            idempotency_key="issue-global-race",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(issue, [registry_a, registry_b]))
+
+    assert {result["credit_id"] for result in results} == {"credit-global-1"}
+    assert {result["registry_status"] for result in results} == {"CONSUMED"}
+    assert ledger.verify_event_chain()["events_checked"] == 3
+    assert registry_a.verify_event_chain()["events_checked"] == 2
+    assert registry_a.get_award("award-global-1")["status"] == "CONSUMED"
+    assert registry_a.verify_projection_consistency()["valid"] is True
+    assert ledger.verify_projection_consistency()["valid"] is True
+    registry_b.close()
+    close_all(ledger, registry_a)
+
+
+def test_concurrent_competing_end_to_end_issuance_cannot_double_award(tmp_path):
+    path = tmp_path / "racing-end-to-end-conflict.sqlite"
+    ledger, registry_a, private, keys = setup(path)
+    registry_b = SLEAwardRegistry(path)
+    envelopes = [
+        signed_award(private, award_id="award-race-a"),
+        signed_award(private, award_id="award-race-b"),
+    ]
+    barrier = threading.Barrier(2)
+
+    def issue(pair):
+        registry, envelope = pair
+        barrier.wait()
+        try:
+            return issue_authorized_credit(
+                ledger, registry, envelope, keys, now=NOW,
+                due_at="2030-01-01T00:00:00Z",
+                credit_id="credit-" + envelope["award_id"],
+                idempotency_key="issue-" + envelope["award_id"],
+            )
+        except AwardRegistryError as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(issue, [(registry_a, envelopes[0]), (registry_b, envelopes[1])]))
+
+    assert sum(isinstance(result, dict) for result in results) == 1
+    assert sum(isinstance(result, AwardRegistryError) for result in results) == 1
+    assert ledger.verify_event_chain()["events_checked"] == 3
+    assert registry_a.verify_event_chain()["events_checked"] == 2
+    assert registry_a.verify_projection_consistency()["valid"] is True
+    assert ledger.verify_projection_consistency()["valid"] is True
+    registry_b.close()
+    close_all(ledger, registry_a)
+
+
+def test_registry_lock_timeout_fails_closed_while_another_connection_holds_write_lock(tmp_path):
+    path = tmp_path / "locked-awards.sqlite"
+    ledger, registry_a, private, keys = setup(path)
+    registry_b = SLEAwardRegistry(path, timeout=0)
+    registry_a._db.execute("BEGIN IMMEDIATE")
+    try:
+        with pytest.raises(Exception, match="locked"):
+            registry_b.reserve(signed_award(private), keys, now=NOW)
+        assert registry_a._db.execute("SELECT COUNT(*) FROM awards").fetchone()[0] == 0
+        assert registry_a._db.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0
+    finally:
+        registry_a._db.execute("ROLLBACK")
+    registry_b.close()
+    close_all(ledger, registry_a)
