@@ -35,6 +35,8 @@ class SQLiteCheckpointAnchorApplication:
         *,
         bearer_tokens: Mapping[str, str],
         max_page_size: int = 500,
+        reader_principals: set[str] | None = None,
+        writer_principals: set[str] | None = None,
         clock: Callable[[], float] = time.time,
     ) -> None:
         if str(database) == ":memory:":
@@ -47,6 +49,13 @@ class SQLiteCheckpointAnchorApplication:
             raise AnchorServiceError("configure named principals with bearer tokens of at least 32 characters")
         if isinstance(max_page_size, bool) or not isinstance(max_page_size, int) or not 1 <= max_page_size <= 5000:
             raise AnchorServiceError("max_page_size must be between 1 and 5000")
+        principals = set(bearer_tokens)
+        self.reader_principals = principals if reader_principals is None else set(reader_principals)
+        self.writer_principals = principals if writer_principals is None else set(writer_principals)
+        if not self.reader_principals.issubset(principals) or not self.writer_principals.issubset(principals):
+            raise AnchorServiceError("reader/writer principals must have configured credentials")
+        if not self.reader_principals or not self.writer_principals:
+            raise AnchorServiceError("at least one reader and one writer principal are required")
         self.database = str(database)
         self.max_page_size = max_page_size
         self.clock = clock
@@ -136,8 +145,12 @@ class SQLiteCheckpointAnchorApplication:
         if not registry_id or len(registry_id) > 256 or "/" in registry_id or chr(92) in registry_id:
             return self._response(start_response, "400 Bad Request", {"error": "invalid_registry_id"})
         if method == "GET":
+            if principal not in self.reader_principals:
+                return self._response(start_response, "403 Forbidden", {"error": "read_forbidden"})
             return self._list(environ, start_response, registry_id, principal)
         if method == "POST":
+            if principal not in self.writer_principals:
+                return self._response(start_response, "403 Forbidden", {"error": "write_forbidden"})
             return self._append(environ, start_response, registry_id, principal)
         return self._response(start_response, "405 Method Not Allowed", {"error": "method_not_allowed"})
 
@@ -257,8 +270,17 @@ class SQLiteCheckpointAnchorApplication:
 def create_app_from_environment():
     """Build a service from explicit deployment environment variables."""
     database = os.environ.get("SLE_ANCHOR_DATABASE")
-    principal = os.environ.get("SLE_ANCHOR_PRINCIPAL")
-    token = os.environ.get("SLE_ANCHOR_BEARER_TOKEN")
-    if not database or not principal or not token:
-        raise AnchorServiceError("SLE_ANCHOR_DATABASE, SLE_ANCHOR_PRINCIPAL and SLE_ANCHOR_BEARER_TOKEN are required")
-    return SQLiteCheckpointAnchorApplication(database, bearer_tokens={principal: token})
+    writer_principal = os.environ.get("SLE_ANCHOR_WRITER_PRINCIPAL")
+    writer_token = os.environ.get("SLE_ANCHOR_WRITER_TOKEN")
+    auditor_principal = os.environ.get("SLE_ANCHOR_AUDITOR_PRINCIPAL")
+    auditor_token = os.environ.get("SLE_ANCHOR_AUDITOR_TOKEN")
+    if not all((database, writer_principal, writer_token, auditor_principal, auditor_token)):
+        raise AnchorServiceError("SLE_ANCHOR_DATABASE and separate writer/auditor principal+token variables are required")
+    if writer_principal == auditor_principal:
+        raise AnchorServiceError("writer and auditor must use distinct principals")
+    return SQLiteCheckpointAnchorApplication(
+        database,
+        bearer_tokens={writer_principal: writer_token, auditor_principal: auditor_token},
+        reader_principals={writer_principal, auditor_principal},
+        writer_principals={writer_principal},
+    )
