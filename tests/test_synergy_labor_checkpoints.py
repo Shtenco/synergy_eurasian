@@ -76,6 +76,9 @@ def test_remote_anchor_round_trip_and_recovery_with_new_client(service_url):
     anchor = HttpCheckpointAnchorStore(url, lambda:"test-token")
     checkpoint = create_registry_checkpoint(registry, anchor, private, registry_id="registry-a",
         signer_key_id="checkpoint-key", created_at=datetime(2026,11,14,12,0,tzinfo=timezone.utc))
+    # Simulate retry after a lost HTTP response: the exact signed record is not duplicated.
+    anchor.append_checkpoint({key:value for key,value in checkpoint.items() if key != "checkpoint_digest"})
+    assert len(anchor.list_checkpoints("registry-a")) == 1
     recovered = HttpCheckpointAnchorStore(url, lambda:"test-token")
     result = verify_registry_checkpoints(registry, recovered, keys, registry_id="registry-a")
     assert result["valid"] is True and result["checkpoints_checked"] == 1
