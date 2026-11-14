@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 from pathlib import Path
+import sqlite3
 import threading
 import sys
 
@@ -538,7 +539,7 @@ def test_registry_lock_timeout_fails_closed_while_another_connection_holds_write
     registry_b = SLEAwardRegistry(path, timeout=0)
     registry_a._db.execute("BEGIN IMMEDIATE")
     try:
-        with pytest.raises(Exception, match="locked"):
+        with pytest.raises(sqlite3.OperationalError, match="locked"):
             registry_b.reserve(signed_award(private), keys, now=NOW)
         assert registry_a._db.execute("SELECT COUNT(*) FROM awards").fetchone()[0] == 0
         assert registry_a._db.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0
