@@ -1045,6 +1045,7 @@ def test_external_checkpoint_detects_registry_rollback_behind_anchor(tmp_path):
         signer_key_id="checkpoint-key-1", created_at=NOW,
     )
     registry._db.execute("DELETE FROM awards")
+    registry._db.execute("DROP TRIGGER award_events_no_delete")
     registry._db.execute("DELETE FROM events")
     audit = verify_registry_checkpoints(
         registry, anchors, trusted, registry_id="registry-prod-a"
