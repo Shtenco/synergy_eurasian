@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import sqlite3
 import tempfile
-from urllib.parse import quote
 
 from synergy_labor_checkpoints import CheckpointError, GENESIS_HASH, _digest
 
@@ -84,7 +83,6 @@ def _sqlite_online_copy(source_path: Path, destination_path: Path) -> None:
     destination = sqlite3.connect(str(destination_path), timeout=30)
     try:
         source.backup(destination)
-        destination.execute("PRAGMA integrity_check")
         result = destination.execute("PRAGMA integrity_check").fetchone()
         if result is None or result[0] != "ok":
             raise AnchorBackupError("SQLite integrity_check failed on copied database")
@@ -114,8 +112,6 @@ def backup_anchor_database(
         validation = validate_anchor_database(
             temp, registry_id=registry_id, expected_tail_digest=expected_tail_digest
         )
-        for suffix in ("-wal", "-shm"):
-            Path(str(target) + suffix).unlink(missing_ok=True)
         os.replace(temp, target)
     except Exception:
         temp.unlink(missing_ok=True)
@@ -151,6 +147,10 @@ def restore_anchor_database(
         validate_anchor_database(
             temp, registry_id=registry_id, expected_tail_digest=expected_tail_digest
         )
+        # Caller must stop the service first; stale WAL/SHM sidecars must not be
+        # replayed against the restored main database file.
+        for suffix in ("-wal", "-shm"):
+            Path(str(target) + suffix).unlink(missing_ok=True)
         os.replace(temp, target)
     except Exception:
         temp.unlink(missing_ok=True)
