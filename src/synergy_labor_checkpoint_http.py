@@ -68,8 +68,9 @@ class HttpCheckpointAnchorStore(CheckpointAnchorStore):
         return result
 
     def list_checkpoints(self, registry_id: str):
-        if not isinstance(registry_id, str) or not registry_id.strip():
-            raise CheckpointError("registry_id is required")
+        if (not isinstance(registry_id, str) or not registry_id.strip()
+                or "/" in registry_id or chr(92) in registry_id):
+            raise CheckpointError("registry_id must be a non-empty URL-safe path segment")
         items, cursor, seen = [], None, set()
         for _ in range(self._page_limit):
             result = self._request("GET", self._url(registry_id, cursor))
