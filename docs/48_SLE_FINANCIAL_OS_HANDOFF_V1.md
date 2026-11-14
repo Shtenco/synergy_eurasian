@@ -59,16 +59,18 @@ Default is not automatically a write-off. Cancellation is not automatically a re
 
 ## 5. Cross-system duplicate prevention
 
-The local SLE service-credit database enforces unique `source_contribution_id` and `award_authorization_ref` within that database only.
+SLE now includes a reference shared SQLite award registry in `src/synergy_labor_award_registry.py`. It reserves `award_id`, `source_contribution_id`, `result_digest` and signed `authorization_digest` in one transaction, then consumes the reservation only after matching a local `CREDIT_ISSUED` event and verifying the local ledger chain/projection. Concurrent reservation and issuance tests cover multiple registry connections sharing one database.
+
+This closes the duplicate-award gap only for producers that actually use the same authoritative registry database. It is not yet a Financial OS integration, a distributed service, multi-region consensus, or an atomic transaction across the registry and either system's local database. The local SLE ledger's own unique constraints remain a second, independent defense.
 
 Before any monetary reward or second service-credit rail is enabled, both SLE and Financial OS must atomically reserve/consume the same globally unique award ID. Required protocol:
 1. Reward Engine creates a signed, immutable award authorization against an accepted contribution and approved budget.
-2. A shared idempotency registry reserves the award ID once for a specific beneficiary, amount/unit and destination.
-3. SLE or Financial OS consumes that reservation with compare-and-swap semantics; the other destination must reject an already-consumed award.
+2. Both systems use the same governed registry endpoint and bind the reservation to the beneficiary, amount/unit and destination.
+3. The selected destination consumes the reservation with compare-and-swap semantics; every other destination rejects an already-consumed award.
 4. Outbox/inbox delivery is at-least-once, while consumers are idempotent by award ID and event ID.
 5. Reconciliation proves one authorization maps to at most one economic reward allocation, with explicit cancellation/reversal events.
 
-A pair of independent unique constraints in separate databases is insufficient to prevent cross-system double issuance.
+A pair of independent unique constraints in separate databases is insufficient to prevent cross-system double issuance. The current SQLite reference registry does not satisfy the distributed-service or Financial OS integration gates by itself.
 
 ## 6. Fail-closed conditions
 
@@ -88,7 +90,7 @@ Reject or quarantine the handoff if:
 No cross-repository production adapter until:
 - Financial OS PR #33 or a later canonical branch is promoted with exact-head CI and documented API stability;
 - Ed25519 (or an approved equivalent) signed evidence/award envelopes are verified against a governed key registry;
-- shared award reservation is implemented and concurrency-tested across both systems;
+- the shared award registry is deployed as one governed authority and concurrency/recovery-tested across both SLE and Financial OS consumers (the current SLE SQLite reference implementation alone does not meet this gate);
 - Financial OS independently recognizes/rejects sample issue, redemption, cancellation and default events;
 - end-to-end replay, reconciliation, reversal and restore tests pass;
 - legal review confirms the instrument's classification and enforceability in each deployment jurisdiction.
