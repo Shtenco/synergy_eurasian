@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/sle_dispute_decision.schema.json",
+  "title": "SYNERGY SLE Signed Dispute Decision V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "case_id", "credit_id", "resolver_id", "outcome",
+    "rationale_digest", "decided_at", "expected_version", "key_id", "signature"
+  ],
+  "properties": {
+    "schema": { "const": "sle.dispute-decision/v1" },
+    "case_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "credit_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "resolver_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "outcome": { "enum": ["CLAIM_UPHELD", "DISPUTE_UPHELD"] },
+    "rationale_digest": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+    "decided_at": { "type": "string", "format": "date-time" },
+    "expected_version": { "type": "integer", "minimum": 0 },
+    "key_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "signature": { "type": "string", "contentEncoding": "base64", "minLength": 1 }
+  }
+}

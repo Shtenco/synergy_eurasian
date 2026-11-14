@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/sle_award_registry_record.schema.json",
+  "title": "SYNERGY SLE Global Award Registry Record V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "award_id",
+    "source_contribution_id",
+    "result_digest",
+    "authorization_digest",
+    "authorization_json",
+    "beneficiary_id",
+    "issuer_id",
+    "service_code",
+    "unit",
+    "quantity",
+    "capacity_id",
+    "status",
+    "credit_id",
+    "ledger_event_id",
+    "ledger_event_hash",
+    "reserved_at",
+    "consumed_at"
+  ],
+  "properties": {
+    "award_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "source_contribution_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "result_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "authorization_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "beneficiary_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "issuer_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "service_code": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "unit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "quantity": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$"
+    },
+    "capacity_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "status": {
+      "enum": [
+        "RESERVED",
+        "CONSUMED"
+      ]
+    },
+    "credit_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ledger_event_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ledger_event_hash": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "reserved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "consumed_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "authorization_json": {
+      "type": "string",
+      "contentMediaType": "application/json"
+    }
+  }
+}
