@@ -763,3 +763,80 @@ def test_process_death_after_local_issue_recovers_from_reopened_wal_databases(tm
     assert recovered_ledger.verify_event_chain()["events_checked"] == 3
     assert recovered_registry.verify_event_chain()["events_checked"] == 2
     close_all(recovered_ledger, recovered_registry)
+
+
+def _crash_after_reservation_before_local_issue(
+    registry_path, envelope, key_registry,
+):
+    """Commit only the global reservation and terminate before local issuance."""
+    import os
+
+    registry = SLEAwardRegistry(registry_path)
+    registry.reserve(
+        envelope, key_registry,
+        now=datetime(2026, 11, 14, 12, 0, tzinfo=timezone.utc),
+    )
+    os._exit(74)
+
+
+def test_process_death_after_reservation_keeps_award_locked_fail_closed(tmp_path):
+    """An expired stranded reservation cannot be silently released or re-awarded."""
+    import multiprocessing
+
+    registry_path = tmp_path / "stranded-reservation.sqlite"
+    registry = SLEAwardRegistry(registry_path)
+    private = Ed25519PrivateKey.generate()
+    public = private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    keys = {
+        "reward-key-1": {
+            "principal_id": "reward-authorizer-1",
+            "roles": ["REWARD_AUTHORIZER"],
+            "public_key_b64": base64.b64encode(public).decode("ascii"),
+            "valid_from": "2026-01-01T00:00:00Z",
+            "valid_until": "2028-01-01T00:00:00Z",
+            "revoked_at": None,
+        }
+    }
+    envelope = signed_award(private, expires_at="2026-11-15T00:00:00Z")
+    registry.close()
+
+    context = multiprocessing.get_context("spawn")
+    process = context.Process(
+        target=_crash_after_reservation_before_local_issue,
+        args=(str(registry_path), envelope, keys),
+    )
+    process.start()
+    process.join(timeout=25)
+    if process.is_alive():
+        process.terminate()
+        process.join(timeout=5)
+        pytest.fail("reservation crash simulation process did not terminate")
+    assert process.exitcode == 74
+
+    recovered = SLEAwardRegistry(registry_path)
+    ledger = LaborCreditLedger()
+    after_expiry = datetime(2026, 11, 16, 12, 0, tzinfo=timezone.utc)
+    with pytest.raises(AwardRegistryError):
+        issue_authorized_credit(
+            ledger, recovered, envelope, keys, now=after_expiry,
+            due_at="2030-01-01T00:00:00Z", credit_id="never-issued-credit",
+            idempotency_key="never-issued-request",
+        )
+    assert recovered.get_award("award-global-1")["status"] == "RESERVED"
+    assert ledger.verify_event_chain()["events_checked"] == 0
+    assert recovered.verify_event_chain()["events_checked"] == 1
+    assert recovered.verify_projection_consistency()["valid"] is True
+
+    competing = signed_award(
+        private, award_id="award-after-stranded",
+        contribution_id="contribution-global-1",
+        result_digest=hashlib.sha256(b"different attempted award").hexdigest(),
+    )
+    with pytest.raises(AwardRegistryError, match="already reserved"):
+        recovered.reserve(competing, keys, now=after_expiry)
+    assert recovered.verify_event_chain()["events_checked"] == 1
+    assert recovered.verify_projection_consistency()["valid"] is True
+    close_all(ledger, recovered)
