@@ -28,6 +28,8 @@ class AnchorService:
                 parts = urlsplit(self.path).path.strip("/").split("/")
                 return unquote(parts[2]) if len(parts) == 4 and parts[:2] == ["v1", "registries"] and parts[3] == "checkpoints" else None
             def do_GET(self):
+                if self.headers.get("Authorization") != "Bearer test-token":
+                    return self.send_json(401, {"error":"unauthorized"})
                 rid = self.registry_id()
                 if rid is None: return self.send_json(404, {})
                 with service.lock: rows = list(service.records.get(rid, []))
@@ -36,6 +38,8 @@ class AnchorService:
                 nxt = str(start+2) if start+2 < len(rows) else None
                 self.send_json(200, {"items": page, "next_cursor": nxt})
             def do_POST(self):
+                if self.headers.get("Authorization") != "Bearer test-token":
+                    return self.send_json(401, {"error":"unauthorized"})
                 rid = self.registry_id()
                 if rid is None: return self.send_json(404, {})
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
@@ -43,7 +47,7 @@ class AnchorService:
                 with service.lock:
                     rows = service.records.setdefault(rid, [])
                     actual = _digest(rows[-1]) if rows else GENESIS_HASH
-                    if expected != actual or record.get("previous_checkpoint_digest") != actual:
+                    if expected != actual or self.headers.get("If-Match") != actual or record.get("previous_checkpoint_digest") != actual:
                         return self.send_json(409, {"error":"stale"})
                     digest = _digest(record)
                     if self.headers.get("Idempotency-Key") != digest:
@@ -103,3 +107,9 @@ def test_remote_adapter_rejects_insecure_urls_and_missing_token():
         HttpCheckpointAnchorStore("http://example.com", lambda:"secret")
     with pytest.raises(CheckpointError, match="token"):
         HttpCheckpointAnchorStore("http://127.0.0.1:1234", lambda:"")
+
+def test_remote_adapter_fails_closed_when_authentication_token_is_missing(service_url):
+    url, _ = service_url
+    store = HttpCheckpointAnchorStore(url, lambda:"")
+    with pytest.raises(CheckpointError, match="token"):
+        store.list_checkpoints("registry-auth")
