@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from synergy_v66.continuous_default_experiments import (
+    Q3_CASH_FLOOR,
     Q3_CYCLES,
     _build_scenario,
     _run_one,
