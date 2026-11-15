@@ -53,6 +53,10 @@ class DuplicateIssuanceClaim(PostgresLedgerError):
     pass
 
 
+class DuplicateBurnClaim(PostgresLedgerError):
+    pass
+
+
 class PostgresLedger:
     GENESIS_HASH = "0" * 64
 
@@ -567,6 +571,13 @@ class PostgresLedger:
 
                     if issuance_claim is not None:
                         self._lock_and_consume_epoch_budget(cur, issuance_claim)
+                    if burn_claim is not None:
+                        cur.execute(
+                            "SELECT 1 FROM sdu_burn_claims WHERE burn_id=%s",
+                            (burn_claim.burn_id,),
+                        )
+                        if cur.fetchone() is not None:
+                            raise DuplicateBurnClaim("burn claim has already been consumed")
 
                     if event_type == "SDU_MINT":
                         expected_counter = ("SDU", "system_issuance", True, False, False)
