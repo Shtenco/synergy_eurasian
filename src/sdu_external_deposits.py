@@ -108,6 +108,24 @@ class ExternalDepositVerifier:
                 raise ExternalDepositError("verifier IDs and 32-byte keys are required")
         if not supported_chains or not supported_assets:
             raise ExternalDepositError("supported chain and asset allowlists are required")
+        if any(not isinstance(chain, str) or not chain.strip() for chain in supported_chains):
+            raise ExternalDepositError("supported chain IDs must be non-empty strings")
+        if any(not isinstance(asset, str) or not asset.strip() for asset in supported_assets):
+            raise ExternalDepositError("supported asset symbols must be non-empty strings")
+        if not supported_chains.issubset(minimum_confirmations):
+            raise ExternalDepositError("minimum confirmations must be configured for every supported chain")
+        if not supported_assets.issubset(maximum_amounts):
+            raise ExternalDepositError("maximum deposit amount must be configured for every supported asset")
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in minimum_confirmations.values()
+        ):
+            raise ExternalDepositError("minimum confirmation counts must be non-negative integers")
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value <= 0
+            for value in maximum_amounts.values()
+        ):
+            raise ExternalDepositError("maximum deposit amounts must be positive integers")
         self._keys = dict(verifier_keys)
         self.threshold = threshold
         self.supported_chains = set(supported_chains)
