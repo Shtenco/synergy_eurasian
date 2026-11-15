@@ -312,3 +312,21 @@ def test_system_account_configuration_cannot_be_preseeded_incorrectly():
     ledger.create_account(Account("system:issuance:SDU", "SDU", kind="wallet"))
     with pytest.raises(ValidationError, match="system account configuration mismatch"):
         ledger.issue("alice", 10, approval_ref="a1", idempotency_key="mint-1")
+
+
+def test_sdu_issuance_cannot_mint_external_usdc():
+    ledger = make_ledger()
+    with pytest.raises(ValidationError, match="cannot mint external assets"):
+        ledger.issue(
+            "alice_usdc", 10, approval_ref="fake-usdc", idempotency_key="mint-usdc"
+        )
+    assert ledger.balance_of("alice_usdc", "USDC") == 0
+
+
+def test_sdu_burn_engine_cannot_burn_external_usdc():
+    ledger = make_ledger()
+    with pytest.raises(ValidationError, match="cannot burn external assets"):
+        ledger.burn(
+            "alice_usdc", 10, idempotency_key="burn-usdc", actor_id="protocol"
+        )
+    assert ledger.balance_of("alice_usdc", "USDC") == 0
