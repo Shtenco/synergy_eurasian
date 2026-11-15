@@ -60,6 +60,7 @@ jobs:
           tests/test_sdu_accounting_core.py
           tests/test_sdu_issuance_authorization.py
           tests/test_sdu_burn_authorization.py
+          tests/test_sdu_external_deposits.py
           tests/test_sdu_ledger_checkpoints.py
           tests/test_sdu_postgres_ledger.py
 
