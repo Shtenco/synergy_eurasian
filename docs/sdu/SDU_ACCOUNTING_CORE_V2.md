@@ -197,7 +197,25 @@ The dedicated GitHub Actions workflow starts an ephemeral PostgreSQL 16 service,
 
 The repository-wide EIIOM CI has a separate pre-existing test-collection failure involving missing `synergy_v66.credit` on the base branch. This SDU workflow does not hide or claim to repair that unrelated failure.
 
-## 10. Constitutional compatibility
+## 10. Production release gates — mandatory, not optional
+
+The research ledger must remain non-production until every gate below has an independently reviewable artifact and passing test evidence.
+
+| Gate | Minimum acceptance evidence |
+|---|---|
+| Cryptographic identity | Replace every HMAC authorization/checkpoint path with asymmetric signatures; validators sign with separately held private keys; ledger service verifies with public keys only; key IDs, policy version, rotation, revocation and threshold changes are auditable. |
+| External-chain truth | Independent chain clients/light clients or audited proof providers verify chain ID, canonical transaction, exact transfer/log index, token contract/native denomination, amount, decimals, destination, block inclusion and finality. |
+| Reorganizations | Define finality per chain, monitor reorgs, freeze affected credits, reconcile and record compensating journal events; never delete or rewrite historical events. |
+| Custody and reserves | Reconcile credited external-asset liabilities against independently attested wallet/custody balances. A ledger credit must never be labelled as AMM reserve liquidity until funds are actually controlled by the pool. |
+| Database authority | Deploy a non-owner runtime role with explicit least-privilege grants; prove it cannot alter schema, triggers, journal rows, balances, epoch budgets or authorization records outside approved stored operations. |
+| Independent audit | Publish signed checkpoints to an independently administered append-only anchor; test recovery from a database restore and detection of a rewritten/truncated database history. |
+| AMM settlement | Approve the exact canonical asymmetric buy/sell reserve movements, fees, burn semantics, rounding, min-out, oracle freshness and sandwich controls; add invariant/property tests before enabling swaps. |
+| Operational resilience | Load, concurrency, failover, backup/restore, incident response, monitoring, key-compromise and validator-unavailability exercises pass. |
+| Governance and legal review | Define verifier independence, appeals, anti-Sybil, DAO authority limits, change control, jurisdictional obligations and user disclosures. No redemption or price guarantee is implied. |
+
+A green focused CI run is necessary but does not satisfy these production gates.
+
+## 11. Constitutional compatibility
 
 This increment preserves the intended research constitution:
 - **ALL:** anyone may initiate an issuance claim; initiation is not unilateral mint authority.
