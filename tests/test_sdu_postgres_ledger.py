@@ -46,7 +46,8 @@ def clean_database(install_schema):
     with psycopg.connect(DATABASE_URL) as conn:
         conn.execute(
             """TRUNCATE TABLE
-               sdu_checkpoints, sdu_issuance_claims, sdu_idempotency,
+               sdu_checkpoints, sdu_external_deposit_claims, sdu_burn_claims,
+               sdu_issuance_claims, sdu_idempotency,
                sdu_postings, sdu_events, sdu_balances, sdu_accounts,
                sdu_assets, sdu_epoch_issuance
                RESTART IDENTITY CASCADE"""
@@ -445,3 +446,41 @@ def test_external_transaction_cannot_be_credited_twice_with_new_claim():
             idempotency_key="deposit-replay-2", actor_id="deposit-service",
         )
     assert ledger.total_supply("USDC") == 100
+
+
+def test_multiple_token_transfers_in_one_chain_transaction_are_distinct_deposits():
+    ledger = make_ledger()
+    verifier_keys = {"verifier-a": b"a" * 32, "verifier-b": b"b" * 32}
+    verifier = ExternalDepositVerifier(
+        verifier_keys, threshold=2, supported_chains={"eth-mainnet"},
+        supported_assets={"USDC"}, minimum_confirmations={"eth-mainnet": 12},
+        maximum_amounts={"USDC": 1_000_000},
+    )
+    common = dict(
+        chain_id="eth-mainnet",
+        transaction_hash="9" * 64,
+        asset="USDC",
+        destination_account="alice_usdc",
+        block_number=21_000_002,
+        confirmations=24,
+        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+    )
+    for index, amount in ((0, 100), (1, 250)):
+        claim = ExternalDepositClaim(
+            deposit_id=f"deposit-multi-{index}",
+            amount=amount,
+            proof_digest=str(index + 1) * 64,
+            transfer_index=index,
+            **common,
+        )
+        attestations = [
+            verifier.sign_for_testing(claim, name, verifier_keys[name])
+            for name in ("verifier-a", "verifier-b")
+        ]
+        ledger.credit_external_deposit(
+            claim, attestations, verifier=verifier,
+            idempotency_key=f"deposit-multi-{index}", actor_id="deposit-service",
+        )
+    assert ledger.balance("alice_usdc", "USDC") == 350
+    assert ledger.total_supply("USDC") == 350
+    assert ledger.verify_integrity()["events"] == 2
