@@ -483,6 +483,52 @@ class PostgresLedger:
                     raise PostgresLedgerError("SDU burn events and authorized burn claims are not one-to-one")
 
                 cur.execute(
+                    """SELECT d.deposit_id,d.chain_id,d.transaction_hash,d.asset_symbol,
+                              d.amount,d.destination_account,d.proof_digest,d.claim_digest,
+                              e.event_type,e.metadata,e.event_id
+                       FROM sdu_external_deposit_claims d
+                       JOIN sdu_events e ON e.event_id=d.event_id"""
+                )
+                deposits = cur.fetchall()
+                for deposit_id, chain_id, tx_hash, asset, amount, destination, proof_digest, claim_digest, event_type, metadata, event_id in deposits:
+                    if event_type != "EXTERNAL_DEPOSIT":
+                        raise PostgresLedgerError("external deposit claim points to a non-deposit event")
+                    if not isinstance(metadata, dict):
+                        metadata = json.loads(metadata)
+                    if (
+                        metadata.get("deposit_id") != deposit_id
+                        or metadata.get("chain_id") != chain_id
+                        or metadata.get("transaction_hash") != str(tx_hash).strip()
+                        or metadata.get("asset") != asset
+                        or metadata.get("proof_digest") != str(proof_digest).strip()
+                        or metadata.get("claim_digest") != str(claim_digest).strip()
+                    ):
+                        raise PostgresLedgerError("external deposit claim metadata mismatch")
+                    cur.execute(
+                        """SELECT account_id,asset_symbol,amount FROM sdu_postings
+                           WHERE event_id=%s ORDER BY line_number""",
+                        (event_id,),
+                    )
+                    deposit_postings = cur.fetchall()
+                    deposit_totals: dict[tuple[str, str], int] = {}
+                    for account_id, posting_asset, value in deposit_postings:
+                        key = (account_id, posting_asset)
+                        deposit_totals[key] = deposit_totals.get(key, 0) + int(value)
+                    counter_account = f"system:external_deposit:{asset}"
+                    if (
+                        len(deposit_totals) != 2
+                        or deposit_totals.get((counter_account, asset)) != -int(amount)
+                        or deposit_totals.get((destination, asset)) != int(amount)
+                        or sum(deposit_totals.values()) != 0
+                        or any(posting_asset != asset for _account, posting_asset in deposit_totals)
+                    ):
+                        raise PostgresLedgerError("external deposit postings do not match verified claim")
+                cur.execute("SELECT COUNT(*) FROM sdu_events WHERE event_type='EXTERNAL_DEPOSIT'")
+                deposit_event_count = int(cur.fetchone()[0])
+                if deposit_event_count != len(deposits):
+                    raise PostgresLedgerError("external deposit events and attestations are not one-to-one")
+
+                cur.execute(
                     "SELECT next_sequence,last_event_hash FROM sdu_ledger_state WHERE singleton=TRUE"
                 )
                 state = cur.fetchone()
