@@ -29,6 +29,7 @@ from sdu_accounting_core import (
     ValidationError,
 )
 from sdu_burn_authorization import BurnAuthorizationService, BurnClaim
+from sdu_external_deposits import ExternalDepositClaim, ExternalDepositVerifier
 from sdu_issuance_authorization import (
     IssuanceAuthorizationService,
     IssuanceClaim,
@@ -54,6 +55,10 @@ class DuplicateIssuanceClaim(PostgresLedgerError):
 
 
 class DuplicateBurnClaim(PostgresLedgerError):
+    pass
+
+
+class DuplicateExternalDeposit(PostgresLedgerError):
     pass
 
 
@@ -175,7 +180,7 @@ class PostgresLedger:
         actor_id: str,
         metadata: Mapping[str, object] | None = None,
     ) -> LedgerEvent:
-        if event_type in {"SDU_MINT", "SDU_BURN", "REVERSAL"}:
+        if event_type in {"SDU_MINT", "SDU_BURN", "EXTERNAL_DEPOSIT", "REVERSAL"}:
             raise ValidationError("reserved event type requires a dedicated authorized command")
         legs = tuple(postings)
         return self._post_transaction(
@@ -246,6 +251,42 @@ class PostgresLedger:
             privileged=True,
             burn_claim=claim,
             approved_validator_ids=verified.approved_validator_ids,
+        )
+
+    def credit_external_deposit(
+        self,
+        claim: ExternalDepositClaim,
+        attestations: tuple[ValidatorApproval, ...] | list[ValidatorApproval],
+        *,
+        verifier: ExternalDepositVerifier,
+        idempotency_key: str,
+        actor_id: str,
+    ) -> LedgerEvent:
+        verified = verifier.verify(claim, attestations)
+        metadata = {
+            "approved_verifier_ids": list(verified.approved_verifier_ids),
+            "asset": claim.asset,
+            "block_number": claim.block_number,
+            "chain_id": claim.chain_id,
+            "confirmations": claim.confirmations,
+            "deposit_id": claim.deposit_id,
+            "proof_digest": claim.proof_digest,
+            "transaction_hash": claim.transaction_hash,
+            "claim_digest": verified.claim_digest,
+        }
+        counter_account = f"system:external_deposit:{claim.asset}"
+        return self._post_transaction(
+            "EXTERNAL_DEPOSIT",
+            (
+                Posting(counter_account, claim.asset, -claim.amount),
+                Posting(claim.destination_account, claim.asset, claim.amount),
+            ),
+            idempotency_key=idempotency_key,
+            actor_id=actor_id,
+            metadata=metadata,
+            privileged=True,
+            external_deposit_claim=claim,
+            approved_validator_ids=verified.approved_verifier_ids,
         )
 
     def total_supply(self, asset: str = "SDU") -> int:
@@ -525,6 +566,7 @@ class PostgresLedger:
         issuance_claim: IssuanceClaim | None = None,
         burn_claim: BurnClaim | None = None,
         approved_validator_ids: tuple[str, ...] = (),
+        external_deposit_claim: ExternalDepositClaim | None = None,
     ) -> LedgerEvent:
         if not event_type or not event_type.strip():
             raise ValidationError("event_type is required")
@@ -578,6 +620,16 @@ class PostgresLedger:
                         )
                         if cur.fetchone() is not None:
                             raise DuplicateBurnClaim("burn claim has already been consumed")
+                    if external_deposit_claim is not None:
+                        cur.execute(
+                            """SELECT 1 FROM sdu_external_deposit_claims
+                               WHERE deposit_id=%s OR
+                                     (chain_id=%s AND transaction_hash=%s AND asset_symbol=%s)""",
+                            (external_deposit_claim.deposit_id, external_deposit_claim.chain_id,
+                             external_deposit_claim.transaction_hash, external_deposit_claim.asset),
+                        )
+                        if cur.fetchone() is not None:
+                            raise DuplicateExternalDeposit("external transaction has already been credited")
 
                     if event_type == "SDU_MINT":
                         expected_counter = ("SDU", "system_issuance", True, False, False)
@@ -631,6 +683,36 @@ class PostgresLedger:
                             """INSERT INTO sdu_balances(account_id,asset_symbol,balance)
                                VALUES ('system:burn:SDU','SDU',0)
                                ON CONFLICT (account_id,asset_symbol) DO NOTHING"""
+                        )
+
+                    if event_type == "EXTERNAL_DEPOSIT":
+                        if external_deposit_claim is None:
+                            raise ValidationError("external deposit requires verified quorum attestations")
+                        counter_account = f"system:external_deposit:{external_deposit_claim.asset}"
+                        expected_kind = "system_external_deposit"
+                        cur.execute(
+                            """INSERT INTO sdu_accounts
+                               (account_id,asset_symbol,account_kind,allow_negative,
+                                counts_toward_supply,burnable)
+                               VALUES (%s,%s,%s,TRUE,FALSE,FALSE)
+                               ON CONFLICT (account_id,asset_symbol) DO NOTHING""",
+                            (counter_account, external_deposit_claim.asset, expected_kind),
+                        )
+                        cur.execute(
+                            """SELECT account_kind,allow_negative,counts_toward_supply,burnable
+                               FROM sdu_accounts WHERE account_id=%s AND asset_symbol=%s FOR UPDATE""",
+                            (counter_account, external_deposit_claim.asset),
+                        )
+                        counter_policy = cur.fetchone()
+                        if counter_policy is None or (
+                            str(counter_policy[0]), bool(counter_policy[1]),
+                            bool(counter_policy[2]), bool(counter_policy[3])
+                        ) != (expected_kind, True, False, False):
+                            raise ValidationError("external deposit counter configuration mismatch")
+                        cur.execute(
+                            """INSERT INTO sdu_balances(account_id,asset_symbol,balance)
+                               VALUES (%s,%s,0) ON CONFLICT (account_id,asset_symbol) DO NOTHING""",
+                            (counter_account, external_deposit_claim.asset),
                         )
 
                     account_policies: dict[tuple[str, str], tuple[bool, bool, bool, str]] = {}
@@ -691,6 +773,24 @@ class PostgresLedger:
                         counter_policy = account_policies.get(("system:burn:SDU", "SDU"))
                         if counter_policy is None or counter_policy[3] != "system_burn":
                             raise ValidationError("system burn counter is missing")
+                    elif event_type == "EXTERNAL_DEPOSIT":
+                        if not privileged or external_deposit_claim is None:
+                            raise ValidationError("external deposit requires a verified deposit command")
+                        if any(asset != external_deposit_claim.asset for asset in per_asset):
+                            raise ValidationError("external deposit cannot credit a different asset")
+                        destination_policy = account_policies.get(
+                            (external_deposit_claim.destination_account, external_deposit_claim.asset)
+                        )
+                        if (
+                            destination_policy is None
+                            or not destination_policy[1]
+                            or destination_policy[3].startswith("system_")
+                        ):
+                            raise ValidationError("deposit destination must be a spendable asset account")
+                        counter_account = f"system:external_deposit:{external_deposit_claim.asset}"
+                        counter_policy = account_policies.get((counter_account, external_deposit_claim.asset))
+                        if counter_policy is None or counter_policy[3] != "system_external_deposit":
+                            raise ValidationError("external deposit contra-account is missing")
                     elif privileged:
                         raise ValidationError("unsupported privileged operation")
 
@@ -735,6 +835,20 @@ class PostgresLedger:
                                VALUES (%s,%s,%s,%s,%s)""",
                             (issuance_claim.claim_id, issuance_claim.epoch_id, event_id,
                              issuance_claim.amount, issuance_claim.evidence_digest),
+                        )
+                    if external_deposit_claim is not None:
+                        cur.execute(
+                            """INSERT INTO sdu_external_deposit_claims
+                               (deposit_id,event_id,chain_id,transaction_hash,asset_symbol,
+                                amount,destination_account,block_number,confirmations,
+                                proof_digest,claim_digest,approved_verifier_ids)
+                               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)""",
+                            (external_deposit_claim.deposit_id, event_id,
+                             external_deposit_claim.chain_id, external_deposit_claim.transaction_hash,
+                             external_deposit_claim.asset, external_deposit_claim.amount,
+                             external_deposit_claim.destination_account, external_deposit_claim.block_number,
+                             external_deposit_claim.confirmations, external_deposit_claim.proof_digest,
+                             metadata["claim_digest"], json.dumps(list(approved_validator_ids))),
                         )
                     if burn_claim is not None:
                         cur.execute(
