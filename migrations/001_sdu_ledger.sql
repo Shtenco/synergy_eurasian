@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS sdu_external_deposit_claims (
     event_id UUID NOT NULL UNIQUE REFERENCES sdu_events(event_id),
     chain_id TEXT NOT NULL,
     transaction_hash CHAR(64) NOT NULL,
+    transfer_index INTEGER NOT NULL DEFAULT 0 CHECK (transfer_index >= 0),
     asset_symbol TEXT NOT NULL REFERENCES sdu_assets(symbol),
     amount NUMERIC NOT NULL CHECK (amount > 0 AND amount = trunc(amount)),
     destination_account TEXT NOT NULL,
@@ -100,7 +101,7 @@ CREATE TABLE IF NOT EXISTS sdu_external_deposit_claims (
     claim_digest CHAR(64) NOT NULL,
     approved_verifier_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (chain_id, transaction_hash, asset_symbol)
+    UNIQUE (chain_id, transaction_hash, asset_symbol, transfer_index)
 );
 
 CREATE TABLE IF NOT EXISTS sdu_burn_claims (
