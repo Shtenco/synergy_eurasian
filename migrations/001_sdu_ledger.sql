@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS sdu_external_deposit_claims (
     transaction_hash CHAR(64) NOT NULL,
     transfer_index INTEGER NOT NULL DEFAULT 0 CHECK (transfer_index >= 0),
     asset_symbol TEXT NOT NULL REFERENCES sdu_assets(symbol),
+    asset_reference TEXT NOT NULL CHECK (asset_reference <> '' AND asset_reference = btrim(asset_reference)),
     amount NUMERIC NOT NULL CHECK (amount > 0 AND amount = trunc(amount)),
     destination_account TEXT NOT NULL,
     block_number NUMERIC NOT NULL CHECK (block_number >= 0 AND block_number = trunc(block_number)),
@@ -107,6 +108,8 @@ CREATE TABLE IF NOT EXISTS sdu_external_deposit_claims (
 -- Safe re-application for databases created from an earlier research draft.
 ALTER TABLE sdu_external_deposit_claims
     ADD COLUMN IF NOT EXISTS transfer_index INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sdu_external_deposit_claims
+    ADD COLUMN IF NOT EXISTS asset_reference TEXT NOT NULL DEFAULT 'legacy-unverified';
 ALTER TABLE sdu_external_deposit_claims
     DROP CONSTRAINT IF EXISTS sdu_external_deposit_claims_chain_id_transaction_hash_asset_symbol_key;
 CREATE UNIQUE INDEX IF NOT EXISTS sdu_external_deposit_transfer_identity
