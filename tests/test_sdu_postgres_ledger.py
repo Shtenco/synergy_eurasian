@@ -418,7 +418,8 @@ def test_external_transaction_cannot_be_credited_twice_with_new_claim():
     )
     claim = ExternalDepositClaim(
         deposit_id="deposit-replay-1", chain_id="eth-mainnet",
-        transaction_hash="e" * 64, asset="USDC", amount=100,
+        transaction_hash="e" * 64, asset="USDC",
+        asset_reference="0x" + "1" * 40, amount=100,
         destination_account="alice_usdc", block_number=21_000_001,
         confirmations=18, proof_digest="f" * 64,
         expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
