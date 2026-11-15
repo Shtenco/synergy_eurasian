@@ -47,12 +47,15 @@ class ExternalDepositClaim:
             ("deposit_id", self.deposit_id),
             ("chain_id", self.chain_id),
             ("destination_account", self.destination_account),
+            ("asset", self.asset),
+            ("asset_reference", self.asset_reference),
+            ("expires_at", self.expires_at),
         ):
-            if not value or value.strip() != value:
-                raise ExternalDepositError(f"{name} is required and must be trimmed")
-        if not _HEX_64.fullmatch(self.transaction_hash):
+            if not isinstance(value, str) or not value or value.strip() != value:
+                raise ExternalDepositError(f"{name} is required and must be a trimmed string")
+        if not isinstance(self.transaction_hash, str) or not _HEX_64.fullmatch(self.transaction_hash):
             raise ExternalDepositError("transaction_hash must be lowercase 32-byte hex")
-        if not _HEX_64.fullmatch(self.proof_digest):
+        if not isinstance(self.proof_digest, str) or not _HEX_64.fullmatch(self.proof_digest):
             raise ExternalDepositError("proof_digest must be lowercase SHA-256 hex")
         if not self.asset or self.asset.strip() != self.asset:
             raise ExternalDepositError("asset is required")
@@ -113,8 +116,12 @@ class ExternalDepositVerifier:
         if threshold < 1 or threshold > len(verifier_keys):
             raise ExternalDepositError("invalid external verifier threshold")
         for verifier_id, key in verifier_keys.items():
-            if not verifier_id or not isinstance(key, bytes) or len(key) < 32:
-                raise ExternalDepositError("verifier IDs and 32-byte keys are required")
+            if (
+                not isinstance(verifier_id, str) or not verifier_id
+                or verifier_id.strip() != verifier_id
+                or not isinstance(key, bytes) or len(key) < 32
+            ):
+                raise ExternalDepositError("trimmed verifier IDs and 32-byte keys are required")
         if not supported_chains or not supported_assets:
             raise ExternalDepositError("supported chain and asset allowlists are required")
         if any(
@@ -191,8 +198,19 @@ class ExternalDepositVerifier:
         if expiry.astimezone(timezone.utc) <= current.astimezone(timezone.utc):
             raise ExternalDepositError("deposit attestation has expired")
 
+        if not isinstance(attestations, (tuple, list)):
+            raise ExternalDepositError("attestations must be a list or tuple")
         valid: set[str] = set()
         for attestation in attestations:
+            if not isinstance(attestation, ValidatorApproval):
+                raise ExternalDepositError("invalid external verifier attestation record")
+            if (
+                not isinstance(attestation.validator_id, str) or not attestation.validator_id
+                or attestation.validator_id.strip() != attestation.validator_id
+                or not isinstance(attestation.signature_hex, str)
+                or not _HEX_64.fullmatch(attestation.signature_hex)
+            ):
+                raise ExternalDepositError("attestation signer ID or signature is not canonical")
             if attestation.validator_id in valid:
                 raise ExternalDepositError("duplicate external verifier attestation")
             secret = self._keys.get(attestation.validator_id)
