@@ -122,8 +122,6 @@ def plan_reserve_recovery(
     """Build a non-mutating recovery plan with local reserves funded first."""
     if allocation_rule not in ALLOCATION_RULES:
         raise ValueError(f"allocation_rule must be one of {sorted(ALLOCATION_RULES)}")
-    if ledger.current_day < 0:
-        raise ValueError("ledger must be initialized with process_day before reserve recovery planning")
     if not isinstance(target_regional_by_region, dict) or set(target_regional_by_region) != set(ledger.regions):
         raise ValueError("target_regional_by_region must contain every known region exactly once")
     if isinstance(target_federation, bool) or not isinstance(target_federation, (int, float)) or not math.isfinite(float(target_federation)) or target_federation < 0:
@@ -140,6 +138,8 @@ def plan_reserve_recovery(
         or not 0 <= fraction <= ledger.reserve_recovery_contribution_fraction
     ):
         raise ValueError("contribution_fraction_per_period cannot exceed the ledger policy cap")
+    if ledger.current_day < 0:
+        raise ValueError("ledger must be initialized with process_day before reserve recovery planning")
     expected_period_id = f"day-window-{ledger.current_day // RECOVERY_PERIOD_DAYS}"
     if recovery_period_id is not None and recovery_period_id != expected_period_id:
         raise ValueError(f"recovery_period_id must be the ledger-defined {expected_period_id}")
