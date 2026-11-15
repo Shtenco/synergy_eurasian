@@ -123,18 +123,18 @@ def test_atomic_multicurrency_settlement_balances_both_assets():
     ledger.issue("alice", 100, approval_ref="a1", idempotency_key="mint-sdu")
     ledger.create_account(
         Account(
-            "system:usdc_genesis",
+            "external:usdc_genesis",
             "USDC",
             allow_negative=True,
             counts_toward_supply=False,
-            kind="system_genesis",
+            kind="external_genesis",
             burnable=False,
         )
     )
     ledger.post(
         "GENESIS_USDC",
         (
-            Posting("system:usdc_genesis", "USDC", -7),
+            Posting("external:usdc_genesis", "USDC", -7),
             Posting("alice_usdc", "USDC", 7),
         ),
         idempotency_key="genesis-usdc",
@@ -261,3 +261,20 @@ def test_rebuild_balances_matches_live_projection():
     rebuilt = ledger.rebuild_balances()
     assert rebuilt[("alice", "SDU")] == ledger.balance("alice") == 75
     assert rebuilt[("bob", "SDU")] == ledger.balance("bob") == 25
+
+
+def test_public_post_cannot_bypass_issuance_gate():
+    ledger = make_ledger()
+    ledger.issue("alice", 100, approval_ref="a1", idempotency_key="mint-1")
+    with pytest.raises(ValidationError):
+        ledger.post(
+            "FORGED_MINT",
+            (
+                Posting("system:issuance:SDU", "SDU", -50),
+                Posting("bob", "SDU", 50),
+            ),
+            idempotency_key="forged",
+            actor_id="attacker",
+        )
+    assert ledger.total_supply("SDU") == 100
+    assert ledger.balance("bob") == 0
