@@ -7,6 +7,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from sdu_issuance_authorization import ValidatorApproval
 from sdu_external_deposits import (
     ExternalDepositClaim,
     ExternalDepositError,
@@ -158,3 +159,22 @@ def test_external_verifier_rejects_noncanonical_allowlist_identifiers():
             minimum_confirmations={" eth-mainnet ": 12},
             maximum_amounts={"USDC": 1000},
         )
+
+
+def test_external_deposit_rejects_non_string_fields_and_malformed_attestations():
+    for field in ("deposit_id", "chain_id", "destination_account", "asset", "asset_reference", "expires_at"):
+        with pytest.raises(ExternalDepositError, match=field):
+            make_claim(**{field: None}).canonical_payload()
+    with pytest.raises(ExternalDepositError, match="transaction_hash"):
+        make_claim(transaction_hash=123).canonical_payload()
+    with pytest.raises(ExternalDepositError, match="proof_digest"):
+        make_claim(proof_digest=123).canonical_payload()
+
+    keys, verifier = make_verifier()
+    claim = make_claim()
+    with pytest.raises(ExternalDepositError, match="attestation record"):
+        verifier.verify(claim, [object()])
+    with pytest.raises(ExternalDepositError, match="canonical"):
+        verifier.verify(claim, [ValidatorApproval("verifier-a", "not-a-signature")])
+    with pytest.raises(ExternalDepositError, match="list or tuple"):
+        verifier.verify(claim, iter(sign(claim, keys, verifier)))
