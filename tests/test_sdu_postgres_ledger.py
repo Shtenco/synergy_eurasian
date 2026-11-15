@@ -492,3 +492,55 @@ def test_multiple_token_transfers_in_one_chain_transaction_are_distinct_deposits
     assert ledger.balance("alice_usdc", "USDC") == 350
     assert ledger.total_supply("USDC") == 350
     assert ledger.verify_integrity()["events"] == 2
+
+
+def test_concurrent_external_deposit_replay_is_credited_exactly_once():
+    ledger = make_ledger()
+    keys = {"verifier-a": b"a" * 32, "verifier-b": b"b" * 32}
+    verifier = ExternalDepositVerifier(
+        keys, threshold=2, supported_chains={"eth-mainnet"},
+        supported_assets={"USDC"},
+        asset_references={("eth-mainnet", "USDC"): "0x" + "1" * 40},
+        minimum_confirmations={"eth-mainnet": 12},
+        maximum_amounts={"USDC": 1_000_000},
+    )
+    common = dict(
+        chain_id="eth-mainnet",
+        transaction_hash="a" * 64,
+        asset="USDC",
+        asset_reference="0x" + "1" * 40,
+        amount=175,
+        destination_account="alice_usdc",
+        block_number=21_000_003,
+        confirmations=24,
+        proof_digest="b" * 64,
+        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+    )
+    claims = [
+        ExternalDepositClaim(deposit_id=f"concurrent-{i}", **common)
+        for i in (1, 2)
+    ]
+    signed = [
+        [
+            verifier.sign_for_testing(claim, name, keys[name])
+            for name in ("verifier-a", "verifier-b")
+        ]
+        for claim in claims
+    ]
+
+    def credit(index):
+        try:
+            ledger.credit_external_deposit(
+                claims[index], signed[index], verifier=verifier,
+                idempotency_key=f"concurrent-deposit-{index}", actor_id="deposit-service",
+            )
+            return "credited"
+        except DuplicateExternalDeposit:
+            return "duplicate"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(credit, (0, 1)))
+    assert sorted(results) == ["credited", "duplicate"]
+    assert ledger.balance("alice_usdc", "USDC") == 175
+    assert ledger.total_supply("USDC") == 175
+    assert ledger.verify_integrity()["events"] == 1
