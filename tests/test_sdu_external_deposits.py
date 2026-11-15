@@ -115,7 +115,6 @@ def test_external_verifier_requires_complete_chain_and_asset_policy():
         ExternalDepositVerifier(
             keys, threshold=1, supported_chains={"eth-mainnet"},
             supported_assets={"USDC"}, asset_references={("eth-mainnet", "USDC"): "0x" + "1" * 40}, minimum_confirmations={},
-            asset_references={("eth-mainnet", "USDC"): "0x" + "1" * 40},
             maximum_amounts={"USDC": 1000},
         )
     with pytest.raises(ExternalDepositError, match="maximum deposit"):
