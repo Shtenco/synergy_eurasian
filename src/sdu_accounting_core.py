@@ -178,7 +178,7 @@ class Ledger:
             self._ensure_system_account(system_id, account.asset, "issuance")
             data = dict(metadata or {})
             data["approval_ref"] = approval_ref
-            return self.post(
+            return self._post(
                 "SDU_MINT",
                 (Posting(system_id, account.asset, -amount), Posting(destination, account.asset, amount)),
                 idempotency_key=idempotency_key, actor_id=actor_id, metadata=data,
@@ -198,7 +198,7 @@ class Ledger:
                 raise ValidationError(f"burn is not permitted from account {source}")
             system_id = f"system:burn:{account.asset}"
             self._ensure_system_account(system_id, account.asset, "burn")
-            return self.post(
+            return self._post(
                 "SDU_BURN",
                 (Posting(source, account.asset, -amount), Posting(system_id, account.asset, amount)),
                 idempotency_key=idempotency_key, actor_id=actor_id, metadata=metadata,
@@ -218,6 +218,24 @@ class Ledger:
         )
 
     def post(
+        self, event_type: str, postings: Iterable[Posting], *,
+        idempotency_key: str, actor_id: str,
+        metadata: Mapping[str, object] | None = None,
+        timestamp: datetime | None = None,
+    ) -> LedgerEvent:
+        """Post an ordinary transaction; system accounts are command-gated."""
+        legs = tuple(postings)
+        with self._lock:
+            for leg in legs:
+                account = self._accounts.get(leg.account_id)
+                if account is not None and account.kind.startswith("system_"):
+                    raise ValidationError("system accounts may only be used by privileged commands")
+            return self._post(
+                event_type, legs, idempotency_key=idempotency_key,
+                actor_id=actor_id, metadata=metadata, timestamp=timestamp,
+            )
+
+    def _post(
         self, event_type: str, postings: Iterable[Posting], *,
         idempotency_key: str, actor_id: str,
         metadata: Mapping[str, object] | None = None,
@@ -299,13 +317,13 @@ class Ledger:
                 existing = next((e for e in self._events
                                  if e.event_type == "REVERSAL"
                                  and e.metadata.get("original_event_id") == event_id), None)
-                if existing is not None and existing.idempotency_key == idempotency_key:
+                if existing is not None and existing.idempotency_key == idempotency_key and existing.actor_id == actor_id:
                     return existing
                 raise ValidationError("event has already been reversed")
             if original.event_type == "REVERSAL":
                 raise ValidationError("reversal events cannot be reversed in this prototype")
             inverse = tuple(Posting(p.account_id, p.asset, -p.amount) for p in original.postings)
-            return self.post(
+            return self._post(
                 "REVERSAL", inverse, idempotency_key=idempotency_key,
                 actor_id=actor_id, metadata={"original_event_id": event_id},
             )
