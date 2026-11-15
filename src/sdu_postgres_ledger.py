@@ -397,6 +397,47 @@ class PostgresLedger:
                         raise PostgresLedgerError(f"epoch {epoch_id} exceeds its issuance budget")
 
                 cur.execute(
+                    """SELECT b.burn_id,b.source_account,b.amount,b.burn_scope,
+                              b.claim_digest,b.approved_validator_ids,e.event_type,e.metadata,e.event_id
+                       FROM sdu_burn_claims b
+                       JOIN sdu_events e ON e.event_id=b.event_id"""
+                )
+                burn_claims = cur.fetchall()
+                for burn_id, source_account, amount, burn_scope, claim_digest, validator_ids, event_type, metadata, event_id in burn_claims:
+                    if event_type != "SDU_BURN":
+                        raise PostgresLedgerError("burn claim points to a non-burn event")
+                    if not isinstance(metadata, dict):
+                        metadata = json.loads(metadata)
+                    if (
+                        metadata.get("burn_id") != burn_id
+                        or metadata.get("burn_scope") != burn_scope
+                        or metadata.get("claim_digest") != str(claim_digest).strip()
+                    ):
+                        raise PostgresLedgerError("burn claim metadata mismatch")
+                    cur.execute(
+                        """SELECT account_id,asset_symbol,amount FROM sdu_postings
+                           WHERE event_id=%s ORDER BY line_number""",
+                        (event_id,),
+                    )
+                    burn_postings = cur.fetchall()
+                    burn_totals: dict[tuple[str, str], int] = {}
+                    for account_id, asset, value in burn_postings:
+                        key = (account_id, asset)
+                        burn_totals[key] = burn_totals.get(key, 0) + int(value)
+                    if (
+                        len(burn_totals) != 2
+                        or burn_totals.get((source_account, "SDU")) != -int(amount)
+                        or burn_totals.get(("system:burn:SDU", "SDU")) != int(amount)
+                        or sum(burn_totals.values()) != 0
+                        or any(asset != "SDU" for _account, asset in burn_totals)
+                    ):
+                        raise PostgresLedgerError("burn postings do not exactly match burn claim")
+                cur.execute("SELECT COUNT(*) FROM sdu_events WHERE event_type='SDU_BURN'")
+                burn_event_count = int(cur.fetchone()[0])
+                if burn_event_count != len(burn_claims):
+                    raise PostgresLedgerError("SDU burn events and authorized burn claims are not one-to-one")
+
+                cur.execute(
                     "SELECT next_sequence,last_event_hash FROM sdu_ledger_state WHERE singleton=TRUE"
                 )
                 state = cur.fetchone()
