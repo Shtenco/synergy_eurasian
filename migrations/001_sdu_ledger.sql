@@ -142,3 +142,83 @@ FOR EACH ROW EXECUTE FUNCTION sdu_reject_ledger_mutation();
 -- Runtime database role must not own tables, alter schema, disable triggers,
 -- or write directly to balances / ledger_state / epoch counters.
 -- Grant only required SELECT/INSERT/UPDATE privileges through deployment config.
+
+
+-- Defense in depth: even a direct balance update cannot make a spendable
+-- account negative. Runtime role must still be denied direct table writes.
+CREATE OR REPLACE FUNCTION sdu_guard_negative_balance()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+    negative_allowed BOOLEAN;
+BEGIN
+    SELECT allow_negative INTO negative_allowed
+    FROM sdu_accounts
+    WHERE account_id=NEW.account_id AND asset_symbol=NEW.asset_symbol;
+    IF negative_allowed IS NULL THEN
+        RAISE EXCEPTION 'unknown SDU account balance target';
+    END IF;
+    IF NEW.balance < 0 AND NOT negative_allowed THEN
+        RAISE EXCEPTION 'negative balance forbidden for account %', NEW.account_id;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS sdu_balance_nonnegative ON sdu_balances;
+CREATE TRIGGER sdu_balance_nonnegative
+BEFORE INSERT OR UPDATE OF balance ON sdu_balances
+FOR EACH ROW EXECUTE FUNCTION sdu_guard_negative_balance();
+
+-- Validate that every committed event has at least two postings and balances
+-- each asset. The deferred trigger runs at transaction commit.
+CREATE OR REPLACE FUNCTION sdu_assert_event_complete()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+    posting_count BIGINT;
+    bad_asset TEXT;
+BEGIN
+    SELECT COUNT(*) INTO posting_count
+    FROM sdu_postings WHERE event_id=NEW.event_id;
+    IF posting_count < 2 THEN
+        RAISE EXCEPTION 'SDU event % must contain at least two postings', NEW.event_id;
+    END IF;
+    SELECT asset_symbol INTO bad_asset
+    FROM sdu_postings
+    WHERE event_id=NEW.event_id
+    GROUP BY asset_symbol
+    HAVING SUM(amount) <> 0
+    LIMIT 1;
+    IF bad_asset IS NOT NULL THEN
+        RAISE EXCEPTION 'unbalanced SDU event % for asset %', NEW.event_id, bad_asset;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS sdu_event_complete_deferred ON sdu_events;
+CREATE CONSTRAINT TRIGGER sdu_event_complete_deferred
+AFTER INSERT ON sdu_events
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION sdu_assert_event_complete();
+
+CREATE OR REPLACE FUNCTION sdu_reject_protected_mutation()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'SDU audit records are append-only';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS sdu_idempotency_immutable ON sdu_idempotency;
+CREATE TRIGGER sdu_idempotency_immutable
+BEFORE UPDATE OR DELETE ON sdu_idempotency
+FOR EACH ROW EXECUTE FUNCTION sdu_reject_protected_mutation();
+
+DROP TRIGGER IF EXISTS sdu_issuance_claims_immutable ON sdu_issuance_claims;
+CREATE TRIGGER sdu_issuance_claims_immutable
+BEFORE UPDATE OR DELETE ON sdu_issuance_claims
+FOR EACH ROW EXECUTE FUNCTION sdu_reject_protected_mutation();
+
+DROP TRIGGER IF EXISTS sdu_checkpoints_immutable ON sdu_checkpoints;
+CREATE TRIGGER sdu_checkpoints_immutable
+BEFORE UPDATE OR DELETE ON sdu_checkpoints
+FOR EACH ROW EXECUTE FUNCTION sdu_reject_protected_mutation();
