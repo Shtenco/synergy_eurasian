@@ -147,3 +147,15 @@ def test_external_deposit_rejects_unapproved_token_contract_for_allowed_symbol()
     forged_contract = make_claim(asset_reference="0x" + "2" * 40)
     with pytest.raises(ExternalDepositError, match="contract/denom"):
         verifier.verify(forged_contract, signatures)
+
+
+def test_external_verifier_rejects_noncanonical_allowlist_identifiers():
+    keys = {"verifier-a": b"a" * 32}
+    with pytest.raises(ExternalDepositError, match="trimmed"):
+        ExternalDepositVerifier(
+            keys, threshold=1, supported_chains={" eth-mainnet "},
+            supported_assets={"USDC"},
+            asset_references={(" eth-mainnet ", "USDC"): "0x" + "1" * 40},
+            minimum_confirmations={" eth-mainnet ": 12},
+            maximum_amounts={"USDC": 1000},
+        )
