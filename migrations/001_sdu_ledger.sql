@@ -101,8 +101,7 @@ CREATE TABLE IF NOT EXISTS sdu_external_deposit_claims (
     proof_digest CHAR(64) NOT NULL,
     claim_digest CHAR(64) NOT NULL,
     approved_verifier_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (chain_id, transaction_hash, asset_symbol, transfer_index)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Safe re-application for databases created from an earlier research draft.
