@@ -1,154 +1,187 @@
-# SDU Accounting Core V2 — research implementation
+# SDU Accounting Core V2 — persistent-ledger research increment
 
-**Status:** isolated research prototype on feat/sdu-accounting-core-v2.  
-**Not deployed:** this is not a token contract, production ledger, live AMM, audited monetary policy, or promise of redemption or price appreciation.
+**Status:** isolated research implementation on \`feat/sdu-accounting-core-v2\`.  
+**Not deployed:** no token contract, production payment processor, live AMM, audited monetary policy, redemption promise or price guarantee is introduced.
 
-## Scope of this increment
+## Scope and files
 
-This increment adds:
+| File | Responsibility |
+|---|---|
+| \`src/sdu_accounting_core.py\` | Dependency-free in-memory reference ledger and invariant model |
+| \`migrations/001_sdu_ledger.sql\` | PostgreSQL schema, deferred balance checks, immutable journal triggers and non-negative balance guard |
+| \`src/sdu_postgres_ledger.py\` | Transactional PostgreSQL adapter, epoch-budget enforcement, journal replay audit and checkpoint persistence |
+| \`src/sdu_issuance_authorization.py\` | Threshold validator approval of canonical issuance claims |
+| \`src/sdu_ledger_checkpoints.py\` | Signed checkpoint creation and signature/progression verification |
+| \`tests/test_sdu_accounting_core.py\` | In-memory accounting invariants |
+| \`tests/test_sdu_issuance_authorization.py\` | Validator threshold and tamper tests |
+| \`tests/test_sdu_ledger_checkpoints.py\` | Checkpoint signature and monotonicity tests |
+| \`tests/test_sdu_postgres_ledger.py\` | PostgreSQL integration, independent-connection concurrency and database guard tests |
+| \`.github/workflows/sdu-accounting.yml\` | Dedicated Python + PostgreSQL CI job |
 
-- src/sdu_accounting_core.py — dependency-free in-memory event ledger.
-- tests/test_sdu_accounting_core.py — focused invariant, retry, reversal, and concurrency tests.
+This is an additive branch. It does not edit the existing Synergy economy models or replace the canonical asymmetric AMM.
 
-It does not modify the existing Synergy economic models or the canonical asymmetric AMM snapshot.
+## 1. Monetary representation and journal invariants
 
-## 1. Monetary representation
+Amounts are signed integer atomic units. Python floating-point values are not accepted. PostgreSQL stores integer-valued amounts in unconstrained \`NUMERIC\`, so the research schema does not introduce an arbitrary fixed precision/scale ceiling. The final SDU decimal count remains a token-level configuration decision.
 
-Amounts are signed integer atomic units. Floating-point values are rejected. Each asset declares a decimal precision through AssetSpec; the final SDU on-chain decimal count remains an explicit configuration decision and must match the eventual token implementation.
-
-A posting is (account_id, asset, signed_integer_amount). Positive amounts credit an account; negative amounts debit it.
-
-Every event must balance separately for each asset:
-
-\[
-\forall c:\quad \sum_{p \in Event,\ p.asset=c} p.amount=0
-\]
-
-A multi-asset swap therefore has an SDU-balanced leg set and a USDC-balanced leg set. The ledger does not infer an exchange rate or silently net unlike assets.
-
-## 2. Supply accounting
-
-The circulating/accounted token supply is derived from balances of accounts marked counts_toward_supply=True:
+Every event must balance separately for every asset:
 
 \[
-S_c=\sum_{a:\ a.asset=c,\ a.counts\_toward\_supply} Balance(a,c)
+\forall c:\quad \sum_{p\in Event,\ p.asset=c}p.amount=0
 \]
 
-The technical issuance and burn contra-accounts are excluded.
+A swap therefore has one balanced SDU posting group and one balanced USDC posting group. Unlike assets are never netted against one another.
 
-For completed operations:
+The ledger's accounted supply is:
 
 \[
-S_{t+1}=S_t+Mint_t-Burn_t
+S_c=\sum_{a:\ a.asset=c,\ a.counts\_toward\_supply}Balance(a,c)
 \]
 
-Transfers, AMM reserve movements, fee transfers and LP movements do not change total supply. A burn reduces supply only when a real source-account debit and burn-counter credit are committed.
+Transfers and AMM reserve movements do not change supply. Only a dedicated SDU mint or burn command changes it. The issuance and burn contra-accounts are excluded from supply.
 
-Account.burnable=False blocks burn from a protocol reserve. Reserve accounts should be configured as non-burnable unless an explicit protocol rule authorizes a separate operation.
+## 2. PostgreSQL transaction model
 
-## 3. Event and posting guarantees
+All writes use one database transaction. The adapter locks the singleton \`sdu_ledger_state\` row with \`FOR UPDATE\` before allocating a sequence number. It then:
 
-- Events are frozen records with monotonically increasing local sequence numbers.
-- Each event stores its postings, actor, timestamp, idempotency key, metadata and previous-event hash.
-- A SHA-256 hash chain makes accidental or partial modification detectable when checked against a trusted checkpoint.
-- Balances are a projection and can be rebuilt from the event list.
-- Corrections are new reversal events; history is not edited.
-- Reversal is refused if the original event was already reversed. Reversal can also fail when the original recipient has already spent the funds.
-- A repeated idempotency key with the same command returns the original event. Reuse for a different command is rejected.
-- A command validates every posting and resulting balance before changing the projection or appending the event.
+1. checks the idempotency key and request fingerprint;
+2. locks affected accounts/balance rows in sorted order;
+3. checks per-asset balance and spendable-balance constraints;
+4. validates the dedicated command's authorization and epoch budget, if applicable;
+5. appends the event and all postings;
+6. updates balance projections and idempotency records;
+7. updates the journal head sequence/hash;
+8. commits everything together.
 
-**Hash-chain limitation:** a hash chain stored only in one mutable database does not prevent a privileged attacker from rewriting the entire chain and recalculating hashes. Production must periodically sign and publish/anchor checkpoints outside the ledger's administrative trust boundary.
+The global journal-head lock serializes all writes across independent processes and prevents two servers from double-spending the same balance. This is intentionally conservative and will limit throughput. Do not remove it or shard the sequence/hash chain until a separately reviewed concurrency design exists.
 
-## 4. Privileged operations and trust boundary
+The SQL migration adds:
+- unique event sequence, event hash and idempotency key constraints;
+- integer-valued \`NUMERIC\` amounts;
+- deferred event-completeness and per-asset balancing triggers;
+- append-only triggers for events, postings, idempotency records, issuance claims and checkpoints;
+- a database-level guard against negative balances in accounts that do not explicitly allow overdrafts.
 
-The public post() method rejects technical system_* accounts and reserved event types SDU_MINT, SDU_BURN and REVERSAL. Mint and burn use dedicated command methods; reversals use the internal posting path to restore the exact original postings.
+The adapter also checks account policy and balances before writing. Database triggers are defense in depth, not a substitute for least-privilege database roles.
 
-issue() requires and records an approval_ref, but the prototype does not validate the referenced approval, validator signatures, evidence, epoch budget, or constitutional limits. The reference is an audit link, not proof of authorization. A production issuance service must verify those conditions before calling the ledger.
+### Applying the migration
 
-Python's underscore naming is not a security boundary. The module must remain behind a trusted command service; untrusted users must never receive direct access to account creation or internal posting methods. The prototype also does not authenticate actor_id or prove that the actor owns the source account for a transfer or voluntary burn. Owner authorization and key/signature verification belong in the command/API layer.
+Use a dedicated schema-migration role, not the runtime service role:
 
-## 5. Atomicity and concurrency scope
+\`\`\`bash
+psql "$SDU_DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/001_sdu_ledger.sql
+\`\`\`
 
-The prototype uses an in-process reentrant lock. It prevents two threads in this process from spending the same available balance concurrently.
+The runtime role must not own the schema/tables, alter triggers, disable triggers, truncate journal tables, or update/delete event and posting rows. Grant only the minimum required SELECT/INSERT/UPDATE permissions. The migration does not create or manage database roles because that must be adapted to the deployment's identity and secret-management environment.
 
-It does not provide:
-- persistence across process restarts;
-- coordination between multiple processes or servers;
-- database-level atomic commit;
-- durable idempotency across restarts;
-- distributed consensus or finality.
+### Adapter initialization
 
-A production implementation needs a transactional database write that commits the event, all postings, the idempotency record and the balance projection together. Unique constraints must protect idempotency keys, and account locking or serializable/optimistic concurrency control must protect against concurrent overspending. The current in-memory lock is a test harness, not a substitute.
+\`\`\`python
+import os
+import psycopg
+from sdu_postgres_ledger import PostgresLedger
 
-## 6. What is deliberately not implemented yet
+ledger = PostgresLedger(
+    lambda: psycopg.connect(os.environ["SDU_DATABASE_URL"])
+)
+ledger.register_asset("SDU", 6)
+ledger.register_asset("USDC", 6)
+ledger.create_account("wallet:alice", "SDU")
+ledger.create_account("wallet:bob", "SDU")
+\`\`\`
 
-### AMM
+The example is an integration pattern, not a production deployment recipe. Account provisioning and user authentication must be exposed only through a trusted service.
 
-No trade-pricing function is included in this increment. The ledger can atomically record a multi-asset settlement after an independent quote has been validated, but it does not calculate the quote.
+## 3. Threshold issuance authorization
 
-Before implementing the canonical asymmetric AMM, the following details must be resolved without replacing its core formulas:
+An issuance claim binds:
+- unique claim ID and epoch ID;
+- destination account;
+- positive integer amount;
+- SHA-256 digest of the supporting evidence;
+- purpose;
+- expiry timestamp.
 
-1. Whether the buy fee remains in the pool or is transferred to the protocol.
-2. The exact gross/net USDC reserve movement on buys.
-3. The exact gross/net SDU and USDC movement on sells.
-4. The meaning and timing of P_terminal in the sell path.
-5. The relationship between q, z=q-burn, and the amount actually removed from the pool.
-6. Minimum-output, maximum-slippage, reserve and oracle-staleness checks.
+Validators sign the canonical serialized claim. The verifier rejects duplicate signers, unknown validators, invalid signatures, expired claims, claims over the per-claim maximum and insufficient threshold approvals.
 
-Until those are explicit, a long-horizon AMM simulation would risk internally inconsistent reserve accounting.
+The PostgreSQL adapter independently enforces the configured epoch budget in the same transaction as the mint. It locks the epoch row, prevents claim reuse, increments \`spent\`, and commits the mint, claim record and accounting postings atomically. A failed mint rolls back the budget increment too.
 
-### Issuance policy
+**Cryptographic limitation:** the current dependency-free prototype uses HMAC-SHA256. HMAC keys are symmetric and do not provide public verifiability. This is not the final validator-key architecture. Production requires asymmetric signatures (for example Ed25519), HSM/KMS-backed key custody, validator key rotation/revocation, domain-separated signing, audit logs and a separately specified validator-selection process. The current module domain-separates issuance signatures but does not manage key custody.
 
-No AI policy optimizer, DAO voting, Sybil defence, validator selection, epoch budget allocator, CPI estimator, or productive-claim verification is implemented here.
+The evidence digest proves only that validators signed a particular digest. It does not independently prove the underlying productive contribution is real, unique or correctly valued. Evidence verification, anti-Sybil controls, appeals and independent audits remain separate work.
 
-### External assets
+## 4. Journal audit and checkpoints
 
-USDC is represented only as a separately denominated ledger asset. The SDU issuance and burn commands explicitly reject USDC and other external assets. The public posting path also rejects privileged counter accounts, including negative-balance and non-supply accounts. A synthetic external-source posting appears only in a test fixture through the internal path; production external deposits require a separately verified adapter. USDC is represented only as a separately denominated ledger asset. The prototype does not establish that any USDC reserve exists or that USDC is redeemable.
+\`PostgresLedger.verify_integrity()\` replays the event journal and verifies:
+- contiguous event sequence;
+- previous-hash linkage and each event hash;
+- per-asset balance of every event;
+- idempotency fingerprints;
+- replayed balances against stored balance projections;
+- absence of negative balances in ordinary accounts;
+- one-to-one correspondence between mint events and verified claim records;
+- claim metadata, minted amount and epoch spent/budget totals;
+- database journal head against the last event.
 
-## 7. Test coverage in this increment
+\`create_and_store_checkpoint(key)\` signs the current ledger sequence and event hash and stores a local checkpoint record. The method is idempotent for a sequence and verifies the stored signature before reusing it.
 
-The focused test file covers:
+**Checkpoint limitation:** storing a signed checkpoint only in the same database does not protect against a database superuser who can rewrite both journal and checkpoint rows. Export each checkpoint to an independent trust domain (separate provider/account, immutable object lock, public transparency log or other independently administered anchor). HMAC is only a prototype signature; production should use an asymmetric signing key so independent auditors can verify checkpoints without possessing the signing secret. The verifier checks checkpoint authenticity and monotonic sequence; proving continuity between two checkpoints still requires auditing the intervening event chain.
 
-1. Mint → transfer → burn supply conservation.
-2. Required approval reference (without claiming to verify it).
-3. Insufficient-funds rejection without partial writes.
-4. Idempotent retry.
-5. Idempotency-key conflict.
-6. Per-asset balance checks.
-7. Atomic multi-asset settlement.
-8. Account/asset mismatch rejection.
-9. Reversal and duplicate-reversal rejection.
-10. Concurrent double-spend attempt.
-11. Hash-chain continuity and projection replay.
-12. Protocol-reserve burn restriction.
-13. Non-positive command amount rejection.
-14. Projection reconstruction.
-15. Public-post attempt to bypass the issuance counter gate.\n16. Forged reversal-event attempt.\n17. Supply-counted account overdraft configuration rejection.\n18. Pre-seeded system-counter configuration rejection.\n19. Rejection of SDU issuance into USDC accounts.\n20. Rejection of SDU burn from USDC accounts.\n21. Audit rejection when reversal postings do not exactly invert the original event.\n22. Public-post rejection of fake supply creation through a non-supply counter account.
+## 5. What remains deliberately outside this increment
 
-Run the focused tests:
+- No production identity provider, wallet signature verification or account-ownership authorization.
+- No production key management, validator election, DAO governance, anti-Sybil or evidence oracle.
+- No verified external-deposit adapter. A USDC balance may be credited only after an independently verified real deposit; SDU issuance cannot create USDC.
+- No voluntary burn command in the PostgreSQL adapter yet. The in-memory reference ledger has a burn path, but production burn must authenticate account ownership and distinguish holder burn from protocol-reserve burn.
+- No protocol-reserve burn authorization flow.
+- No AMM quote engine, LP accounting, fee routing or oracle integration.
+- No AI monetary-policy optimizer or long-horizon simulation.
 
-    pytest -q tests/test_sdu_accounting_core.py
+The in-memory core remains a reference model, not the persistence layer. Python underscore naming is not a security boundary; never expose internal posting methods or database credentials to untrusted callers.
 
-The local implementation check for this increment completed with 23 passing tests. This is not a claim that the repository-wide CI suite has passed.
+## 6. Canonical asymmetric AMM compatibility
 
-## 8. Required next engineering steps
+The existing asymmetric AMM formulas remain the canonical research baseline. They are not replaced with a constant-product \`x*y=k\` curve.
 
-1. Add a persistent PostgreSQL adapter with transactionally committed event, postings, idempotency and projection.
-2. Add database constraints for per-asset balancing, unique idempotency keys, immutable posted rows and non-negative spendable balances.
-3. Add signed authorization objects for minting and protocol-reserve burn.
-4. Add durable event sequence allocation and external hash checkpoints.
-5. Specify and test the canonical asymmetric AMM fee and reserve movements.
-6. Add independent reconciliation reports for token supply, AMM SDU reserve and AMM USDC reserve.
-7. Only then connect production agents and long-horizon monetary-policy simulations.
+Before implementing the PostgreSQL swap settlement path, the following accounting semantics must be specified and tested:
+1. whether the buy fee remains in the pool or is transferred to protocol revenue;
+2. gross/net USDC movement on buys;
+3. gross/net SDU and USDC movement on sells;
+4. exact timing and meaning of \`P_terminal\` in the sell path;
+5. the relationship between \`q\`, \`z=q-burn\` and SDU actually removed from pool reserves;
+6. slippage/min-out, reserve, oracle-staleness and sandwich-risk checks.
 
-## 9. Constitutional compatibility
+Issuance does not automatically add SDU to AMM reserves. External voluntary burns reduce total supply but not pool SDU reserve unless those tokens are actually removed from the pool. AMM quote, SDU reserve, USDC reserve, external reference price and mark-to-market TVL must remain separate measurements.
 
-This prototype is designed to preserve the existing research constitution:
+## 7. Test and CI commands
 
-- **ALL:** any participant may initiate a claim; initiation is not unilateral mint authority.
-- **HYBRID:** AI, DAO and independent validators have separated responsibilities.
-- **AUTONOMOUS:** AI policy actions must remain inside constitutional bounds.
-- **UNLIMITED:** no lifetime supply ceiling; epoch constraints remain possible.
-- **UNIVERSAL:** holders may burn their own tokens; protocol reserve burn requires explicit authorization.
+Pure-Python tests:
 
-No mainnet activation, token-supply change, AMM replacement or redemption promise is introduced by this research increment.
+\`\`\`bash
+python -m pytest -q \
+  tests/test_sdu_accounting_core.py \
+  tests/test_sdu_issuance_authorization.py \
+  tests/test_sdu_ledger_checkpoints.py
+\`\`\`
+
+PostgreSQL integration tests require PostgreSQL 16+, psycopg 3 and \`SDU_TEST_DATABASE_URL\`:
+
+\`\`\`bash
+python -m pip install "pytest>=8,<9" "psycopg[binary]>=3.2,<4"
+python -m pytest -q tests/test_sdu_postgres_ledger.py
+\`\`\`
+
+The dedicated GitHub Actions workflow starts an ephemeral PostgreSQL 16 service and runs all SDU test files plus Python compilation. The current source contains 44 test functions across the four SDU test modules; the final pass count must be taken from the latest completed Actions run, not inferred from test-file counts.
+
+The repository-wide EIIOM CI has a separate pre-existing test-collection failure involving missing \`synergy_v66.credit\` on the base branch. This SDU workflow does not hide or claim to repair that unrelated failure.
+
+## 8. Constitutional compatibility
+
+This increment preserves the intended research constitution:
+- **ALL:** anyone may initiate an issuance claim; initiation is not unilateral mint authority.
+- **HYBRID:** AI, DAO and independent validators have distinct roles.
+- **AUTONOMOUS:** AI actions must remain inside constitutional limits.
+- **UNLIMITED:** no lifetime supply ceiling; epoch budgets remain possible.
+- **UNIVERSAL:** holders may burn their own tokens; protocol-reserve burn requires explicit authorization.
+
+No mainnet activation, token-supply change, AMM replacement, redemption promise or guaranteed price appreciation is introduced.
