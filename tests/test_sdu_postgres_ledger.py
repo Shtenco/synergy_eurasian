@@ -174,12 +174,14 @@ def test_database_rejects_direct_negative_balance_and_journal_mutation():
                          idempotency_key="mint-db-guards", actor_id="issuance-service")
     with psycopg.connect(DATABASE_URL) as conn:
         with pytest.raises(psycopg.Error):
-            conn.execute(
-                "UPDATE sdu_balances SET balance=-1 WHERE account_id='alice' AND asset_symbol='SDU'"
-            )
+            with conn.transaction():
+                conn.execute(
+                    "UPDATE sdu_balances SET balance=-1 WHERE account_id='alice' AND asset_symbol='SDU'"
+                )
     with psycopg.connect(DATABASE_URL) as conn:
         with pytest.raises(psycopg.Error):
-            conn.execute("UPDATE sdu_events SET actor_id='tampered' WHERE event_id=%s", (event.event_id,))
+            with conn.transaction():
+                conn.execute("UPDATE sdu_events SET actor_id='tampered' WHERE event_id=%s", (event.event_id,))
     assert ledger.balance("alice") == 100
 
 
