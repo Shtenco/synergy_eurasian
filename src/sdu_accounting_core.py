@@ -242,8 +242,12 @@ class Ledger:
                 raise ValidationError("reserved event type requires a privileged command")
             for leg in legs:
                 account = self._accounts.get(leg.account_id)
-                if account is not None and account.kind.startswith("system_"):
-                    raise ValidationError("system accounts may only be used by privileged commands")
+                if account is not None and (
+                    account.kind.startswith("system_")
+                    or account.allow_negative
+                    or not account.counts_toward_supply
+                ):
+                    raise ValidationError("privileged counter accounts may only be used by dedicated commands")
             return self._post(
                 event_type, legs, idempotency_key=idempotency_key,
                 actor_id=actor_id, metadata=metadata, timestamp=timestamp,
