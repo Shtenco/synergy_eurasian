@@ -350,6 +350,7 @@ class Ledger:
             previous_hash = self.GENESIS_HASH
             seen_keys: set[str] = set()
             seen_event_ids: set[str] = set()
+            seen_events_by_id: dict[str, LedgerEvent] = {}
             replayed_reversals: set[str] = set()
             for expected_sequence, event in enumerate(self._events, start=1):
                 if event.sequence != expected_sequence:
@@ -370,10 +371,22 @@ class Ledger:
                     raise ValidationError("duplicate event id in event log")
                 if event.event_type == "REVERSAL":
                     original_id = str(event.metadata.get("original_event_id", ""))
-                    if original_id not in seen_event_ids or original_id in replayed_reversals:
+                    original_event = seen_events_by_id.get(original_id)
+                    if original_event is None or original_id in replayed_reversals:
                         raise ValidationError("invalid or duplicate reversal reference")
+                    if original_event.event_type == "REVERSAL":
+                        raise ValidationError("reversal events cannot reverse other reversals")
+                    expected_inverse = sorted(
+                        (p.account_id, p.asset, -p.amount) for p in original_event.postings
+                    )
+                    actual_inverse = sorted(
+                        (p.account_id, p.asset, p.amount) for p in event.postings
+                    )
+                    if actual_inverse != expected_inverse:
+                        raise ValidationError("reversal postings do not exactly reverse original event")
                     replayed_reversals.add(original_id)
                 seen_event_ids.add(event.event_id)
+                seen_events_by_id[event.event_id] = event
                 totals: dict[str, int] = {}
                 for leg in event.postings:
                     self._require_account_asset(leg.account_id, leg.asset)
