@@ -392,6 +392,10 @@ def test_paired_100_cycle_experiment_preserves_cash_and_enforces_member_caps():
             assert abs(row["system_cash_change"]) <= 1e-8
             assert row["cash_floor_breach_count"] == 0
             assert row["max_period_cap_excess"] <= 1e-8
+            assert row["total_member_contributions"] == pytest.approx(row["total_replenished"])
+            assert row["max_contribution_opening_cash_ratio"] <= 0.40 + 1e-8
+            assert 0.0 <= row["contribution_gini"] <= 1.0
+            assert 0.0 <= row["top_20_percent_contribution_share"] <= 1.0
             assert row["bank_draws"] == pytest.approx(0.0)
             assert row["external_inflows"] == pytest.approx(0.0)
             assert row["external_outflows"] == pytest.approx(0.0)
