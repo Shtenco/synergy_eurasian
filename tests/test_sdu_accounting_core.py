@@ -278,3 +278,21 @@ def test_public_post_cannot_bypass_issuance_gate():
         )
     assert ledger.total_supply("SDU") == 100
     assert ledger.balance("bob") == 0
+
+
+def test_public_post_cannot_forge_reversal_metadata():
+    ledger = make_ledger()
+    ledger.issue("alice", 100, approval_ref="a1", idempotency_key="mint-1")
+    transfer = ledger.transfer(
+        "alice", "bob", 10, asset="SDU",
+        idempotency_key="t-1", actor_id="alice",
+    )
+    with pytest.raises(ValidationError):
+        ledger.post(
+            "REVERSAL",
+            (Posting("alice", "SDU", 1), Posting("bob", "SDU", -1)),
+            idempotency_key="fake-reversal",
+            actor_id="attacker",
+            metadata={"original_event_id": transfer.event_id},
+        )
+    ledger.verify_integrity()
