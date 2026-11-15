@@ -123,13 +123,13 @@ The focused test file covers:
 12. Protocol-reserve burn restriction.
 13. Non-positive command amount rejection.
 14. Projection reconstruction.
-15. Public-post attempt to bypass the issuance counter gate.\n16. Forged reversal-event attempt.\n17. Supply-counted account overdraft configuration rejection.\n18. Pre-seeded system-counter configuration rejection.\n19. Rejection of SDU issuance into USDC accounts.\n20. Rejection of SDU burn from USDC accounts.
+15. Public-post attempt to bypass the issuance counter gate.\n16. Forged reversal-event attempt.\n17. Supply-counted account overdraft configuration rejection.\n18. Pre-seeded system-counter configuration rejection.\n19. Rejection of SDU issuance into USDC accounts.\n20. Rejection of SDU burn from USDC accounts.\n21. Audit rejection when reversal postings do not exactly invert the original event.
 
 Run the focused tests:
 
     pytest -q tests/test_sdu_accounting_core.py
 
-The local implementation check for this increment completed with 21 passing tests. This is not a claim that the repository-wide CI suite has passed.
+The local implementation check for this increment completed with 22 passing tests. This is not a claim that the repository-wide CI suite has passed.
 
 ## 8. Required next engineering steps
 
