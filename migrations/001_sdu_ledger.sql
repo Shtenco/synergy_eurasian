@@ -115,7 +115,7 @@ ALTER TABLE sdu_external_deposit_claims
 -- Refuse to "upgrade" populated legacy claims by silently inventing transfer
 -- identity or asset contract references. A reviewed backfill/quarantine must
 -- populate these values and reconcile immutable event metadata first.
-DO $
+DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM sdu_external_deposit_claims
@@ -137,7 +137,7 @@ BEGIN
             'duplicate external deposit transfer identities require reviewed quarantine before migration';
     END IF;
 END;
-$;
+$$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS sdu_external_deposit_transfer_identity
     ON sdu_external_deposit_claims(chain_id, transaction_hash, asset_symbol, transfer_index);
