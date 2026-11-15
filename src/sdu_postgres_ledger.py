@@ -122,33 +122,23 @@ class PostgresLedger:
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
+                        """INSERT INTO sdu_epoch_issuance(epoch_id,budget,spent)
+                           VALUES (%s,%s,0) ON CONFLICT (epoch_id) DO NOTHING""",
+                        (epoch_id, budget),
+                    )
+                    cur.execute(
                         "SELECT spent FROM sdu_epoch_issuance WHERE epoch_id=%s FOR UPDATE",
                         (epoch_id,),
                     )
                     row = cur.fetchone()
                     if row is None:
-                        cur.execute(
-                            """INSERT INTO sdu_epoch_issuance(epoch_id,budget,spent)
-                               VALUES (%s,%s,0) ON CONFLICT (epoch_id) DO NOTHING""",
-                            (epoch_id, budget),
-                        )
-                        cur.execute(
-                            "SELECT spent FROM sdu_epoch_issuance WHERE epoch_id=%s FOR UPDATE",
-                            (epoch_id,),
-                        )
-                        row = cur.fetchone()
-                    if row is not None and int(row[0]) == 0:
-                        cur.execute(
-                            "UPDATE sdu_epoch_issuance SET budget=%s, updated_at=now() WHERE epoch_id=%s",
-                            (budget, epoch_id),
-                        )
-                    else:
-                        if int(row[0]) > budget:
-                            raise ValidationError("new epoch budget cannot be below already spent amount")
-                        cur.execute(
-                            "UPDATE sdu_epoch_issuance SET budget=%s, updated_at=now() WHERE epoch_id=%s",
-                            (budget, epoch_id),
-                        )
+                        raise PostgresLedgerError("epoch budget row disappeared during configuration")
+                    if int(row[0]) > budget:
+                        raise ValidationError("new epoch budget cannot be below already spent amount")
+                    cur.execute(
+                        "UPDATE sdu_epoch_issuance SET budget=%s, updated_at=now() WHERE epoch_id=%s",
+                        (budget, epoch_id),
+                    )
 
     def transfer(
         self,
