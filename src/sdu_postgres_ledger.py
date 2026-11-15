@@ -818,11 +818,11 @@ class PostgresLedger:
             (event_id,),
         )
         postings = tuple(Posting(a, asset, int(amount)) for a, asset, amount in cur.fetchall())
-        metadata = row[7]
+        metadata = row[6]
         if not isinstance(metadata, str):
             metadata = json.dumps(metadata, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         return LedgerEvent(
             str(row[0]), int(row[1]), str(row[2]), str(row[3]), str(row[4]),
             row[5].astimezone(timezone.utc).isoformat(), postings, metadata,
-            str(row[8]).strip(), str(row[9]).strip(),
+            str(row[7]).strip(), str(row[8]).strip(),
         )
