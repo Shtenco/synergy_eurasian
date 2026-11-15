@@ -1,0 +1,5 @@
+# Optional dependencies for the SDU PostgreSQL ledger and its test suite.
+# The in-memory accounting core and pure authorization/checkpoint modules use
+# only the Python standard library.
+psycopg[binary]>=3.2,<4
+pytest>=8,<9
