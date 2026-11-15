@@ -201,3 +201,26 @@ def test_database_rejects_ordinary_external_counter_account_posting():
             (Posting("external:counter", "SDU", -10), Posting("alice", "SDU", 10)),
             idempotency_key="fake-mint", actor_id="attacker",
         )
+
+
+def test_database_replay_audit_and_checkpoint_are_idempotent():
+    from sdu_ledger_checkpoints import verify_checkpoint
+
+    ledger = make_ledger()
+    keys, authorizer = make_authorizer()
+    claim = make_claim("claim-audit", 250)
+    ledger.issue(claim, approvals(claim, keys, authorizer), authorizer=authorizer,
+                 idempotency_key="mint-audit", actor_id="issuance-service")
+    ledger.transfer("alice", "bob", 50, asset="SDU",
+                    idempotency_key="transfer-audit", actor_id="alice")
+    audit = ledger.verify_integrity()
+    assert audit["events"] == 2
+    assert audit["last_sequence"] == 2
+    assert audit["postings"] == 4
+
+    signing_key = b"database-checkpoint-key-material-32bytes"
+    first = ledger.create_and_store_checkpoint(signing_key)
+    second = ledger.create_and_store_checkpoint(signing_key)
+    assert first == second
+    assert first.sequence == 2
+    assert verify_checkpoint(first, signing_key)
