@@ -226,3 +226,28 @@ def test_database_replay_audit_and_checkpoint_are_idempotent():
     assert first == second
     assert first.sequence == 2
     assert verify_checkpoint(first, signing_key)
+
+
+def test_system_accounts_cannot_be_created_through_public_account_api():
+    ledger = make_ledger()
+    from sdu_accounting_core import ValidationError
+    with pytest.raises(ValidationError, match="system accounts"):
+        ledger.create_account("system:issuance:SDU", "SDU", kind="system_issuance",
+                              allow_negative=True, counts_toward_supply=False,
+                              burnable=False)
+
+
+def test_integrity_audit_detects_tampered_ledger_head():
+    ledger = make_ledger()
+    keys, authorizer = make_authorizer()
+    claim = make_claim("claim-head-tamper", 100)
+    ledger.issue(claim, approvals(claim, keys, authorizer), authorizer=authorizer,
+                 idempotency_key="mint-head-tamper", actor_id="issuance-service")
+    with psycopg.connect(DATABASE_URL) as conn:
+        conn.execute(
+            "UPDATE sdu_ledger_state SET last_event_hash=%s WHERE singleton=TRUE",
+            ("f" * 64,),
+        )
+    from sdu_postgres_ledger import PostgresLedgerError
+    with pytest.raises(PostgresLedgerError, match="ledger state head"):
+        ledger.verify_integrity()
