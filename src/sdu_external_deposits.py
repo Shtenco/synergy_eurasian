@@ -33,6 +33,7 @@ class ExternalDepositClaim:
     chain_id: str
     transaction_hash: str
     asset: str
+    asset_reference: str
     amount: int
     destination_account: str
     block_number: int
@@ -55,6 +56,8 @@ class ExternalDepositClaim:
             raise ExternalDepositError("proof_digest must be lowercase SHA-256 hex")
         if not self.asset or self.asset.strip() != self.asset:
             raise ExternalDepositError("asset is required")
+        if not self.asset_reference or self.asset_reference.strip() != self.asset_reference:
+            raise ExternalDepositError("asset_reference (token contract or native denom) is required")
         if isinstance(self.amount, bool) or not isinstance(self.amount, int) or self.amount <= 0:
             raise ExternalDepositError("deposit amount must be a positive integer")
         if isinstance(self.block_number, bool) or not isinstance(self.block_number, int) or self.block_number < 0:
@@ -72,6 +75,7 @@ class ExternalDepositClaim:
         payload = {
             "amount": self.amount,
             "asset": self.asset,
+            "asset_reference": self.asset_reference,
             "block_number": self.block_number,
             "chain_id": self.chain_id,
             "confirmations": self.confirmations,
@@ -100,6 +104,7 @@ class ExternalDepositVerifier:
         threshold: int,
         supported_chains: set[str],
         supported_assets: set[str],
+        asset_references: Mapping[tuple[str, str], str],
         minimum_confirmations: Mapping[str, int],
         maximum_amounts: Mapping[str, int],
     ) -> None:
@@ -118,6 +123,14 @@ class ExternalDepositVerifier:
             raise ExternalDepositError("supported asset symbols must be non-empty strings")
         if not supported_chains.issubset(minimum_confirmations):
             raise ExternalDepositError("minimum confirmations must be configured for every supported chain")
+        expected_pairs = {(chain, asset) for chain in supported_chains for asset in supported_assets}
+        if not expected_pairs.issubset(asset_references):
+            raise ExternalDepositError("asset reference must be configured for every supported chain/asset pair")
+        if any(
+            not isinstance(reference, str) or not reference.strip() or reference.strip() != reference
+            for reference in asset_references.values()
+        ):
+            raise ExternalDepositError("asset references must be non-empty canonical identifiers")
         if not supported_assets.issubset(maximum_amounts):
             raise ExternalDepositError("maximum deposit amount must be configured for every supported asset")
         if any(
@@ -134,6 +147,7 @@ class ExternalDepositVerifier:
         self.threshold = threshold
         self.supported_chains = set(supported_chains)
         self.supported_assets = set(supported_assets)
+        self.asset_references = dict(asset_references)
         self.minimum_confirmations = dict(minimum_confirmations)
         self.maximum_amounts = dict(maximum_amounts)
 
@@ -157,6 +171,8 @@ class ExternalDepositVerifier:
             raise ExternalDepositError("unsupported external chain")
         if claim.asset not in self.supported_assets:
             raise ExternalDepositError("unsupported external asset")
+        if claim.asset_reference != self.asset_references.get((claim.chain_id, claim.asset)):
+            raise ExternalDepositError("external asset contract/denom does not match configured chain allowlist")
         if claim.confirmations < self.minimum_confirmations.get(claim.chain_id, 0):
             raise ExternalDepositError("deposit has insufficient confirmations")
         maximum = self.maximum_amounts.get(claim.asset)
