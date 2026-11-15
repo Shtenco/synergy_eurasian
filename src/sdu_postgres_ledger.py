@@ -272,6 +272,7 @@ class PostgresLedger:
             "deposit_id": claim.deposit_id,
             "proof_digest": claim.proof_digest,
             "transaction_hash": claim.transaction_hash,
+            "transfer_index": claim.transfer_index,
             "claim_digest": verified.claim_digest,
         }
         counter_account = f"system:external_deposit:{claim.asset}"
@@ -483,7 +484,7 @@ class PostgresLedger:
                     raise PostgresLedgerError("SDU burn events and authorized burn claims are not one-to-one")
 
                 cur.execute(
-                    """SELECT d.deposit_id,d.chain_id,d.transaction_hash,d.asset_symbol,
+                    """SELECT d.deposit_id,d.chain_id,d.transaction_hash,d.transfer_index,d.asset_symbol,
                               d.amount,d.destination_account,d.block_number,d.confirmations,
                               d.proof_digest,d.claim_digest,d.approved_verifier_ids,
                               e.event_type,e.metadata,e.event_id
@@ -491,7 +492,7 @@ class PostgresLedger:
                        JOIN sdu_events e ON e.event_id=d.event_id"""
                 )
                 deposits = cur.fetchall()
-                for deposit_id, chain_id, tx_hash, asset, amount, destination, block_number, confirmations, proof_digest, claim_digest, verifier_ids, event_type, metadata, event_id in deposits:
+                for deposit_id, chain_id, tx_hash, transfer_index, asset, amount, destination, block_number, confirmations, proof_digest, claim_digest, verifier_ids, event_type, metadata, event_id in deposits:
                     if event_type != "EXTERNAL_DEPOSIT":
                         raise PostgresLedgerError("external deposit claim points to a non-deposit event")
                     if not isinstance(metadata, dict):
@@ -500,6 +501,7 @@ class PostgresLedger:
                         metadata.get("deposit_id") != deposit_id
                         or metadata.get("chain_id") != chain_id
                         or metadata.get("transaction_hash") != str(tx_hash).strip()
+                        or metadata.get("transfer_index") != int(transfer_index)
                         or metadata.get("asset") != asset
                         or metadata.get("proof_digest") != str(proof_digest).strip()
                         or metadata.get("claim_digest") != str(claim_digest).strip()
@@ -674,9 +676,11 @@ class PostgresLedger:
                         cur.execute(
                             """SELECT 1 FROM sdu_external_deposit_claims
                                WHERE deposit_id=%s OR
-                                     (chain_id=%s AND transaction_hash=%s AND asset_symbol=%s)""",
+                                     (chain_id=%s AND transaction_hash=%s AND asset_symbol=%s
+                                      AND transfer_index=%s)""",
                             (external_deposit_claim.deposit_id, external_deposit_claim.chain_id,
-                             external_deposit_claim.transaction_hash, external_deposit_claim.asset),
+                             external_deposit_claim.transaction_hash, external_deposit_claim.asset,
+                             external_deposit_claim.transfer_index),
                         )
                         if cur.fetchone() is not None:
                             raise DuplicateExternalDeposit("external transaction has already been credited")
@@ -889,16 +893,17 @@ class PostgresLedger:
                     if external_deposit_claim is not None:
                         cur.execute(
                             """INSERT INTO sdu_external_deposit_claims
-                               (deposit_id,event_id,chain_id,transaction_hash,asset_symbol,
+                               (deposit_id,event_id,chain_id,transaction_hash,transfer_index,asset_symbol,
                                 amount,destination_account,block_number,confirmations,
                                 proof_digest,claim_digest,approved_verifier_ids)
-                               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)""",
+                               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)""",
                             (external_deposit_claim.deposit_id, event_id,
                              external_deposit_claim.chain_id, external_deposit_claim.transaction_hash,
-                             external_deposit_claim.asset, external_deposit_claim.amount,
-                             external_deposit_claim.destination_account, external_deposit_claim.block_number,
-                             external_deposit_claim.confirmations, external_deposit_claim.proof_digest,
-                             metadata["claim_digest"], json.dumps(list(approved_validator_ids))),
+                             external_deposit_claim.transfer_index, external_deposit_claim.asset,
+                             external_deposit_claim.amount, external_deposit_claim.destination_account,
+                             external_deposit_claim.block_number, external_deposit_claim.confirmations,
+                             external_deposit_claim.proof_digest, metadata["claim_digest"],
+                             json.dumps(list(approved_validator_ids))),
                         )
                     if burn_claim is not None:
                         cur.execute(
