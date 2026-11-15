@@ -120,7 +120,8 @@ class IssuanceAuthorizationService:
     @staticmethod
     def sign_for_testing(claim: IssuanceClaim, validator_id: str, secret: bytes) -> ValidatorApproval:
         """Convenience helper for fixtures/offline tooling; keep secrets offline."""
-        signature = hmac.new(secret, claim.canonical_payload(), hashlib.sha256).hexdigest()
+        message = b"SYNERGY_SDU_ISSUANCE_V1\\x00" + claim.canonical_payload()
+        signature = hmac.new(secret, message, hashlib.sha256).hexdigest()
         return ValidatorApproval(validator_id, signature)
 
     def verify(
@@ -147,7 +148,8 @@ class IssuanceAuthorizationService:
             secret = self._keys.get(approval.validator_id)
             if secret is None:
                 raise AuthorizationError("approval from unknown or inactive validator")
-            expected = hmac.new(secret, payload, hashlib.sha256).hexdigest()
+            message = b"SYNERGY_SDU_ISSUANCE_V1\\x00" + payload
+            expected = hmac.new(secret, message, hashlib.sha256).hexdigest()
             if not hmac.compare_digest(expected, approval.signature_hex):
                 raise AuthorizationError("invalid validator signature")
             valid.add(approval.validator_id)
