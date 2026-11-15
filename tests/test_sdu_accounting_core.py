@@ -131,7 +131,8 @@ def test_atomic_multicurrency_settlement_balances_both_assets():
             burnable=False,
         )
     )
-    ledger.post(
+    # Synthetic fixture only; production external deposits need a verified adapter.
+    ledger._post(
         "GENESIS_USDC",
         (
             Posting("external:usdc_genesis", "USDC", -7),
