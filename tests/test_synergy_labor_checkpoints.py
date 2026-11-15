@@ -115,8 +115,10 @@ def test_remote_compare_and_append_rejects_stale_competing_writers(service_url):
 def test_remote_adapter_rejects_insecure_urls_and_missing_token():
     with pytest.raises(CheckpointError, match="HTTPS"):
         HttpCheckpointAnchorStore("http://example.com", lambda:"secret")
+    # Authentication is resolved lazily for each request, not at client construction.
+    store = HttpCheckpointAnchorStore("http://127.0.0.1:1234", lambda:"")
     with pytest.raises(CheckpointError, match="token"):
-        HttpCheckpointAnchorStore("http://127.0.0.1:1234", lambda:"")
+        store.list_checkpoints("registry-auth")
 
 def test_remote_adapter_fails_closed_when_authentication_token_is_missing(service_url):
     url, _ = service_url
