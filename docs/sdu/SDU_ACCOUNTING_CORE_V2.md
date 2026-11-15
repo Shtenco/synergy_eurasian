@@ -67,7 +67,7 @@ The SQL migration adds:
 - append-only triggers for events, postings, idempotency records, issuance claims and checkpoints;
 - a database-level guard against negative balances in accounts that do not explicitly allow overdrafts.
 
-The adapter also checks account policy and balances before writing. Database triggers are defense in depth, not a substitute for least-privilege database roles.
+The adapter also checks account policy and balances before writing. Database triggers are defense in depth, not a substitute for least-privilege database roles. Re-applying the migration is covered by PostgreSQL integration tests. When upgrading an early draft database, pre-existing external-deposit rows receive the explicit `legacy-unverified` asset-reference marker; they must be reconciled against chain/token evidence before the deposit integrity audit can treat them as verified.
 
 ### Applying the migration
 
