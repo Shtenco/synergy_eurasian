@@ -105,3 +105,19 @@ def test_external_deposit_hash_fields_must_be_canonical():
         make_claim(transaction_hash="0x123").canonical_payload()
     with pytest.raises(ExternalDepositError, match="proof_digest"):
         make_claim(proof_digest="bad").canonical_payload()
+
+
+def test_external_verifier_requires_complete_chain_and_asset_policy():
+    keys = {"verifier-a": b"a" * 32}
+    with pytest.raises(ExternalDepositError, match="minimum confirmations"):
+        ExternalDepositVerifier(
+            keys, threshold=1, supported_chains={"eth-mainnet"},
+            supported_assets={"USDC"}, minimum_confirmations={},
+            maximum_amounts={"USDC": 1000},
+        )
+    with pytest.raises(ExternalDepositError, match="maximum deposit"):
+        ExternalDepositVerifier(
+            keys, threshold=1, supported_chains={"eth-mainnet"},
+            supported_assets={"USDC"}, minimum_confirmations={"eth-mainnet": 12},
+            maximum_amounts={},
+        )
