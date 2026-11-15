@@ -39,6 +39,7 @@ class ExternalDepositClaim:
     confirmations: int
     proof_digest: str
     expires_at: str
+    transfer_index: int = 0
 
     def canonical_payload(self) -> bytes:
         for name, value in (
@@ -60,6 +61,8 @@ class ExternalDepositClaim:
             raise ExternalDepositError("block_number must be a non-negative integer")
         if isinstance(self.confirmations, bool) or not isinstance(self.confirmations, int) or self.confirmations < 0:
             raise ExternalDepositError("confirmations must be a non-negative integer")
+        if isinstance(self.transfer_index, bool) or not isinstance(self.transfer_index, int) or self.transfer_index < 0:
+            raise ExternalDepositError("transfer_index must be a non-negative integer")
         try:
             expiry = datetime.fromisoformat(self.expires_at.replace("Z", "+00:00"))
         except (AttributeError, ValueError) as exc:
@@ -77,6 +80,7 @@ class ExternalDepositClaim:
             "expires_at": expiry.astimezone(timezone.utc).isoformat(),
             "proof_digest": self.proof_digest,
             "transaction_hash": self.transaction_hash,
+            "transfer_index": self.transfer_index,
         }
         return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
