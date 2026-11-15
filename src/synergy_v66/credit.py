@@ -293,12 +293,18 @@ class CreditLedger:
             for cell_id in self.cell_by_id
         ):
             raise ValueError("combined regional and federation reserve contributions exceed member opening cash")
+        # The opening cash floor protects reserve members, not every cell in
+        # the economy. Non-members cannot contribute to either reserve tier and
+        # may legitimately start below the reserve-member floor.
+        reserve_member_ids = set(federation_members)
+        for regional_members_for_region in regional_members.values():
+            reserve_member_ids.update(regional_members_for_region)
         if any(
             member_opening_cash[cell_id]
             - reserve_contributions[cell_id]
             - federation_contributions[cell_id]
             < float(minimum_post_contribution_cash) - EPS
-            for cell_id in self.cell_by_id
+            for cell_id in reserve_member_ids
         ):
             raise ValueError("combined reserve contributions breach minimum post-contribution cash")
         if grace_days < 0:
