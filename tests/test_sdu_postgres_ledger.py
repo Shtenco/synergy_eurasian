@@ -377,6 +377,7 @@ def test_verified_external_deposit_credits_only_attested_usdc_and_is_auditable()
         threshold=2,
         supported_chains={"eth-mainnet"},
         supported_assets={"USDC"},
+        asset_references={("eth-mainnet", "USDC"): "0x" + "1" * 40},
         minimum_confirmations={"eth-mainnet": 12},
         maximum_amounts={"USDC": 1_000_000},
     )
@@ -385,6 +386,7 @@ def test_verified_external_deposit_credits_only_attested_usdc_and_is_auditable()
         chain_id="eth-mainnet",
         transaction_hash="c" * 64,
         asset="USDC",
+        asset_reference="0x" + "1" * 40,
         amount=250,
         destination_account="alice_usdc",
         block_number=21_000_000,
@@ -411,7 +413,7 @@ def test_external_transaction_cannot_be_credited_twice_with_new_claim():
     keys = {"verifier-a": b"a" * 32, "verifier-b": b"b" * 32}
     verifier = ExternalDepositVerifier(
         keys, threshold=2, supported_chains={"eth-mainnet"},
-        supported_assets={"USDC"}, minimum_confirmations={"eth-mainnet": 12},
+        supported_assets={"USDC"}, asset_references={("eth-mainnet", "USDC"): "0x" + "1" * 40}, minimum_confirmations={"eth-mainnet": 12},
         maximum_amounts={"USDC": 1_000_000},
     )
     claim = ExternalDepositClaim(
@@ -432,6 +434,7 @@ def test_external_transaction_cannot_be_credited_twice_with_new_claim():
     repeated = ExternalDepositClaim(
         deposit_id="deposit-replay-2", chain_id=claim.chain_id,
         transaction_hash=claim.transaction_hash, asset=claim.asset,
+        asset_reference=claim.asset_reference,
         amount=claim.amount, destination_account=claim.destination_account,
         block_number=claim.block_number, confirmations=claim.confirmations,
         proof_digest=claim.proof_digest, expires_at=claim.expires_at,
