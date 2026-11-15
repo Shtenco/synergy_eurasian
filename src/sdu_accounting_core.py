@@ -176,6 +176,8 @@ class Ledger:
             account = self._accounts.get(destination)
             if account is None:
                 raise AccountNotFound(destination)
+            if account.asset != "SDU":
+                raise ValidationError("the SDU issuance engine cannot mint external assets")
             if account.kind.startswith("system_"):
                 raise ValidationError("issuance destination cannot be a system account")
             if not account.counts_toward_supply:
@@ -200,6 +202,8 @@ class Ledger:
             account = self._accounts.get(source)
             if account is None:
                 raise AccountNotFound(source)
+            if account.asset != "SDU":
+                raise ValidationError("the SDU burn engine cannot burn external assets")
             if not account.burnable:
                 raise ValidationError(f"burn is not permitted from account {source}")
             if not account.counts_toward_supply:
