@@ -710,8 +710,11 @@ class PostgresLedger:
                             raise ValidationError("system issuance account configuration mismatch")
                         cur.execute(
                             """INSERT INTO sdu_balances(account_id,asset_symbol,balance)
-                               VALUES ('system:issuance:SDU','SDU',0)
-                               ON CONFLICT (account_id,asset_symbol) DO NOTHING"""
+                               SELECT 'system:issuance:SDU','SDU',0
+                               WHERE NOT EXISTS (
+                                   SELECT 1 FROM sdu_balances
+                                   WHERE account_id='system:issuance:SDU' AND asset_symbol='SDU'
+                               )"""
                         )
 
                     if event_type == "SDU_BURN":
@@ -737,8 +740,11 @@ class PostgresLedger:
                             raise ValidationError("system burn account configuration mismatch")
                         cur.execute(
                             """INSERT INTO sdu_balances(account_id,asset_symbol,balance)
-                               VALUES ('system:burn:SDU','SDU',0)
-                               ON CONFLICT (account_id,asset_symbol) DO NOTHING"""
+                               SELECT 'system:burn:SDU','SDU',0
+                               WHERE NOT EXISTS (
+                                   SELECT 1 FROM sdu_balances
+                                   WHERE account_id='system:burn:SDU' AND asset_symbol='SDU'
+                               )"""
                         )
 
                     if event_type == "EXTERNAL_DEPOSIT":
@@ -767,8 +773,12 @@ class PostgresLedger:
                             raise ValidationError("external deposit counter configuration mismatch")
                         cur.execute(
                             """INSERT INTO sdu_balances(account_id,asset_symbol,balance)
-                               VALUES (%s,%s,0) ON CONFLICT (account_id,asset_symbol) DO NOTHING""",
-                            (counter_account, external_deposit_claim.asset),
+                               SELECT %s,%s,0
+                               WHERE NOT EXISTS (
+                                   SELECT 1 FROM sdu_balances WHERE account_id=%s AND asset_symbol=%s
+                               )""",
+                            (counter_account, external_deposit_claim.asset,
+                             counter_account, external_deposit_claim.asset),
                         )
 
                     account_policies: dict[tuple[str, str], tuple[bool, bool, bool, str]] = {}
