@@ -330,3 +330,21 @@ def test_sdu_burn_engine_cannot_burn_external_usdc():
             "alice_usdc", 10, idempotency_key="burn-usdc", actor_id="protocol"
         )
     assert ledger.balance_of("alice_usdc", "USDC") == 0
+
+
+def test_integrity_rejects_reversal_that_does_not_reverse_original_postings():
+    ledger = make_ledger()
+    ledger.issue("alice", 100, approval_ref="a1", idempotency_key="mint-1")
+    transfer = ledger.transfer(
+        "alice", "bob", 40, asset="SDU",
+        idempotency_key="t-1", actor_id="alice",
+    )
+    ledger._post(
+        "REVERSAL",
+        (Posting("alice", "SDU", 1), Posting("bob", "SDU", -1)),
+        idempotency_key="forged-internal-reversal",
+        actor_id="tester",
+        metadata={"original_event_id": transfer.event_id},
+    )
+    with pytest.raises(ValidationError, match="do not exactly reverse"):
+        ledger.verify_integrity()
