@@ -347,17 +347,22 @@ class PostgresLedger:
                         (event_id,),
                     )
                     mint_postings = cur.fetchall()
-                    expected = {
-                        ("system:issuance:SDU", "SDU"): -int(amount),
-                    }
+                    mint_totals: dict[tuple[str, str], int] = {}
                     for account_id, asset, value in mint_postings:
                         key = (account_id, asset)
-                        expected[key] = expected.get(key, 0) + int(value)
-                    if any(value != 0 for key, value in expected.items() if key != ("system:issuance:SDU", "SDU")):
-                        raise PostgresLedgerError("issuance destination postings do not match claim amount")
-                    if expected[("system:issuance:SDU", "SDU")] != -int(amount):
-                        raise PostgresLedgerError("issuance contra-account does not match claim amount")
+                        mint_totals[key] = mint_totals.get(key, 0) + int(value)
+                    if (
+                        len(mint_totals) != 2
+                        or mint_totals.get(("system:issuance:SDU", "SDU")) != -int(amount)
+                        or sum(mint_totals.values()) != 0
+                        or any(asset != "SDU" for _account, asset in mint_totals)
+                    ):
+                        raise PostgresLedgerError("issuance postings do not exactly match claim amount")
                     epoch_claim_totals[epoch_id] = epoch_claim_totals.get(epoch_id, 0) + int(amount)
+                cur.execute("SELECT COUNT(*) FROM sdu_events WHERE event_type='SDU_MINT'")
+                mint_event_count = int(cur.fetchone()[0])
+                if mint_event_count != len(claims):
+                    raise PostgresLedgerError("SDU mint events and verified issuance claims are not one-to-one")
                 cur.execute("SELECT epoch_id,budget,spent FROM sdu_epoch_issuance")
                 for epoch_id, budget, spent in cur.fetchall():
                     if int(spent) != epoch_claim_totals.get(epoch_id, 0):
