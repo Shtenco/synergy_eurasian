@@ -20,6 +20,7 @@ def make_claim(**overrides):
         "chain_id": "eth-mainnet",
         "transaction_hash": "a" * 64,
         "asset": "USDC",
+        "asset_reference": "0x" + "1" * 40,
         "amount": 250_000,
         "destination_account": "alice-usdc",
         "block_number": 21_000_000,
@@ -38,6 +39,7 @@ def make_verifier():
         threshold=2,
         supported_chains={"eth-mainnet"},
         supported_assets={"USDC"},
+        asset_references={("eth-mainnet", "USDC"): "0x" + "1" * 40},
         minimum_confirmations={"eth-mainnet": 12},
         maximum_amounts={"USDC": 5_000_000},
     )
@@ -112,7 +114,7 @@ def test_external_verifier_requires_complete_chain_and_asset_policy():
     with pytest.raises(ExternalDepositError, match="minimum confirmations"):
         ExternalDepositVerifier(
             keys, threshold=1, supported_chains={"eth-mainnet"},
-            supported_assets={"USDC"}, minimum_confirmations={},
+            supported_assets={"USDC"}, asset_references={("eth-mainnet", "USDC"): "0x" + "1" * 40}, minimum_confirmations={},
             maximum_amounts={"USDC": 1000},
         )
     with pytest.raises(ExternalDepositError, match="maximum deposit"):
