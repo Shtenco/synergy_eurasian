@@ -344,7 +344,8 @@ def test_burn_claim_cannot_be_replayed_with_a_new_idempotency_key():
                  actor_id="issuance-service")
     holder_key = b"alice-holder-secret-material-32-bytes"
     burn_authorizer = BurnAuthorizationService(
-        {"alice": holder_key}, {}, protocol_threshold=1, max_burn_amount=1000
+        {"alice": holder_key}, {"validator-a": b"a" * 32},
+        protocol_threshold=1, max_burn_amount=1000
     )
     claim = BurnClaim(
         burn_id="burn-replay",
