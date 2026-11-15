@@ -1,7 +1,7 @@
 import pytest
 
 from synergy_v66.credit import CreditLedger
-from synergy_v66.network_topology import CELLS
+from synergy_v66.network_topology import CELLS, CellSpec
 from synergy_v66.reserve_recovery import (
     execute_reserve_recovery,
     plan_reserve_recovery,
@@ -10,6 +10,37 @@ from synergy_v66.reserve_recovery import (
 
 def _zero_map():
     return {cell.cell_id: 0.0 for cell in CELLS}
+
+
+def _small_member_ledger(member_cash: float, nonmember_cash: float) -> CreditLedger:
+    cells = (
+        CellSpec("RESERVE-MEMBER", "WEST", "services", "reserve_member", 1.0),
+        CellSpec("NONMEMBER", "WEST", "trade", "borrower", 1.0),
+    )
+    return CreditLedger(
+        cells=cells,
+        regions=("WEST",),
+        initial_cash_by_cell={
+            "RESERVE-MEMBER": member_cash,
+            "NONMEMBER": nonmember_cash,
+        },
+        regional_pool_reserve_per_region=0.0,
+        federation_pool_reserve_total=0.0,
+        minimum_post_contribution_cash=10.0,
+        regional_reserve_members_by_region={"WEST": ("RESERVE-MEMBER",)},
+        federation_reserve_members=("RESERVE-MEMBER",),
+    )
+
+
+def test_initial_reserve_cash_floor_does_not_apply_to_nonmembers():
+    ledger = _small_member_ledger(member_cash=100.0, nonmember_cash=5.0)
+    assert ledger.accounts["RESERVE-MEMBER"].cash == pytest.approx(100.0)
+    assert ledger.accounts["NONMEMBER"].cash == pytest.approx(5.0)
+
+
+def test_initial_reserve_cash_floor_still_rejects_underfunded_member():
+    with pytest.raises(ValueError, match="minimum post-contribution cash"):
+        _small_member_ledger(member_cash=5.0, nonmember_cash=100.0)
 
 
 def test_multi_level_recovery_plan_is_non_mutating_and_settles_cash_exactly():
