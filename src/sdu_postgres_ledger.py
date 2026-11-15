@@ -120,8 +120,19 @@ class PostgresLedger:
                     row = cur.fetchone()
                     if row is None:
                         cur.execute(
-                            "INSERT INTO sdu_epoch_issuance(epoch_id,budget,spent) VALUES (%s,%s,0)",
+                            """INSERT INTO sdu_epoch_issuance(epoch_id,budget,spent)
+                               VALUES (%s,%s,0) ON CONFLICT (epoch_id) DO NOTHING""",
                             (epoch_id, budget),
+                        )
+                        cur.execute(
+                            "SELECT spent FROM sdu_epoch_issuance WHERE epoch_id=%s FOR UPDATE",
+                            (epoch_id,),
+                        )
+                        row = cur.fetchone()
+                    if row is not None and int(row[0]) == 0:
+                        cur.execute(
+                            "UPDATE sdu_epoch_issuance SET budget=%s, updated_at=now() WHERE epoch_id=%s",
+                            (budget, epoch_id),
                         )
                     else:
                         if int(row[0]) > budget:
@@ -279,6 +290,33 @@ class PostgresLedger:
 
                     if issuance_claim is not None:
                         self._lock_and_consume_epoch_budget(cur, issuance_claim)
+
+                    if event_type == "SDU_MINT":
+                        expected_counter = ("SDU", "system_issuance", True, False, False)
+                        cur.execute(
+                            """INSERT INTO sdu_accounts
+                               (account_id,asset_symbol,account_kind,allow_negative,
+                                counts_toward_supply,burnable)
+                               VALUES ('system:issuance:SDU','SDU','system_issuance',TRUE,FALSE,FALSE)
+                               ON CONFLICT (account_id,asset_symbol) DO NOTHING"""
+                        )
+                        cur.execute(
+                            """SELECT account_kind,allow_negative,counts_toward_supply,burnable
+                               FROM sdu_accounts
+                               WHERE account_id='system:issuance:SDU' AND asset_symbol='SDU'
+                               FOR UPDATE"""
+                        )
+                        counter_policy = cur.fetchone()
+                        if counter_policy is None or (
+                            str(counter_policy[0]), bool(counter_policy[1]),
+                            bool(counter_policy[2]), bool(counter_policy[3])
+                        ) != expected_counter[1:]:
+                            raise ValidationError("system issuance account configuration mismatch")
+                        cur.execute(
+                            """INSERT INTO sdu_balances(account_id,asset_symbol,balance)
+                               VALUES ('system:issuance:SDU','SDU',0)
+                               ON CONFLICT (account_id,asset_symbol) DO NOTHING"""
+                        )
 
                     account_policies: dict[tuple[str, str], tuple[bool, bool, bool, str]] = {}
                     for account_id, asset in sorted(per_account):
