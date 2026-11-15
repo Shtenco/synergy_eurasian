@@ -62,3 +62,17 @@ def test_recovery_cannot_charge_defaulted_borrowers_or_exceed_shared_period_cap(
     assert result["reserve_member_cash_floor_breaches"] == 0
     assert result["total_member_contributions"] > 0.0
     assert result["invariants"]["no_defaulted_borrower_contributes"]
+
+def test_initial_cash_floor_applies_only_to_reserve_contributors():
+    scenario = _build_scenario(53)
+    from synergy_v66.continuous_default_experiments import _new_ledger
+
+    ledger = _new_ledger(scenario)
+    snapshot = ledger.snapshot()
+    assert ledger.accounts["W-B000"].cash == pytest.approx(10.0)
+    assert ledger.accounts["W-S000"].cash == pytest.approx(20.0)
+    assert all(
+        ledger.accounts[cell_id].cash >= Q3_CASH_FLOOR - 1e-9
+        for cell_id in scenario["federation_members"]
+    )
+    assert snapshot["cash_conservation_error"] == pytest.approx(0.0)
