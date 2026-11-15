@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from sdu_postgres_ledger import (
+    DuplicateBurnClaim,
     DuplicateIssuanceClaim,
     EpochBudgetExceeded,
     PostgresLedger,
@@ -332,3 +333,33 @@ def test_protocol_reserve_burn_requires_explicitly_burnable_reserve_and_threshol
     assert ledger.balance("amm:reserve:burnable") == 55
     assert ledger.total_supply() == 55
     assert ledger.verify_integrity()["events"] == 2
+
+
+def test_burn_claim_cannot_be_replayed_with_a_new_idempotency_key():
+    ledger = make_ledger()
+    keys, issuance_authorizer = make_authorizer()
+    mint = make_claim("claim-burn-replay", 100)
+    ledger.issue(mint, approvals(mint, keys, issuance_authorizer),
+                 authorizer=issuance_authorizer, idempotency_key="mint-burn-replay",
+                 actor_id="issuance-service")
+    holder_key = b"alice-holder-secret-material-32-bytes"
+    burn_authorizer = BurnAuthorizationService(
+        {"alice": holder_key}, {}, protocol_threshold=1, max_burn_amount=1000
+    )
+    claim = BurnClaim(
+        burn_id="burn-replay",
+        source_account="alice",
+        amount=10,
+        burn_scope="holder",
+        actor_id="alice",
+        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+        purpose="holder voluntary burn",
+    )
+    signature = burn_authorizer.sign_holder_for_testing(claim, holder_key)
+    ledger.burn(claim, authorizer=burn_authorizer, idempotency_key="burn-replay-1",
+                holder_signature=signature)
+    with pytest.raises(DuplicateBurnClaim):
+        ledger.burn(claim, authorizer=burn_authorizer, idempotency_key="burn-replay-2",
+                    holder_signature=signature)
+    assert ledger.balance("alice") == 90
+    assert ledger.total_supply() == 90
