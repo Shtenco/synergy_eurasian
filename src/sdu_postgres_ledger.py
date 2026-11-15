@@ -484,13 +484,14 @@ class PostgresLedger:
 
                 cur.execute(
                     """SELECT d.deposit_id,d.chain_id,d.transaction_hash,d.asset_symbol,
-                              d.amount,d.destination_account,d.proof_digest,d.claim_digest,
+                              d.amount,d.destination_account,d.block_number,d.confirmations,
+                              d.proof_digest,d.claim_digest,d.approved_verifier_ids,
                               e.event_type,e.metadata,e.event_id
                        FROM sdu_external_deposit_claims d
                        JOIN sdu_events e ON e.event_id=d.event_id"""
                 )
                 deposits = cur.fetchall()
-                for deposit_id, chain_id, tx_hash, asset, amount, destination, proof_digest, claim_digest, event_type, metadata, event_id in deposits:
+                for deposit_id, chain_id, tx_hash, asset, amount, destination, block_number, confirmations, proof_digest, claim_digest, verifier_ids, event_type, metadata, event_id in deposits:
                     if event_type != "EXTERNAL_DEPOSIT":
                         raise PostgresLedgerError("external deposit claim points to a non-deposit event")
                     if not isinstance(metadata, dict):
@@ -502,6 +503,9 @@ class PostgresLedger:
                         or metadata.get("asset") != asset
                         or metadata.get("proof_digest") != str(proof_digest).strip()
                         or metadata.get("claim_digest") != str(claim_digest).strip()
+                        or metadata.get("block_number") != int(block_number)
+                        or metadata.get("confirmations") != int(confirmations)
+                        or metadata.get("approved_verifier_ids") != list(verifier_ids)
                     ):
                         raise PostgresLedgerError("external deposit claim metadata mismatch")
                     cur.execute(
