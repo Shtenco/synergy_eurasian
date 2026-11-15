@@ -111,6 +111,34 @@ ALTER TABLE sdu_external_deposit_claims
     ADD COLUMN IF NOT EXISTS asset_reference TEXT NOT NULL DEFAULT 'legacy-unverified';
 ALTER TABLE sdu_external_deposit_claims
     DROP CONSTRAINT IF EXISTS sdu_external_deposit_claims_chain_id_transaction_hash_asset_symbol_key;
+
+-- Refuse to "upgrade" populated legacy claims by silently inventing transfer
+-- identity or asset contract references. A reviewed backfill/quarantine must
+-- populate these values and reconcile immutable event metadata first.
+DO $
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM sdu_external_deposit_claims
+        WHERE asset_reference = 'legacy-unverified'
+           OR asset_reference IS NULL
+           OR btrim(asset_reference) = ''
+    ) THEN
+        RAISE EXCEPTION
+            'legacy external deposit rows require reviewed asset_reference backfill before migration';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM sdu_external_deposit_claims
+        GROUP BY chain_id, transaction_hash, asset_symbol, transfer_index
+        HAVING COUNT(*) > 1
+    ) THEN
+        RAISE EXCEPTION
+            'duplicate external deposit transfer identities require reviewed quarantine before migration';
+    END IF;
+END;
+$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS sdu_external_deposit_transfer_identity
     ON sdu_external_deposit_claims(chain_id, transaction_hash, asset_symbol, transfer_index);
 
