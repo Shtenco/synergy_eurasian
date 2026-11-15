@@ -17,6 +17,7 @@
 | `tests/test_sdu_ledger_checkpoints.py` | Checkpoint signature and monotonicity tests |
 | `tests/test_sdu_postgres_ledger.py` | PostgreSQL integration, independent-connection concurrency and database guard tests |
 | `.github/workflows/sdu-accounting.yml` | Dedicated Python + PostgreSQL CI job |
+| `requirements-sdu.txt` | Optional psycopg 3 and SDU test dependencies |
 
 This is an additive branch. It does not edit the existing Synergy economy models or replace the canonical asymmetric AMM.
 
@@ -184,7 +185,7 @@ python -m pytest -q \
 PostgreSQL integration tests require PostgreSQL 16+, psycopg 3 and `SDU_TEST_DATABASE_URL`:
 
 ```bash
-python -m pip install "pytest>=8,<9" "psycopg[binary]>=3.2,<4"
+python -m pip install -r requirements-sdu.txt
 python -m pytest -q tests/test_sdu_postgres_ledger.py
 ```
 
