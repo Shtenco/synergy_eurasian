@@ -61,7 +61,7 @@ Account.burnable=False blocks burn from a protocol reserve. Reserve accounts sho
 
 ## 4. Privileged operations and trust boundary
 
-The public post() method rejects technical system_* accounts. Mint and burn use dedicated command methods; reversals use the internal posting path to restore the exact original postings.
+The public post() method rejects technical system_* accounts and reserved event types SDU_MINT, SDU_BURN and REVERSAL. Mint and burn use dedicated command methods; reversals use the internal posting path to restore the exact original postings.
 
 issue() requires and records an approval_ref, but the prototype does not validate the referenced approval, validator signatures, evidence, epoch budget, or constitutional limits. The reference is an audit link, not proof of authorization. A production issuance service must verify those conditions before calling the ledger.
 
@@ -123,13 +123,13 @@ The focused test file covers:
 12. Protocol-reserve burn restriction.
 13. Non-positive command amount rejection.
 14. Projection reconstruction.
-15. Public-post attempt to bypass the issuance counter gate.
+15. Public-post attempt to bypass the issuance counter gate.\n16. Forged reversal-event attempt.
 
 Run the focused tests:
 
     pytest -q tests/test_sdu_accounting_core.py
 
-The local implementation check for this increment completed with 16 passing tests. This is not a claim that the repository-wide CI suite has passed.
+The local implementation check for this increment completed with 17 passing tests. This is not a claim that the repository-wide CI suite has passed.
 
 ## 8. Required next engineering steps
 
