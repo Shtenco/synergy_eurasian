@@ -14,14 +14,14 @@ from sdu_burn_authorization import (
 )
 
 
-def claim(scope="holder", source="alice", amount=10):
+def claim(scope="holder", source="alice", amount=10, expires_at=None):
     return BurnClaim(
         burn_id="burn-001",
         source_account=source,
         amount=amount,
         burn_scope=scope,
         actor_id="alice" if scope == "holder" else "dao-executor",
-        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+        expires_at=expires_at or (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
         purpose="voluntary burn" if scope == "holder" else "approved reserve adjustment",
     )
 
