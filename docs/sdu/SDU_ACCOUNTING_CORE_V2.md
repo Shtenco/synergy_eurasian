@@ -188,7 +188,7 @@ python -m pip install "pytest>=8,<9" "psycopg[binary]>=3.2,<4"
 python -m pytest -q tests/test_sdu_postgres_ledger.py
 ```
 
-The dedicated GitHub Actions workflow starts an ephemeral PostgreSQL 16 service and runs all SDU test files plus Python compilation. The current source contains 61 test functions across the six SDU test modules; the final pass count must be taken from the latest completed Actions run, not inferred from test-file counts.
+The dedicated GitHub Actions workflow starts an ephemeral PostgreSQL 16 service and runs all SDU test files plus Python compilation. The current source contains 62 test functions across the six SDU test modules; the final pass count must be taken from the latest completed Actions run, not inferred from test-file counts.
 
 The repository-wide EIIOM CI has a separate pre-existing test-collection failure involving missing `synergy_v66.credit` on the base branch. This SDU workflow does not hide or claim to repair that unrelated failure.
 
