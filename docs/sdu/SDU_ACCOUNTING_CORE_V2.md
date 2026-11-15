@@ -127,19 +127,28 @@ The evidence digest proves only that validators signed a particular digest. It d
 
 **Checkpoint limitation:** storing a signed checkpoint only in the same database does not protect against a database superuser who can rewrite both journal and checkpoint rows. Export each checkpoint to an independent trust domain (separate provider/account, immutable object lock, public transparency log or other independently administered anchor). HMAC is only a prototype signature; production should use an asymmetric signing key so independent auditors can verify checkpoints without possessing the signing secret. The verifier checks checkpoint authenticity and monotonic sequence; proving continuity between two checkpoints still requires auditing the intervening event chain.
 
-## 5. What remains deliberately outside this increment
+## 5. Holder and protocol-reserve burn authorization
+
+`src/sdu_burn_authorization.py` separates two burn paths:
+
+- **Holder burn:** the source account owner signs the exact source account, amount, purpose and expiry. The PostgreSQL adapter accepts only a valid holder signature for that account.
+- **Protocol-reserve burn:** requires a threshold of independent validator approvals. The source must be an explicitly burnable account whose kind is `amm_*` or `protocol_*`. A reserve configured `burnable=False` remains unburnable even when a claim is signed.
+
+Both paths are limited to SDU, create an immutable `SDU_BURN` event, debit the real source account, credit a non-supply burn counter and persist a unique burn claim in the same database transaction. The integrity audit checks the burn claim against the exact journal postings. Repeating a request with the same idempotency key returns the original event; a new key cannot consume an already-used burn claim.
+
+The prototype uses HMAC-SHA256 for both holder and validator signatures. Key ownership/identity registry, asymmetric signatures, hardware key custody, wallet challenge binding and recovery are still production requirements. The holder key map is not a replacement for an authenticated wallet/account registry.
+
+## 6. What remains deliberately outside this increment
 
 - No production identity provider, wallet signature verification or account-ownership authorization.
 - No production key management, validator election, DAO governance, anti-Sybil or evidence oracle.
 - No verified external-deposit adapter. A USDC balance may be credited only after an independently verified real deposit; SDU issuance cannot create USDC.
-- No voluntary burn command in the PostgreSQL adapter yet. The in-memory reference ledger has a burn path, but production burn must authenticate account ownership and distinguish holder burn from protocol-reserve burn.
-- No protocol-reserve burn authorization flow.
 - No AMM quote engine, LP accounting, fee routing or oracle integration.
 - No AI monetary-policy optimizer or long-horizon simulation.
 
 The in-memory core remains a reference model, not the persistence layer. Python underscore naming is not a security boundary; never expose internal posting methods or database credentials to untrusted callers.
 
-## 6. Canonical asymmetric AMM compatibility
+## 7. Canonical asymmetric AMM compatibility
 
 The existing asymmetric AMM formulas remain the canonical research baseline. They are not replaced with a constant-product \`x*y=k\` curve.
 
@@ -153,7 +162,7 @@ Before implementing the PostgreSQL swap settlement path, the following accountin
 
 Issuance does not automatically add SDU to AMM reserves. External voluntary burns reduce total supply but not pool SDU reserve unless those tokens are actually removed from the pool. AMM quote, SDU reserve, USDC reserve, external reference price and mark-to-market TVL must remain separate measurements.
 
-## 7. Test and CI commands
+## 8. Test and CI commands
 
 Pure-Python tests:
 
@@ -171,11 +180,11 @@ python -m pip install "pytest>=8,<9" "psycopg[binary]>=3.2,<4"
 python -m pytest -q tests/test_sdu_postgres_ledger.py
 \`\`\`
 
-The dedicated GitHub Actions workflow starts an ephemeral PostgreSQL 16 service and runs all SDU test files plus Python compilation. The current source contains 44 test functions across the four SDU test modules; the final pass count must be taken from the latest completed Actions run, not inferred from test-file counts.
+The dedicated GitHub Actions workflow starts an ephemeral PostgreSQL 16 service and runs all SDU test files plus Python compilation. The current source contains 52 test functions across the five SDU test modules; the final pass count must be taken from the latest completed Actions run, not inferred from test-file counts.
 
 The repository-wide EIIOM CI has a separate pre-existing test-collection failure involving missing \`synergy_v66.credit\` on the base branch. This SDU workflow does not hide or claim to repair that unrelated failure.
 
-## 8. Constitutional compatibility
+## 9. Constitutional compatibility
 
 This increment preserves the intended research constitution:
 - **ALL:** anyone may initiate an issuance claim; initiation is not unilateral mint authority.
