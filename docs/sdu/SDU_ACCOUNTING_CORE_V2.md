@@ -65,7 +65,7 @@ The public post() method rejects technical system_* accounts and reserved event 
 
 issue() requires and records an approval_ref, but the prototype does not validate the referenced approval, validator signatures, evidence, epoch budget, or constitutional limits. The reference is an audit link, not proof of authorization. A production issuance service must verify those conditions before calling the ledger.
 
-Python's underscore naming is not a security boundary. The module must remain behind a trusted command service; untrusted users must never receive direct access to account creation or internal posting methods.
+Python's underscore naming is not a security boundary. The module must remain behind a trusted command service; untrusted users must never receive direct access to account creation or internal posting methods. The prototype also does not authenticate actor_id or prove that the actor owns the source account for a transfer or voluntary burn. Owner authorization and key/signature verification belong in the command/API layer.
 
 ## 5. Atomicity and concurrency scope
 
@@ -123,13 +123,13 @@ The focused test file covers:
 12. Protocol-reserve burn restriction.
 13. Non-positive command amount rejection.
 14. Projection reconstruction.
-15. Public-post attempt to bypass the issuance counter gate.\n16. Forged reversal-event attempt.
+15. Public-post attempt to bypass the issuance counter gate.\n16. Forged reversal-event attempt.\n17. Supply-counted account overdraft configuration rejection.\n18. Pre-seeded system-counter configuration rejection.
 
 Run the focused tests:
 
     pytest -q tests/test_sdu_accounting_core.py
 
-The local implementation check for this increment completed with 17 passing tests. This is not a claim that the repository-wide CI suite has passed.
+The local implementation check for this increment completed with 19 passing tests. This is not a claim that the repository-wide CI suite has passed.
 
 ## 8. Required next engineering steps
 
