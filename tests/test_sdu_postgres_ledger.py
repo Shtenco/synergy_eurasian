@@ -181,6 +181,12 @@ def test_database_rejects_direct_negative_balance_and_journal_mutation():
     with psycopg.connect(DATABASE_URL) as conn:
         with pytest.raises(psycopg.Error):
             with conn.transaction():
+                conn.execute(
+                    "UPDATE sdu_balances SET balance=999 WHERE account_id='alice' AND asset_symbol='SDU'"
+                )
+    with psycopg.connect(DATABASE_URL) as conn:
+        with pytest.raises(psycopg.Error):
+            with conn.transaction():
                 conn.execute("UPDATE sdu_events SET actor_id='tampered' WHERE event_id=%s", (event.event_id,))
     assert ledger.balance("alice") == 100
 
