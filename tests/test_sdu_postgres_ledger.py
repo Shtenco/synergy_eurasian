@@ -414,7 +414,6 @@ def test_external_transaction_cannot_be_credited_twice_with_new_claim():
     verifier = ExternalDepositVerifier(
         keys, threshold=2, supported_chains={"eth-mainnet"},
         supported_assets={"USDC"}, asset_references={("eth-mainnet", "USDC"): "0x" + "1" * 40}, minimum_confirmations={"eth-mainnet": 12},
-        asset_references={("eth-mainnet", "USDC"): "0x" + "1" * 40},
         maximum_amounts={"USDC": 1_000_000},
     )
     claim = ExternalDepositClaim(
