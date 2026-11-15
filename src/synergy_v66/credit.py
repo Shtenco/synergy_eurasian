@@ -294,7 +294,8 @@ class CreditLedger:
         ):
             raise ValueError("combined regional and federation reserve contributions exceed member opening cash")
         if any(
-            member_opening_cash[cell_id]
+            reserve_contributions[cell_id] + federation_contributions[cell_id] > EPS
+            and member_opening_cash[cell_id]
             - reserve_contributions[cell_id]
             - federation_contributions[cell_id]
             < float(minimum_post_contribution_cash) - EPS
