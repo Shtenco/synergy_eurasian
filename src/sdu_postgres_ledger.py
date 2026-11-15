@@ -33,7 +33,11 @@ from sdu_issuance_authorization import (
     IssuanceClaim,
     ValidatorApproval,
 )
-from sdu_ledger_checkpoints import (\n    LedgerCheckpoint,\n    create_checkpoint as build_checkpoint,\n    verify_checkpoint,\n)
+from sdu_ledger_checkpoints import (
+    LedgerCheckpoint,
+    create_checkpoint as build_checkpoint,
+    verify_checkpoint,
+)
 
 
 class PostgresLedgerError(Exception):
