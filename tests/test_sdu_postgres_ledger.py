@@ -38,6 +38,8 @@ def install_schema():
     migration = (ROOT / "migrations" / "001_sdu_ledger.sql").read_text()
     with psycopg.connect(DATABASE_URL) as conn:
         conn.execute(migration)
+        # Re-applying the migration must be safe for an existing research DB.
+        conn.execute(migration)
     yield
 
 
