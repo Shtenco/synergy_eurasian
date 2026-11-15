@@ -150,6 +150,7 @@ CREATE OR REPLACE FUNCTION sdu_guard_negative_balance()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
     negative_allowed BOOLEAN;
+    journal_balance NUMERIC;
 BEGIN
     SELECT allow_negative INTO negative_allowed
     FROM sdu_accounts
@@ -159,6 +160,12 @@ BEGIN
     END IF;
     IF NEW.balance < 0 AND NOT negative_allowed THEN
         RAISE EXCEPTION 'negative balance forbidden for account %', NEW.account_id;
+    END IF;
+    SELECT COALESCE(SUM(amount),0) INTO journal_balance
+    FROM sdu_postings
+    WHERE account_id=NEW.account_id AND asset_symbol=NEW.asset_symbol;
+    IF NEW.balance <> journal_balance THEN
+        RAISE EXCEPTION 'balance projection differs from journal for account %', NEW.account_id;
     END IF;
     RETURN NEW;
 END;
