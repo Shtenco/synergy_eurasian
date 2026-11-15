@@ -348,3 +348,29 @@ def test_integrity_rejects_reversal_that_does_not_reverse_original_postings():
     )
     with pytest.raises(ValidationError, match="do not exactly reverse"):
         ledger.verify_integrity()
+
+
+def test_public_post_cannot_create_supply_from_non_supply_counter_account():
+    ledger = make_ledger()
+    ledger.create_account(
+        Account(
+            "external:fake_sdu",
+            "SDU",
+            allow_negative=True,
+            counts_toward_supply=False,
+            kind="external_counter",
+            burnable=False,
+        )
+    )
+    with pytest.raises(ValidationError, match="privileged counter accounts"):
+        ledger.post(
+            "FAKE_EXTERNAL_CREDIT",
+            (
+                Posting("external:fake_sdu", "SDU", -100),
+                Posting("alice", "SDU", 100),
+            ),
+            idempotency_key="fake-external-credit",
+            actor_id="attacker",
+        )
+    assert ledger.total_supply("SDU") == 0
+    assert ledger.balance("alice") == 0
