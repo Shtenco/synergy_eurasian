@@ -296,3 +296,19 @@ def test_public_post_cannot_forge_reversal_metadata():
             metadata={"original_event_id": transfer.event_id},
         )
     ledger.verify_integrity()
+
+
+def test_supply_counted_account_cannot_be_configured_with_overdraft():
+    ledger = Ledger()
+    ledger.register_asset(AssetSpec("SDU", 6))
+    with pytest.raises(ValidationError):
+        ledger.create_account(
+            Account("unsafe", "SDU", allow_negative=True, counts_toward_supply=True)
+        )
+
+
+def test_system_account_configuration_cannot_be_preseeded_incorrectly():
+    ledger = make_ledger()
+    ledger.create_account(Account("system:issuance:SDU", "SDU", kind="wallet"))
+    with pytest.raises(ValidationError, match="system account configuration mismatch"):
+        ledger.issue("alice", 10, approval_ref="a1", idempotency_key="mint-1")
