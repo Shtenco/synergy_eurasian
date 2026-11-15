@@ -287,7 +287,7 @@ class PostgresLedger:
                     expected_request_hash = self._request_hash(
                         str(row[2]), str(row[4]), postings, metadata_json
                     )
-                    if not hashlib.compare_digest(expected_request_hash, str(idem[0]).strip()):
+                    if not hmac.compare_digest(expected_request_hash, str(idem[0]).strip()):
                         raise PostgresLedgerError(f"idempotency fingerprint mismatch for event {event_id}")
                     previous_hash = expected_hash
                     expected_sequence += 1
@@ -665,7 +665,7 @@ class PostgresLedger:
     def _load_event(cur: object, event_id: object) -> LedgerEvent:
         cur.execute(
             """SELECT event_id,sequence,event_type,idempotency_key,actor_id,
-                      event_timestamp,postings,metadata,previous_hash,event_hash
+                      event_timestamp,metadata,previous_hash,event_hash
                FROM sdu_events WHERE event_id=%s""",
             (event_id,),
         )
