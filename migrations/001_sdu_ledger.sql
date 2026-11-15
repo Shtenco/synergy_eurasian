@@ -104,6 +104,14 @@ CREATE TABLE IF NOT EXISTS sdu_external_deposit_claims (
     UNIQUE (chain_id, transaction_hash, asset_symbol, transfer_index)
 );
 
+-- Safe re-application for databases created from an earlier research draft.
+ALTER TABLE sdu_external_deposit_claims
+    ADD COLUMN IF NOT EXISTS transfer_index INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sdu_external_deposit_claims
+    DROP CONSTRAINT IF EXISTS sdu_external_deposit_claims_chain_id_transaction_hash_asset_symbol_key;
+CREATE UNIQUE INDEX IF NOT EXISTS sdu_external_deposit_transfer_identity
+    ON sdu_external_deposit_claims(chain_id, transaction_hash, asset_symbol, transfer_index);
+
 CREATE TABLE IF NOT EXISTS sdu_burn_claims (
     burn_id TEXT PRIMARY KEY CHECK (burn_id <> ''),
     event_id UUID NOT NULL UNIQUE REFERENCES sdu_events(event_id),
