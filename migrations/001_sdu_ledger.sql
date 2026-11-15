@@ -86,6 +86,23 @@ CREATE TABLE IF NOT EXISTS sdu_issuance_claims (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS sdu_external_deposit_claims (
+    deposit_id TEXT PRIMARY KEY CHECK (deposit_id <> ''),
+    event_id UUID NOT NULL UNIQUE REFERENCES sdu_events(event_id),
+    chain_id TEXT NOT NULL,
+    transaction_hash CHAR(64) NOT NULL,
+    asset_symbol TEXT NOT NULL REFERENCES sdu_assets(symbol),
+    amount NUMERIC NOT NULL CHECK (amount > 0 AND amount = trunc(amount)),
+    destination_account TEXT NOT NULL,
+    block_number NUMERIC NOT NULL CHECK (block_number >= 0 AND block_number = trunc(block_number)),
+    confirmations INTEGER NOT NULL CHECK (confirmations >= 0),
+    proof_digest CHAR(64) NOT NULL,
+    claim_digest CHAR(64) NOT NULL,
+    approved_verifier_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (chain_id, transaction_hash, asset_symbol)
+);
+
 CREATE TABLE IF NOT EXISTS sdu_burn_claims (
     burn_id TEXT PRIMARY KEY CHECK (burn_id <> ''),
     event_id UUID NOT NULL UNIQUE REFERENCES sdu_events(event_id),
@@ -245,4 +262,10 @@ FOR EACH ROW EXECUTE FUNCTION sdu_reject_protected_mutation();
 DROP TRIGGER IF EXISTS sdu_burn_claims_immutable ON sdu_burn_claims;
 CREATE TRIGGER sdu_burn_claims_immutable
 BEFORE UPDATE OR DELETE ON sdu_burn_claims
+FOR EACH ROW EXECUTE FUNCTION sdu_reject_protected_mutation();
+
+
+DROP TRIGGER IF EXISTS sdu_external_deposit_claims_immutable ON sdu_external_deposit_claims;
+CREATE TRIGGER sdu_external_deposit_claims_immutable
+BEFORE UPDATE OR DELETE ON sdu_external_deposit_claims
 FOR EACH ROW EXECUTE FUNCTION sdu_reject_protected_mutation();
