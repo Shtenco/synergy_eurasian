@@ -28,6 +28,7 @@ from sdu_accounting_core import (
     Posting,
     ValidationError,
 )
+from sdu_burn_authorization import BurnAuthorizationService, BurnClaim
 from sdu_issuance_authorization import (
     IssuanceAuthorizationService,
     IssuanceClaim,
@@ -206,6 +207,41 @@ class PostgresLedger:
             "SDU_MINT", legs, idempotency_key=idempotency_key,
             actor_id=actor_id, metadata=metadata, privileged=True,
             issuance_claim=claim,
+        )
+
+    def burn(
+        self,
+        claim: BurnClaim,
+        *,
+        authorizer: BurnAuthorizationService,
+        idempotency_key: str,
+        holder_signature: str | None = None,
+        validator_approvals: tuple[ValidatorApproval, ...] | list[ValidatorApproval] = (),
+    ) -> LedgerEvent:
+        verified = authorizer.verify(
+            claim,
+            holder_signature=holder_signature,
+            validator_approvals=validator_approvals,
+        )
+        metadata = {
+            "approved_validator_ids": list(verified.approved_validator_ids),
+            "burn_id": claim.burn_id,
+            "burn_scope": claim.burn_scope,
+            "claim_digest": verified.claim_digest,
+            "purpose": claim.purpose,
+        }
+        return self._post_transaction(
+            "SDU_BURN",
+            (
+                Posting(claim.source_account, "SDU", -claim.amount),
+                Posting("system:burn:SDU", "SDU", claim.amount),
+            ),
+            idempotency_key=idempotency_key,
+            actor_id=claim.actor_id,
+            metadata=metadata,
+            privileged=True,
+            burn_claim=claim,
+            approved_validator_ids=verified.approved_validator_ids,
         )
 
     def total_supply(self, asset: str = "SDU") -> int:
@@ -441,6 +477,8 @@ class PostgresLedger:
         metadata: Mapping[str, object],
         privileged: bool,
         issuance_claim: IssuanceClaim | None = None,
+        burn_claim: BurnClaim | None = None,
+        approved_validator_ids: tuple[str, ...] = (),
     ) -> LedgerEvent:
         if not event_type or not event_type.strip():
             raise ValidationError("event_type is required")
@@ -515,6 +553,33 @@ class PostgresLedger:
                                ON CONFLICT (account_id,asset_symbol) DO NOTHING"""
                         )
 
+                    if event_type == "SDU_BURN":
+                        expected_counter = ("system_burn", False, False, False)
+                        cur.execute(
+                            """INSERT INTO sdu_accounts
+                               (account_id,asset_symbol,account_kind,allow_negative,
+                                counts_toward_supply,burnable)
+                               VALUES ('system:burn:SDU','SDU','system_burn',FALSE,FALSE,FALSE)
+                               ON CONFLICT (account_id,asset_symbol) DO NOTHING"""
+                        )
+                        cur.execute(
+                            """SELECT account_kind,allow_negative,counts_toward_supply,burnable
+                               FROM sdu_accounts
+                               WHERE account_id='system:burn:SDU' AND asset_symbol='SDU'
+                               FOR UPDATE"""
+                        )
+                        counter_policy = cur.fetchone()
+                        if counter_policy is None or (
+                            str(counter_policy[0]), bool(counter_policy[1]),
+                            bool(counter_policy[2]), bool(counter_policy[3])
+                        ) != expected_counter:
+                            raise ValidationError("system burn account configuration mismatch")
+                        cur.execute(
+                            """INSERT INTO sdu_balances(account_id,asset_symbol,balance)
+                               VALUES ('system:burn:SDU','SDU',0)
+                               ON CONFLICT (account_id,asset_symbol) DO NOTHING"""
+                        )
+
                     account_policies: dict[tuple[str, str], tuple[bool, bool, bool, str]] = {}
                     for account_id, asset in sorted(per_account):
                         cur.execute(
@@ -551,6 +616,28 @@ class PostgresLedger:
                         dest_policy = account_policies.get((destination, "SDU"))
                         if dest_policy is None or not dest_policy[1] or dest_policy[3].startswith("system_"):
                             raise ValidationError("issuance destination must be a supply-counted SDU account")
+                    elif event_type == "SDU_BURN":
+                        if not privileged or burn_claim is None:
+                            raise ValidationError("SDU_BURN requires a verified burn authorization")
+                        if any(asset != "SDU" for asset in per_asset):
+                            raise ValidationError("SDU burn cannot destroy external assets")
+                        source_policy = account_policies.get((burn_claim.source_account, "SDU"))
+                        if source_policy is None or not source_policy[2] or not source_policy[1]:
+                            raise ValidationError("burn source must be explicitly burnable and supply-counted")
+                        source_kind = source_policy[3]
+                        if source_kind.startswith("system_"):
+                            raise ValidationError("system accounts cannot be burn sources")
+                        if burn_claim.burn_scope == "holder" and (
+                            source_kind.startswith("amm_") or source_kind.startswith("protocol_")
+                        ):
+                            raise ValidationError("holder burn cannot spend protocol reserve accounts")
+                        if burn_claim.burn_scope == "protocol_reserve" and not (
+                            source_kind.startswith("amm_") or source_kind.startswith("protocol_")
+                        ):
+                            raise ValidationError("protocol-reserve burn must target an explicit protocol account")
+                        counter_policy = account_policies.get(("system:burn:SDU", "SDU"))
+                        if counter_policy is None or counter_policy[3] != "system_burn":
+                            raise ValidationError("system burn counter is missing")
                     elif privileged:
                         raise ValidationError("unsupported privileged operation")
 
@@ -595,6 +682,17 @@ class PostgresLedger:
                                VALUES (%s,%s,%s,%s,%s)""",
                             (issuance_claim.claim_id, issuance_claim.epoch_id, event_id,
                              issuance_claim.amount, issuance_claim.evidence_digest),
+                        )
+                    if burn_claim is not None:
+                        cur.execute(
+                            """INSERT INTO sdu_burn_claims
+                               (burn_id,event_id,source_account,amount,burn_scope,
+                                claim_digest,approved_validator_ids)
+                               VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb)""",
+                            (burn_claim.burn_id, event_id, burn_claim.source_account,
+                             burn_claim.amount, burn_claim.burn_scope,
+                             metadata["claim_digest"],
+                             json.dumps(list(approved_validator_ids))),
                         )
                     cur.execute(
                         """UPDATE sdu_ledger_state
