@@ -121,3 +121,16 @@ def test_external_verifier_requires_complete_chain_and_asset_policy():
             supported_assets={"USDC"}, minimum_confirmations={"eth-mainnet": 12},
             maximum_amounts={},
         )
+
+
+def test_transfer_index_is_signed_and_must_be_non_negative_integer():
+    keys, verifier = make_verifier()
+    original = make_claim(transfer_index=0)
+    signatures = sign(original, keys, verifier)
+    altered = make_claim(transfer_index=1)
+    with pytest.raises(ExternalDepositError, match="attestation"):
+        verifier.verify(altered, signatures)
+    with pytest.raises(ExternalDepositError, match="transfer_index"):
+        make_claim(transfer_index=-1).canonical_payload()
+    with pytest.raises(ExternalDepositError, match="transfer_index"):
+        make_claim(transfer_index=True).canonical_payload()
