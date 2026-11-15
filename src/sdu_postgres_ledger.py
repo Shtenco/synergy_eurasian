@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import hashlib
+import hmac
 import json
 from typing import Callable, Iterable, Mapping
 from uuid import uuid4
@@ -32,6 +33,7 @@ from sdu_issuance_authorization import (
     IssuanceClaim,
     ValidatorApproval,
 )
+from sdu_ledger_checkpoints import LedgerCheckpoint, create_checkpoint as build_checkpoint
 
 
 class PostgresLedgerError(Exception):
@@ -233,6 +235,145 @@ class PostgresLedger:
                 if row is None:
                     raise AccountNotFound(account_id)
                 return int(row[0])
+
+    def verify_integrity(self) -> dict[str, int | str]:
+        """Audit event sequence, hash chain, postings, idempotency and balances."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT event_id,sequence,event_type,idempotency_key,actor_id,
+                              event_timestamp,metadata,previous_hash,event_hash
+                       FROM sdu_events ORDER BY sequence"""
+                )
+                events = cur.fetchall()
+                expected_sequence = 1
+                previous_hash = self.GENESIS_HASH
+                projection: dict[tuple[str, str], int] = {}
+                for row in events:
+                    event_id = str(row[0])
+                    sequence = int(row[1])
+                    if sequence != expected_sequence:
+                        raise PostgresLedgerError("event sequence gap or reorder detected")
+                    if str(row[7]).strip() != previous_hash:
+                        raise PostgresLedgerError("event hash-chain predecessor mismatch")
+                    cur.execute(
+                        """SELECT account_id,asset_symbol,amount FROM sdu_postings
+                           WHERE event_id=%s ORDER BY line_number""",
+                        (row[0],),
+                    )
+                    postings = tuple(Posting(a, asset, int(amount)) for a, asset, amount in cur.fetchall())
+                    if len(postings) < 2:
+                        raise PostgresLedgerError("event has fewer than two postings")
+                    totals: dict[str, int] = {}
+                    for posting in postings:
+                        totals[posting.asset] = totals.get(posting.asset, 0) + posting.amount
+                        key = (posting.account_id, posting.asset)
+                        projection[key] = projection.get(key, 0) + posting.amount
+                    if any(total != 0 for total in totals.values()):
+                        raise PostgresLedgerError(f"event {event_id} is unbalanced")
+                    metadata_json = json.dumps(
+                        row[6], sort_keys=True, separators=(",", ":"), ensure_ascii=False
+                    )
+                    timestamp_text = row[5].astimezone(timezone.utc).isoformat()
+                    expected_hash = self._event_hash(
+                        event_id, sequence, str(row[2]), str(row[3]), str(row[4]),
+                        timestamp_text, postings, metadata_json, previous_hash,
+                    )
+                    if not hmac.compare_digest(expected_hash, str(row[8]).strip()):
+                        raise PostgresLedgerError(f"event hash mismatch at sequence {sequence}")
+                    cur.execute(
+                        "SELECT request_hash FROM sdu_idempotency WHERE idempotency_key=%s",
+                        (row[3],),
+                    )
+                    idem = cur.fetchone()
+                    if idem is None:
+                        raise PostgresLedgerError(f"missing idempotency record for event {event_id}")
+                    expected_request_hash = self._request_hash(
+                        str(row[2]), str(row[4]), postings, metadata_json
+                    )
+                    if not hashlib.compare_digest(expected_request_hash, str(idem[0]).strip()):
+                        raise PostgresLedgerError(f"idempotency fingerprint mismatch for event {event_id}")
+                    previous_hash = expected_hash
+                    expected_sequence += 1
+
+                cur.execute("SELECT account_id,asset_symbol,balance FROM sdu_balances")
+                stored_balances = {
+                    (account_id, asset): int(balance)
+                    for account_id, asset, balance in cur.fetchall()
+                }
+                cur.execute(
+                    "SELECT account_id,asset_symbol,allow_negative FROM sdu_accounts"
+                )
+                account_policies = {
+                    (account_id, asset): bool(allow_negative)
+                    for account_id, asset, allow_negative in cur.fetchall()
+                }
+                for key in account_policies:
+                    projection.setdefault(key, 0)
+                if projection != stored_balances:
+                    raise PostgresLedgerError("balance projection differs from event replay")
+                for key, balance in projection.items():
+                    if balance < 0 and not account_policies.get(key, False):
+                        raise PostgresLedgerError(f"negative balance in spendable account {key[0]}")
+                cur.execute(
+                    "SELECT next_sequence,last_event_hash FROM sdu_ledger_state WHERE singleton=TRUE"
+                )
+                state = cur.fetchone()
+                if state is None:
+                    raise PostgresLedgerError("ledger state singleton row is missing")
+                if int(state[0]) != expected_sequence or str(state[1]).strip() != previous_hash:
+                    raise PostgresLedgerError("ledger state head differs from event journal")
+                return {
+                    "events": len(events),
+                    "accounts": len(account_policies),
+                    "postings": sum(1 for _ in projection) if not events else self._count_postings(cur),
+                    "last_sequence": expected_sequence - 1,
+                    "last_hash": previous_hash,
+                }
+
+    @staticmethod
+    def _count_postings(cur: object) -> int:
+        cur.execute("SELECT COUNT(*) FROM sdu_postings")
+        return int(cur.fetchone()[0])
+
+    def create_and_store_checkpoint(self, signing_key: bytes) -> LedgerCheckpoint:
+        """Create a checkpoint under the ledger-head lock and store its local copy.
+
+        The returned signed checkpoint must also be published to an independent
+        anchor (separate account/provider or public append-only log). Storing it
+        only in this database does not protect against a database superuser.
+        """
+        with self._connect() as conn:
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT next_sequence,last_event_hash FROM sdu_ledger_state "
+                        "WHERE singleton=TRUE FOR UPDATE"
+                    )
+                    state = cur.fetchone()
+                    if state is None:
+                        raise PostgresLedgerError("ledger state singleton row is missing")
+                    checkpoint = build_checkpoint(
+                        int(state[0]) - 1, str(state[1]).strip(), signing_key
+                    )
+                    cur.execute(
+                        "SELECT checkpoint_digest,signature,signature_algorithm FROM sdu_checkpoints WHERE sequence=%s",
+                        (checkpoint.sequence,),
+                    )
+                    existing = cur.fetchone()
+                    if existing is not None:
+                        if str(existing[0]).strip() != checkpoint.digest:
+                            raise PostgresLedgerError("a different checkpoint already exists for this sequence")
+                        return checkpoint
+                    cur.execute(
+                        """INSERT INTO sdu_checkpoints
+                           (sequence,event_hash,checkpoint_digest,signature,signature_algorithm,created_at)
+                           VALUES (%s,%s,%s,%s,%s,%s)""",
+                        (checkpoint.sequence, checkpoint.event_hash, checkpoint.digest,
+                         checkpoint.signature, checkpoint.algorithm,
+                         datetime.fromisoformat(checkpoint.created_at)),
+                    )
+                    return checkpoint
 
     def _post_transaction(
         self,
