@@ -103,7 +103,7 @@ No AI policy optimizer, DAO voting, Sybil defence, validator selection, epoch bu
 
 ### External assets
 
-USDC is represented only as a separately denominated ledger asset. The prototype does not establish that any USDC reserve exists outside a test fixture or that USDC is redeemable.
+USDC is represented only as a separately denominated ledger asset. The SDU issuance and burn commands explicitly reject USDC and other external assets. USDC is represented only as a separately denominated ledger asset. The prototype does not establish that any USDC reserve exists outside a test fixture or that USDC is redeemable.
 
 ## 7. Test coverage in this increment
 
@@ -123,13 +123,13 @@ The focused test file covers:
 12. Protocol-reserve burn restriction.
 13. Non-positive command amount rejection.
 14. Projection reconstruction.
-15. Public-post attempt to bypass the issuance counter gate.\n16. Forged reversal-event attempt.\n17. Supply-counted account overdraft configuration rejection.\n18. Pre-seeded system-counter configuration rejection.
+15. Public-post attempt to bypass the issuance counter gate.\n16. Forged reversal-event attempt.\n17. Supply-counted account overdraft configuration rejection.\n18. Pre-seeded system-counter configuration rejection.\n19. Rejection of SDU issuance into USDC accounts.\n20. Rejection of SDU burn from USDC accounts.
 
 Run the focused tests:
 
     pytest -q tests/test_sdu_accounting_core.py
 
-The local implementation check for this increment completed with 19 passing tests. This is not a claim that the repository-wide CI suite has passed.
+The local implementation check for this increment completed with 21 passing tests. This is not a claim that the repository-wide CI suite has passed.
 
 ## 8. Required next engineering steps
 
