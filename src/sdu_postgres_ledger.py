@@ -465,6 +465,7 @@ class PostgresLedger:
         anchor (separate account/provider or public append-only log). Storing it
         only in this database does not protect against a database superuser.
         """
+        self.verify_integrity()
         with self._connect() as conn:
             with conn.transaction():
                 with conn.cursor() as cur:
