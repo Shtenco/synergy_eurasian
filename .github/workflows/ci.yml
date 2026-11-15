@@ -2,9 +2,10 @@ name: EIIOM CI
 
 on:
   push:
-    branches: [main, eiiom-masterplan-2045, eiiom-v4-federation-megasystem]
+    branches: [main, eiiom-masterplan-2045, eiiom-v4-federation-megasystem, research/synergy-v6.6-foundation]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -113,3 +114,28 @@ jobs:
               "sector_investment_usd": case["sector_investment_usd"],
           } for case in report["budget_sensitivity"]], indent=2))
           PY
+
+
+      - name: Run paired SYNERGY V6.6.3 financing stress experiment
+        run: |
+          python scripts/run_synergy_v66_financing_experiment.py --seed-start 2026 --seed-count 3 --days 20 --output outputs/synergy_v66_financing_experiment_ci.json --sensitivity --reserve-allocation --loss-waterfall --liquidity-capped-reserve --reserve-sizing --federation-liquidity-cap
+
+      - name: Run paired 100-cycle SYNERGY V6.6.4-O reserve survival experiment
+        run: |
+          python scripts/run_synergy_v664o_reserve_survival.py --seed-start 11 --seed-count 3 --cycles 100 --shock-regime severe --output outputs/synergy_v664o_reserve_survival_ci.json
+
+      - name: Run paired SYNERGY V6.6.4-P production payable-default batch experiment
+        run: |
+          python scripts/run_synergy_v664p_production_defaults.py --seed-start 11 --seed-count 3 --output outputs/synergy_v664p_production_default_batch_ci.json
+
+      - name: Run paired SYNERGY V6.6.4-Q3 continuous production-default experiment
+        run: |
+          python scripts/run_synergy_v664q3_continuous_defaults.py --seeds 11 23 37 --output outputs/synergy_v664q3_continuous_defaults_ci.json
+
+      - name: Upload V6.6.4-Q3 cycle-level research results
+        uses: actions/upload-artifact@v4
+        with:
+          name: synergy-v664q3-continuous-defaults
+          path: outputs/synergy_v664q3_continuous_defaults_ci.json
+          if-no-files-found: error
+          retention-days: 14

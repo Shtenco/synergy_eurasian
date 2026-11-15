@@ -1,0 +1,263 @@
+{
+  "q4_1": {
+    "all_sequential_permutations": [
+      {
+        "ending_cash": {
+          "A": 150.0,
+          "B": 50.0,
+          "C": 100.0
+        },
+        "order": [
+          "01-A-to-B",
+          "02-B-to-C",
+          "03-C-to-A"
+        ],
+        "total_paid": 400.0,
+        "total_unpaid": 50.0,
+        "unpaid_claims": [
+          "01-A-to-B"
+        ]
+      },
+      {
+        "ending_cash": {
+          "A": 100.0,
+          "B": 50.0,
+          "C": 150.0
+        },
+        "order": [
+          "01-A-to-B",
+          "03-C-to-A",
+          "02-B-to-C"
+        ],
+        "total_paid": 350.0,
+        "total_unpaid": 100.0,
+        "unpaid_claims": [
+          "01-A-to-B",
+          "03-C-to-A"
+        ]
+      },
+      {
+        "ending_cash": {
+          "A": 150.0,
+          "B": 100.0,
+          "C": 50.0
+        },
+        "order": [
+          "02-B-to-C",
+          "01-A-to-B",
+          "03-C-to-A"
+        ],
+        "total_paid": 350.0,
+        "total_unpaid": 100.0,
+        "unpaid_claims": [
+          "02-B-to-C",
+          "01-A-to-B"
+        ]
+      },
+      {
+        "ending_cash": {
+          "A": 100.0,
+          "B": 150.0,
+          "C": 50.0
+        },
+        "order": [
+          "02-B-to-C",
+          "03-C-to-A",
+          "01-A-to-B"
+        ],
+        "total_paid": 400.0,
+        "total_unpaid": 50.0,
+        "unpaid_claims": [
+          "02-B-to-C"
+        ]
+      },
+      {
+        "ending_cash": {
+          "A": 50.0,
+          "B": 100.0,
+          "C": 150.0
+        },
+        "order": [
+          "03-C-to-A",
+          "01-A-to-B",
+          "02-B-to-C"
+        ],
+        "total_paid": 400.0,
+        "total_unpaid": 50.0,
+        "unpaid_claims": [
+          "03-C-to-A"
+        ]
+      },
+      {
+        "ending_cash": {
+          "A": 50.0,
+          "B": 150.0,
+          "C": 100.0
+        },
+        "order": [
+          "03-C-to-A",
+          "02-B-to-C",
+          "01-A-to-B"
+        ],
+        "total_paid": 350.0,
+        "total_unpaid": 100.0,
+        "unpaid_claims": [
+          "03-C-to-A",
+          "02-B-to-C"
+        ]
+      }
+    ],
+    "cases": {
+      "sequential_invoice_id": {
+        "cash": {
+          "A": 150.0,
+          "B": 50.0,
+          "C": 100.0
+        },
+        "ending_cash_total": 300.0,
+        "opening_cash_total": 300.0,
+        "paid": {
+          "01-A-to-B": 100.0,
+          "02-B-to-C": 150.0,
+          "03-C-to-A": 150.0
+        },
+        "semantics": "sequential_gross_receipts_reusable",
+        "total_paid": 400.0,
+        "total_unpaid": 50.0,
+        "unpaid": {
+          "01-A-to-B": 50.0,
+          "02-B-to-C": 0.0,
+          "03-C-to-A": 0.0
+        }
+      },
+      "sequential_reverse_invoice_id": {
+        "cash": {
+          "A": 50.0,
+          "B": 150.0,
+          "C": 100.0
+        },
+        "ending_cash_total": 300.0,
+        "opening_cash_total": 300.0,
+        "paid": {
+          "01-A-to-B": 150.0,
+          "02-B-to-C": 100.0,
+          "03-C-to-A": 100.0
+        },
+        "semantics": "sequential_gross_receipts_reusable",
+        "total_paid": 350.0,
+        "total_unpaid": 100.0,
+        "unpaid": {
+          "01-A-to-B": 0.0,
+          "02-B-to-C": 50.0,
+          "03-C-to-A": 50.0
+        }
+      },
+      "snapshot_invoice_id": {
+        "cash": {
+          "A": 100.0,
+          "B": 100.0,
+          "C": 100.0
+        },
+        "ending_cash_total": 300.0,
+        "opening_cash_total": 300.0,
+        "paid": {
+          "01-A-to-B": 100.0,
+          "02-B-to-C": 100.0,
+          "03-C-to-A": 100.0
+        },
+        "semantics": "snapshot_batch_receipts_not_reusable",
+        "total_paid": 300.0,
+        "total_unpaid": 150.0,
+        "unpaid": {
+          "01-A-to-B": 50.0,
+          "02-B-to-C": 50.0,
+          "03-C-to-A": 50.0
+        }
+      },
+      "snapshot_reverse_invoice_id": {
+        "cash": {
+          "A": 100.0,
+          "B": 100.0,
+          "C": 100.0
+        },
+        "ending_cash_total": 300.0,
+        "opening_cash_total": 300.0,
+        "paid": {
+          "01-A-to-B": 100.0,
+          "02-B-to-C": 100.0,
+          "03-C-to-A": 100.0
+        },
+        "semantics": "snapshot_batch_receipts_not_reusable",
+        "total_paid": 300.0,
+        "total_unpaid": 150.0,
+        "unpaid": {
+          "01-A-to-B": 50.0,
+          "02-B-to-C": 50.0,
+          "03-C-to-A": 50.0
+        }
+      }
+    },
+    "finding": {
+      "sequential_gross_paid": 400.0,
+      "sequential_ordering_changes_unpaid_claim_identity": true,
+      "sequential_paid_max": 400.0,
+      "sequential_paid_min": 350.0,
+      "sequential_paid_range": 50.0,
+      "sequential_unpaid_claim_patterns": [
+        "01-A-to-B",
+        "01-A-to-B,03-C-to-A",
+        "02-B-to-C",
+        "02-B-to-C,01-A-to-B",
+        "03-C-to-A",
+        "03-C-to-A,02-B-to-C"
+      ],
+      "snapshot_batch_paid": 300.0,
+      "snapshot_ordering_changes_paid_allocation": false
+    },
+    "invoices": [
+      {
+        "amount": 150.0,
+        "buyer": "A",
+        "invoice_id": "01-A-to-B",
+        "seller": "B"
+      },
+      {
+        "amount": 150.0,
+        "buyer": "B",
+        "invoice_id": "02-B-to-C",
+        "seller": "C"
+      },
+      {
+        "amount": 150.0,
+        "buyer": "C",
+        "invoice_id": "03-C-to-A",
+        "seller": "A"
+      }
+    ],
+    "multilateral_netting": {
+      "cash_paid": 0.0,
+      "gross_claims": 450.0,
+      "net_cash_required": 0.0,
+      "net_creditor_positions": 0.0,
+      "net_positions": {
+        "A": 0.0,
+        "B": 0.0,
+        "C": 0.0
+      },
+      "settlement_type": "multilateral_setoff_not_cash_payment",
+      "unsettled_net_debit": 0.0
+    },
+    "opening_cash": {
+      "A": 100.0,
+      "B": 100.0,
+      "C": 100.0
+    }
+  },
+  "validation": {
+    "q2_control_tests": "5/5 passed",
+    "q4_1_randomized_cohorts": "100 cohorts x 2 settlement semantics x 2 orderings = 400 runs",
+    "q4_1_tests": "8/8 passed",
+    "q4_tests": "9/9 passed",
+    "scope": "local synthetic research only; not production CreditLedger or GitHub CI"
+  }
+}

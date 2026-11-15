@@ -1,7 +1,7 @@
 import pytest
 
 from synergy_v66.credit import CreditLedger
-from synergy_v66.network_topology import CELLS
+from synergy_v66.network_topology import CELLS, CellSpec
 from synergy_v66.reserve_recovery import (
     execute_reserve_recovery,
     plan_reserve_recovery,
@@ -10,6 +10,37 @@ from synergy_v66.reserve_recovery import (
 
 def _zero_map():
     return {cell.cell_id: 0.0 for cell in CELLS}
+
+
+def _small_member_ledger(member_cash: float, nonmember_cash: float) -> CreditLedger:
+    cells = (
+        CellSpec("RESERVE-MEMBER", "WEST", "services", "reserve_member", 1.0),
+        CellSpec("NONMEMBER", "WEST", "trade", "borrower", 1.0),
+    )
+    return CreditLedger(
+        cells=cells,
+        regions=("WEST",),
+        initial_cash_by_cell={
+            "RESERVE-MEMBER": member_cash,
+            "NONMEMBER": nonmember_cash,
+        },
+        regional_pool_reserve_per_region=0.0,
+        federation_pool_reserve_total=0.0,
+        minimum_post_contribution_cash=10.0,
+        regional_reserve_members_by_region={"WEST": ("RESERVE-MEMBER",)},
+        federation_reserve_members=("RESERVE-MEMBER",),
+    )
+
+
+def test_initial_reserve_cash_floor_does_not_apply_to_nonmembers():
+    ledger = _small_member_ledger(member_cash=100.0, nonmember_cash=5.0)
+    assert ledger.accounts["RESERVE-MEMBER"].cash == pytest.approx(100.0)
+    assert ledger.accounts["NONMEMBER"].cash == pytest.approx(5.0)
+
+
+def test_initial_reserve_cash_floor_still_rejects_underfunded_member():
+    with pytest.raises(ValueError, match="minimum post-contribution cash"):
+        _small_member_ledger(member_cash=5.0, nonmember_cash=100.0)
 
 
 def test_multi_level_recovery_plan_is_non_mutating_and_settles_cash_exactly():
@@ -269,6 +300,7 @@ def test_ledger_rejects_caller_supplied_period_cap_above_its_own_policy():
 
 def test_planner_cannot_raise_ledger_owned_period_cap():
     ledger = CreditLedger(initial_cash_per_cell=100.0, reserve_recovery_contribution_fraction=0.10)
+    ledger.process_day(0)
     with pytest.raises(ValueError, match="cannot exceed the ledger policy cap"):
         plan_reserve_recovery(
             ledger,
@@ -428,3 +460,35 @@ def test_recovery_plan_rejects_changed_opening_cash_capacity_schedule():
     after = ledger.snapshot()
     assert after["cash_by_cell"] == before["cash_by_cell"]
     assert after["regional_pool_reserve_by_region"] == before["regional_pool_reserve_by_region"]
+
+
+
+def test_100_cycle_claim_beneficiaries_rotate_across_all_region_members():
+    from synergy_v66.reserve_cycle_experiments import run_paired_reserve_recovery_experiment
+
+    result = run_paired_reserve_recovery_experiment(
+        seeds=[53], cycles=100, shock_regime="severe",
+        allocation_rules=["no_replenishment"],
+    )
+    rows = result["observations"]["no_replenishment"][0]["cycle_rows"]
+    for region in ("WEST", "EAST"):
+        beneficiaries = {row["claim_beneficiary_by_region"][region] for row in rows}
+        assert len(beneficiaries) == sum(cell.region == region for cell in CELLS)
+
+
+def test_recovery_planner_requires_initialized_nonnegative_ledger_day():
+    ledger = CreditLedger(initial_cash_per_cell=100.0)
+    with pytest.raises(ValueError, match="initialized with process_day"):
+        plan_reserve_recovery(
+            ledger,
+            target_regional_by_region={"WEST": 5.0, "EAST": 5.0},
+            target_federation=0.0,
+        )
+    with pytest.raises(ValueError, match="non-negative integer"):
+        ledger.apply_exogenous_guarantee_claim(
+            claim_id="NEGATIVE-DAY",
+            region="WEST",
+            beneficiary_cell="WEST-MF1",
+            amount=1.0,
+            day=-1,
+        )
