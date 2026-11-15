@@ -11,9 +11,13 @@
 | `migrations/001_sdu_ledger.sql` | PostgreSQL schema, deferred balance checks, immutable journal triggers and non-negative balance guard |
 | `src/sdu_postgres_ledger.py` | Transactional PostgreSQL adapter, epoch-budget enforcement, journal replay audit and checkpoint persistence |
 | `src/sdu_issuance_authorization.py` | Threshold validator approval of canonical issuance claims |
+| `src/sdu_burn_authorization.py` | Holder/protocol-reserve burn authorization and claim verification |
+| `src/sdu_external_deposits.py` | Chain-specific external asset allowlists and quorum deposit attestations |
 | `src/sdu_ledger_checkpoints.py` | Signed checkpoint creation and signature/progression verification |
 | `tests/test_sdu_accounting_core.py` | In-memory accounting invariants |
 | `tests/test_sdu_issuance_authorization.py` | Validator threshold and tamper tests |
+| `tests/test_sdu_burn_authorization.py` | Holder ownership and protocol-reserve burn authorization tests |
+| `tests/test_sdu_external_deposits.py` | Chain/asset allowlist, contract identity, quorum and replay-identity tests |
 | `tests/test_sdu_ledger_checkpoints.py` | Checkpoint signature and monotonicity tests |
 | `tests/test_sdu_postgres_ledger.py` | PostgreSQL integration, independent-connection concurrency and database guard tests |
 | `.github/workflows/sdu-accounting.yml` | Dedicated Python + PostgreSQL CI job |
@@ -189,7 +193,7 @@ python -m pip install -r requirements-sdu.txt
 python -m pytest -q tests/test_sdu_postgres_ledger.py
 ```
 
-The dedicated GitHub Actions workflow starts an ephemeral PostgreSQL 16 service and runs all SDU test files plus Python compilation. The current source contains 66 test functions across the six SDU test modules; the final pass count must be taken from the latest completed Actions run, not inferred from test-file counts.
+The dedicated GitHub Actions workflow starts an ephemeral PostgreSQL 16 service, applies the SQL migration twice to verify re-applicability, and runs all SDU test files plus Python compilation. The current source contains 66 test functions across the six SDU test modules; the final pass count must be taken from the latest completed Actions run, not inferred from test-file counts.
 
 The repository-wide EIIOM CI has a separate pre-existing test-collection failure involving missing `synergy_v66.credit` on the base branch. This SDU workflow does not hide or claim to repair that unrelated failure.
 
