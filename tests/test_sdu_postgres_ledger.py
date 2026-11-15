@@ -11,11 +11,13 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from sdu_postgres_ledger import (
     DuplicateBurnClaim,
+    DuplicateExternalDeposit,
     DuplicateIssuanceClaim,
     EpochBudgetExceeded,
     PostgresLedger,
 )
 from sdu_burn_authorization import BurnAuthorizationService, BurnClaim
+from sdu_external_deposits import ExternalDepositClaim, ExternalDepositVerifier
 from sdu_issuance_authorization import (
     IssuanceAuthorizationService,
     IssuanceClaim,
@@ -364,3 +366,82 @@ def test_burn_claim_cannot_be_replayed_with_a_new_idempotency_key():
                     holder_signature=signature)
     assert ledger.balance("alice") == 90
     assert ledger.total_supply() == 90
+
+
+def test_verified_external_deposit_credits_only_attested_usdc_and_is_auditable():
+    ledger = make_ledger()
+    keys = {"verifier-a": b"a" * 32, "verifier-b": b"b" * 32}
+    verifier = ExternalDepositVerifier(
+        keys,
+        threshold=2,
+        supported_chains={"eth-mainnet"},
+        supported_assets={"USDC"},
+        minimum_confirmations={"eth-mainnet": 12},
+        maximum_amounts={"USDC": 1_000_000},
+    )
+    claim = ExternalDepositClaim(
+        deposit_id="deposit-001",
+        chain_id="eth-mainnet",
+        transaction_hash="c" * 64,
+        asset="USDC",
+        amount=250,
+        destination_account="alice_usdc",
+        block_number=21_000_000,
+        confirmations=20,
+        proof_digest="d" * 64,
+        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+    )
+    attestations = [
+        verifier.sign_for_testing(claim, validator, keys[validator])
+        for validator in ("verifier-a", "verifier-b")
+    ]
+    event = ledger.credit_external_deposit(
+        claim, attestations, verifier=verifier,
+        idempotency_key="deposit-001", actor_id="deposit-service",
+    )
+    assert event.event_type == "EXTERNAL_DEPOSIT"
+    assert ledger.balance("alice_usdc", "USDC") == 250
+    assert ledger.total_supply("USDC") == 250
+    assert ledger.verify_integrity()["events"] == 1
+
+
+def test_external_transaction_cannot_be_credited_twice_with_new_claim():
+    ledger = make_ledger()
+    keys = {"verifier-a": b"a" * 32, "verifier-b": b"b" * 32}
+    verifier = ExternalDepositVerifier(
+        keys, threshold=2, supported_chains={"eth-mainnet"},
+        supported_assets={"USDC"}, minimum_confirmations={"eth-mainnet": 12},
+        maximum_amounts={"USDC": 1_000_000},
+    )
+    claim = ExternalDepositClaim(
+        deposit_id="deposit-replay-1", chain_id="eth-mainnet",
+        transaction_hash="e" * 64, asset="USDC", amount=100,
+        destination_account="alice_usdc", block_number=21_000_001,
+        confirmations=18, proof_digest="f" * 64,
+        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+    )
+    attestations = [
+        verifier.sign_for_testing(claim, validator, keys[validator])
+        for validator in ("verifier-a", "verifier-b")
+    ]
+    ledger.credit_external_deposit(
+        claim, attestations, verifier=verifier,
+        idempotency_key="deposit-replay-1", actor_id="deposit-service",
+    )
+    repeated = ExternalDepositClaim(
+        deposit_id="deposit-replay-2", chain_id=claim.chain_id,
+        transaction_hash=claim.transaction_hash, asset=claim.asset,
+        amount=claim.amount, destination_account=claim.destination_account,
+        block_number=claim.block_number, confirmations=claim.confirmations,
+        proof_digest=claim.proof_digest, expires_at=claim.expires_at,
+    )
+    repeated_attestations = [
+        verifier.sign_for_testing(repeated, validator, keys[validator])
+        for validator in ("verifier-a", "verifier-b")
+    ]
+    with pytest.raises(DuplicateExternalDeposit):
+        ledger.credit_external_deposit(
+            repeated, repeated_attestations, verifier=verifier,
+            idempotency_key="deposit-replay-2", actor_id="deposit-service",
+        )
+    assert ledger.total_supply("USDC") == 100
