@@ -92,6 +92,8 @@ class PostgresLedger:
             raise ValidationError("account_id must be non-empty and trimmed")
         if not kind or kind.strip() != kind:
             raise ValidationError("account kind must be non-empty and trimmed")
+        if account_id.startswith("system:") or kind.startswith("system_"):
+            raise ValidationError("system accounts are provisioned only by dedicated ledger commands")
         if any(not isinstance(v, bool) for v in (allow_negative, counts_toward_supply, burnable)):
             raise ValidationError("account policy flags must be booleans")
         if allow_negative and counts_toward_supply:
@@ -319,6 +321,50 @@ class PostgresLedger:
                 for key, balance in projection.items():
                     if balance < 0 and not account_policies.get(key, False):
                         raise PostgresLedgerError(f"negative balance in spendable account {key[0]}")
+
+                cur.execute(
+                    """SELECT c.claim_id,c.epoch_id,c.amount,c.evidence_digest,
+                              e.event_type,e.metadata,e.event_id
+                       FROM sdu_issuance_claims c
+                       JOIN sdu_events e ON e.event_id=c.event_id"""
+                )
+                claims = cur.fetchall()
+                epoch_claim_totals: dict[str, int] = {}
+                for claim_id, epoch_id, amount, evidence_digest, event_type, metadata, event_id in claims:
+                    if event_type != "SDU_MINT":
+                        raise PostgresLedgerError("issuance claim points to a non-mint event")
+                    if not isinstance(metadata, dict):
+                        metadata = json.loads(metadata)
+                    if (
+                        metadata.get("claim_id") != claim_id
+                        or metadata.get("epoch_id") != epoch_id
+                        or metadata.get("evidence_digest") != str(evidence_digest).strip()
+                    ):
+                        raise PostgresLedgerError("issuance claim metadata mismatch")
+                    cur.execute(
+                        """SELECT account_id,asset_symbol,amount FROM sdu_postings
+                           WHERE event_id=%s ORDER BY line_number""",
+                        (event_id,),
+                    )
+                    mint_postings = cur.fetchall()
+                    expected = {
+                        ("system:issuance:SDU", "SDU"): -int(amount),
+                    }
+                    for account_id, asset, value in mint_postings:
+                        key = (account_id, asset)
+                        expected[key] = expected.get(key, 0) + int(value)
+                    if any(value != 0 for key, value in expected.items() if key != ("system:issuance:SDU", "SDU")):
+                        raise PostgresLedgerError("issuance destination postings do not match claim amount")
+                    if expected[("system:issuance:SDU", "SDU")] != -int(amount):
+                        raise PostgresLedgerError("issuance contra-account does not match claim amount")
+                    epoch_claim_totals[epoch_id] = epoch_claim_totals.get(epoch_id, 0) + int(amount)
+                cur.execute("SELECT epoch_id,budget,spent FROM sdu_epoch_issuance")
+                for epoch_id, budget, spent in cur.fetchall():
+                    if int(spent) != epoch_claim_totals.get(epoch_id, 0):
+                        raise PostgresLedgerError(f"epoch {epoch_id} spent total differs from issued claims")
+                    if int(spent) > int(budget):
+                        raise PostgresLedgerError(f"epoch {epoch_id} exceeds its issuance budget")
+
                 cur.execute(
                     "SELECT next_sequence,last_event_hash FROM sdu_ledger_state WHERE singleton=TRUE"
                 )
