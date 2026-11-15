@@ -117,10 +117,16 @@ class ExternalDepositVerifier:
                 raise ExternalDepositError("verifier IDs and 32-byte keys are required")
         if not supported_chains or not supported_assets:
             raise ExternalDepositError("supported chain and asset allowlists are required")
-        if any(not isinstance(chain, str) or not chain.strip() for chain in supported_chains):
-            raise ExternalDepositError("supported chain IDs must be non-empty strings")
-        if any(not isinstance(asset, str) or not asset.strip() for asset in supported_assets):
-            raise ExternalDepositError("supported asset symbols must be non-empty strings")
+        if any(
+            not isinstance(chain, str) or not chain.strip() or chain.strip() != chain
+            for chain in supported_chains
+        ):
+            raise ExternalDepositError("supported chain IDs must be non-empty trimmed strings")
+        if any(
+            not isinstance(asset, str) or not asset.strip() or asset.strip() != asset
+            for asset in supported_assets
+        ):
+            raise ExternalDepositError("supported asset symbols must be non-empty trimmed strings")
         if not supported_chains.issubset(minimum_confirmations):
             raise ExternalDepositError("minimum confirmations must be configured for every supported chain")
         expected_pairs = {(chain, asset) for chain in supported_chains for asset in supported_assets}
