@@ -463,6 +463,7 @@ def test_multiple_token_transfers_in_one_chain_transaction_are_distinct_deposits
         chain_id="eth-mainnet",
         transaction_hash="9" * 64,
         asset="USDC",
+        asset_reference="0x" + "1" * 40,
         destination_account="alice_usdc",
         block_number=21_000_002,
         confirmations=24,
