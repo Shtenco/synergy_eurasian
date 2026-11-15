@@ -14,6 +14,7 @@ from sdu_postgres_ledger import (
     EpochBudgetExceeded,
     PostgresLedger,
 )
+from sdu_burn_authorization import BurnAuthorizationService, BurnClaim
 from sdu_issuance_authorization import (
     IssuanceAuthorizationService,
     IssuanceClaim,
@@ -257,3 +258,77 @@ def test_integrity_audit_detects_tampered_ledger_head():
     from sdu_postgres_ledger import PostgresLedgerError
     with pytest.raises(PostgresLedgerError, match="ledger state head"):
         ledger.verify_integrity()
+
+
+def test_postgres_holder_burn_reduces_supply_and_is_auditable():
+    ledger = make_ledger()
+    keys, issuance_authorizer = make_authorizer()
+    mint = make_claim("claim-holder-burn", 100)
+    ledger.issue(mint, approvals(mint, keys, issuance_authorizer),
+                 authorizer=issuance_authorizer, idempotency_key="mint-holder-burn",
+                 actor_id="issuance-service")
+
+    holder_key = b"alice-holder-secret-material-32-bytes"
+    burn_authorizer = BurnAuthorizationService(
+        {"alice": holder_key},
+        {"validator-a": b"a" * 32, "validator-b": b"b" * 32},
+        protocol_threshold=2,
+        max_burn_amount=1000,
+    )
+    burn_claim = BurnClaim(
+        burn_id="burn-holder-001",
+        source_account="alice",
+        amount=30,
+        burn_scope="holder",
+        actor_id="alice",
+        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+        purpose="holder voluntary burn",
+    )
+    signature = burn_authorizer.sign_holder_for_testing(burn_claim, holder_key)
+    event = ledger.burn(
+        burn_claim, authorizer=burn_authorizer, idempotency_key="burn-holder-001",
+        holder_signature=signature,
+    )
+    assert event.event_type == "SDU_BURN"
+    assert ledger.balance("alice") == 70
+    assert ledger.total_supply() == 70
+    assert ledger.verify_integrity()["events"] == 2
+
+
+def test_protocol_reserve_burn_requires_explicitly_burnable_reserve_and_threshold():
+    ledger = make_ledger()
+    keys, issuance_authorizer = make_authorizer()
+    ledger.create_account("amm:reserve:burnable", "SDU",
+                          kind="amm_reserve", burnable=True)
+    mint = make_claim("claim-reserve-burn", 80, destination="amm:reserve:burnable")
+    ledger.issue(mint, approvals(mint, keys, issuance_authorizer),
+                 authorizer=issuance_authorizer, idempotency_key="mint-reserve-burn",
+                 actor_id="issuance-service")
+
+    validator_keys = {"validator-a": b"a" * 32, "validator-b": b"b" * 32}
+    burn_authorizer = BurnAuthorizationService(
+        {}, validator_keys, protocol_threshold=2, max_burn_amount=1000
+    )
+    burn_claim = BurnClaim(
+        burn_id="burn-reserve-001",
+        source_account="amm:reserve:burnable",
+        amount=25,
+        burn_scope="protocol_reserve",
+        actor_id="dao-executor",
+        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+        purpose="explicitly approved protocol reserve burn",
+    )
+    approvals_for_burn = [
+        burn_authorizer.sign_protocol_for_testing(
+            burn_claim, validator_id, validator_keys[validator_id]
+        )
+        for validator_id in ("validator-a", "validator-b")
+    ]
+    ledger.burn(
+        burn_claim, authorizer=burn_authorizer,
+        idempotency_key="burn-reserve-001",
+        validator_approvals=approvals_for_burn,
+    )
+    assert ledger.balance("amm:reserve:burnable") == 55
+    assert ledger.total_supply() == 55
+    assert ledger.verify_integrity()["events"] == 2
