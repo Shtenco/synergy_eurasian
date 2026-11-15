@@ -357,14 +357,23 @@ class PostgresLedger:
                         int(state[0]) - 1, str(state[1]).strip(), signing_key
                     )
                     cur.execute(
-                        "SELECT checkpoint_digest,signature,signature_algorithm FROM sdu_checkpoints WHERE sequence=%s",
+                        """SELECT event_hash,checkpoint_digest,signature,signature_algorithm,created_at
+                           FROM sdu_checkpoints WHERE sequence=%s""",
                         (checkpoint.sequence,),
                     )
                     existing = cur.fetchone()
                     if existing is not None:
-                        if str(existing[0]).strip() != checkpoint.digest:
-                            raise PostgresLedgerError("a different checkpoint already exists for this sequence")
-                        return checkpoint
+                        stored = LedgerCheckpoint(
+                            sequence=checkpoint.sequence,
+                            event_hash=str(existing[0]).strip(),
+                            digest=str(existing[1]).strip(),
+                            signature=str(existing[2]),
+                            algorithm=str(existing[3]),
+                            created_at=existing[4].astimezone(timezone.utc).isoformat(),
+                        )
+                        if stored.event_hash != checkpoint.event_hash:
+                            raise PostgresLedgerError("stored checkpoint event hash differs from ledger head")
+                        return stored
                     cur.execute(
                         """INSERT INTO sdu_checkpoints
                            (sequence,event_hash,checkpoint_digest,signature,signature_algorithm,created_at)
