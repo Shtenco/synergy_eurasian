@@ -138,17 +138,24 @@ Both paths are limited to SDU, create an immutable `SDU_BURN` event, debit the r
 
 The prototype uses HMAC-SHA256 for both holder and validator signatures. Key ownership/identity registry, asymmetric signatures, hardware key custody, wallet challenge binding and recovery are still production requirements. The holder key map is not a replacement for an authenticated wallet/account registry.
 
-## 6. What remains deliberately outside this increment
+## 6. External deposit attestation and crediting
+
+\`src/sdu_external_deposits.py\` binds an external deposit attestation to a canonical tuple: chain ID, transaction hash, asset, integer amount, destination account, block number, confirmation count, proof digest and expiry. A configured quorum of independent verifiers must sign the exact tuple. The verifier enforces chain/asset allowlists, minimum confirmations, per-asset amount limits, expiry and unique signer IDs.
+
+The PostgreSQL adapter's \`credit_external_deposit()\` method then writes the external-asset credit, contra-account posting, event, idempotency key and unique deposit claim in one transaction. A unique database constraint on (chain ID, transaction hash, asset) prevents the same external transaction from being credited twice under a different claim ID or idempotency key. SDU issuance cannot be used to create USDC.
+
+**Critical boundary:** the current module verifies a quorum of signed attestations; it does not independently query a blockchain, validate Merkle inclusion, verify bridge contracts or prove finality. The verifiers must be independent and must themselves validate the real chain transaction and destination. Production requires independent chain clients/light clients or audited bridge attestations, asymmetric signatures, chain reorg handling, confirmation/finality policy, token contract allowlists and operational monitoring. A ledger credit is not proof that an AMM pool reserve holds those funds; external wallet balances and actual AMM reserves must remain separate.
+
+## 7. What remains deliberately outside this increment
 
 - No production identity provider, wallet signature verification or account-ownership authorization.
 - No production key management, validator election, DAO governance, anti-Sybil or evidence oracle.
-- No verified external-deposit adapter. A USDC balance may be credited only after an independently verified real deposit; SDU issuance cannot create USDC.
 - No AMM quote engine, LP accounting, fee routing or oracle integration.
 - No AI monetary-policy optimizer or long-horizon simulation.
 
 The in-memory core remains a reference model, not the persistence layer. Python underscore naming is not a security boundary; never expose internal posting methods or database credentials to untrusted callers.
 
-## 7. Canonical asymmetric AMM compatibility
+## 8. Canonical asymmetric AMM compatibility
 
 The existing asymmetric AMM formulas remain the canonical research baseline. They are not replaced with a constant-product `x*y=k` curve.
 
@@ -162,7 +169,7 @@ Before implementing the PostgreSQL swap settlement path, the following accountin
 
 Issuance does not automatically add SDU to AMM reserves. External voluntary burns reduce total supply but not pool SDU reserve unless those tokens are actually removed from the pool. AMM quote, SDU reserve, USDC reserve, external reference price and mark-to-market TVL must remain separate measurements.
 
-## 8. Test and CI commands
+## 9. Test and CI commands
 
 Pure-Python tests:
 
@@ -181,11 +188,11 @@ python -m pip install "pytest>=8,<9" "psycopg[binary]>=3.2,<4"
 python -m pytest -q tests/test_sdu_postgres_ledger.py
 ```
 
-The dedicated GitHub Actions workflow starts an ephemeral PostgreSQL 16 service and runs all SDU test files plus Python compilation. The current source contains 53 test functions across the five SDU test modules; the final pass count must be taken from the latest completed Actions run, not inferred from test-file counts.
+The dedicated GitHub Actions workflow starts an ephemeral PostgreSQL 16 service and runs all SDU test files plus Python compilation. The current source contains 61 test functions across the six SDU test modules; the final pass count must be taken from the latest completed Actions run, not inferred from test-file counts.
 
 The repository-wide EIIOM CI has a separate pre-existing test-collection failure involving missing `synergy_v66.credit` on the base branch. This SDU workflow does not hide or claim to repair that unrelated failure.
 
-## 9. Constitutional compatibility
+## 10. Constitutional compatibility
 
 This increment preserves the intended research constitution:
 - **ALL:** anyone may initiate an issuance claim; initiation is not unilateral mint authority.
