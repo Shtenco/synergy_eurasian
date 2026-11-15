@@ -33,7 +33,7 @@ from sdu_issuance_authorization import (
     IssuanceClaim,
     ValidatorApproval,
 )
-from sdu_ledger_checkpoints import LedgerCheckpoint, create_checkpoint as build_checkpoint
+from sdu_ledger_checkpoints import (\n    LedgerCheckpoint,\n    create_checkpoint as build_checkpoint,\n    verify_checkpoint,\n)
 
 
 class PostgresLedgerError(Exception):
@@ -373,6 +373,8 @@ class PostgresLedger:
                         )
                         if stored.event_hash != checkpoint.event_hash:
                             raise PostgresLedgerError("stored checkpoint event hash differs from ledger head")
+                        if not verify_checkpoint(stored, signing_key):
+                            raise PostgresLedgerError("stored checkpoint signature does not match supplied key")
                         return stored
                     cur.execute(
                         """INSERT INTO sdu_checkpoints
