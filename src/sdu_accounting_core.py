@@ -174,6 +174,8 @@ class Ledger:
             account = self._accounts.get(destination)
             if account is None:
                 raise AccountNotFound(destination)
+            if account.kind.startswith("system_"):
+                raise ValidationError("issuance destination cannot be a system account")
             system_id = f"system:issuance:{account.asset}"
             self._ensure_system_account(system_id, account.asset, "issuance")
             data = dict(metadata or {})
@@ -226,6 +228,8 @@ class Ledger:
         """Post an ordinary transaction; system accounts are command-gated."""
         legs = tuple(postings)
         with self._lock:
+            if event_type in {"SDU_MINT", "SDU_BURN", "REVERSAL"}:
+                raise ValidationError("reserved event type requires a privileged command")
             for leg in legs:
                 account = self._accounts.get(leg.account_id)
                 if account is not None and account.kind.startswith("system_"):
@@ -335,6 +339,8 @@ class Ledger:
             }
             previous_hash = self.GENESIS_HASH
             seen_keys: set[str] = set()
+            seen_event_ids: set[str] = set()
+            replayed_reversals: set[str] = set()
             for expected_sequence, event in enumerate(self._events, start=1):
                 if event.sequence != expected_sequence:
                     raise ValidationError("event sequence gap or reorder detected")
@@ -350,6 +356,14 @@ class Ledger:
                 if event.idempotency_key in seen_keys:
                     raise ValidationError("duplicate idempotency key in event log")
                 seen_keys.add(event.idempotency_key)
+                if event.event_id in seen_event_ids:
+                    raise ValidationError("duplicate event id in event log")
+                if event.event_type == "REVERSAL":
+                    original_id = str(event.metadata.get("original_event_id", ""))
+                    if original_id not in seen_event_ids or original_id in replayed_reversals:
+                        raise ValidationError("invalid or duplicate reversal reference")
+                    replayed_reversals.add(original_id)
+                seen_event_ids.add(event.event_id)
                 totals: dict[str, int] = {}
                 for leg in event.postings:
                     self._require_account_asset(leg.account_id, leg.asset)
@@ -360,6 +374,8 @@ class Ledger:
                 previous_hash = event.event_hash
             if replay != self._balances:
                 raise ValidationError("balance projection differs from event replay")
+            if replayed_reversals != self._reversed:
+                raise ValidationError("reversal index differs from event replay")
             for (account_id, _asset), amount in replay.items():
                 if amount < 0 and not self._accounts[account_id].allow_negative:
                     raise ValidationError(f"negative balance in non-overdraft account: {account_id}")
