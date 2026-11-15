@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/schemas/sle_evidence_envelope.schema.json",
+  "title": "SYNERGY SLE Signed Evidence Envelope V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "evidence_id", "subject_id", "signer_id", "signer_role",
+    "content_sha256", "issued_at", "expires_at", "key_id", "signature"
+  ],
+  "properties": {
+    "schema": { "const": "sle.evidence/v1" },
+    "evidence_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "subject_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "signer_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "signer_role": { "const": "INDEPENDENT_VERIFIER" },
+    "content_sha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+    "issued_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "key_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "signature": { "type": "string", "contentEncoding": "base64" }
+  }
+}

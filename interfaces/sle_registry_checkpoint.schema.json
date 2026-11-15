@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.example/interfaces/sle_registry_checkpoint.schema.json",
+  "title": "SLE externally anchored registry checkpoint",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "registry_id",
+    "event_seq",
+    "event_hash",
+    "created_at",
+    "signer_key_id",
+    "previous_checkpoint_digest",
+    "signature"
+  ],
+  "properties": {
+    "schema": {
+      "const": "sle.registry-checkpoint/v1"
+    },
+    "registry_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "event_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "signer_key_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "previous_checkpoint_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "signature": {
+      "type": "string",
+      "contentEncoding": "base64"
+    }
+  }
+}
