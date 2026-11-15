@@ -128,6 +128,8 @@ class Ledger:
                 raise ValidationError("account_id must be non-empty and trimmed")
             if not isinstance(account.allow_negative, bool) or not isinstance(account.counts_toward_supply, bool) or not isinstance(account.burnable, bool):
                 raise ValidationError("account policy flags must be booleans")
+            if account.counts_toward_supply and account.allow_negative:
+                raise ValidationError("supply-counted accounts cannot allow negative balances")
             if not account.kind or account.kind.strip() != account.kind:
                 raise ValidationError("account kind must be non-empty and trimmed")
             self._accounts[account.account_id] = account
@@ -176,6 +178,8 @@ class Ledger:
                 raise AccountNotFound(destination)
             if account.kind.startswith("system_"):
                 raise ValidationError("issuance destination cannot be a system account")
+            if not account.counts_toward_supply:
+                raise ValidationError("mint destination must count toward token supply")
             system_id = f"system:issuance:{account.asset}"
             self._ensure_system_account(system_id, account.asset, "issuance")
             data = dict(metadata or {})
@@ -198,6 +202,8 @@ class Ledger:
                 raise AccountNotFound(source)
             if not account.burnable:
                 raise ValidationError(f"burn is not permitted from account {source}")
+            if not account.counts_toward_supply:
+                raise ValidationError("burn source must count toward token supply")
             system_id = f"system:burn:{account.asset}"
             self._ensure_system_account(system_id, account.asset, "burn")
             return self._post(
@@ -391,10 +397,15 @@ class Ledger:
             return rebuilt
 
     def _ensure_system_account(self, account_id: str, asset: str, kind: str) -> None:
-        if account_id not in self._accounts:
-            self.create_account(Account(account_id, asset, allow_negative=True,
-                                        counts_toward_supply=False, kind=f"system_{kind}",
-                                        burnable=False))
+        expected = Account(
+            account_id, asset, allow_negative=True, counts_toward_supply=False,
+            kind=f"system_{kind}", burnable=False,
+        )
+        existing = self._accounts.get(account_id)
+        if existing is None:
+            self.create_account(expected)
+        elif existing != expected:
+            raise ValidationError(f"system account configuration mismatch: {account_id}")
 
     def _require_account_asset(self, account_id: str, asset: str) -> None:
         if asset not in self._assets:
