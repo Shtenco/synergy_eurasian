@@ -136,3 +136,12 @@ def test_transfer_index_is_signed_and_must_be_non_negative_integer():
         make_claim(transfer_index=-1).canonical_payload()
     with pytest.raises(ExternalDepositError, match="transfer_index"):
         make_claim(transfer_index=True).canonical_payload()
+
+
+def test_external_deposit_rejects_unapproved_token_contract_for_allowed_symbol():
+    keys, verifier = make_verifier()
+    claim = make_claim()
+    signatures = sign(claim, keys, verifier)
+    forged_contract = make_claim(asset_reference="0x" + "2" * 40)
+    with pytest.raises(ExternalDepositError, match="contract/denom"):
+        verifier.verify(forged_contract, signatures)
