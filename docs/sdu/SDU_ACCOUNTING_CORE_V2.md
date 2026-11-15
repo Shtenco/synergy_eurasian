@@ -170,6 +170,7 @@ Pure-Python tests:
 python -m pytest -q \
   tests/test_sdu_accounting_core.py \
   tests/test_sdu_issuance_authorization.py \
+  tests/test_sdu_burn_authorization.py \
   tests/test_sdu_ledger_checkpoints.py
 ```
 
