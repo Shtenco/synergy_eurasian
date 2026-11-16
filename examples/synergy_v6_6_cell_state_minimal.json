@@ -1,0 +1,153 @@
+{
+  "schema_version": "synergy.v6.6.cell_state.v1",
+  "cell_id": "KZ-KST-FOOD-001",
+  "effective_time": "2026-11-07T12:00:00Z",
+  "known_at": "2026-11-07T12:05:00Z",
+  "identity": {
+    "region": "KZ-KST",
+    "sector": "food_processing",
+    "governance_class": "enterprise"
+  },
+  "physical": {
+    "capacity": [
+      {
+        "resource": "food_processing_line",
+        "available_quantity": 1200,
+        "unit": "kg/day",
+        "valid_from": "2026-11-07T00:00:00Z",
+        "valid_to": "2026-11-08T00:00:00Z",
+        "evidence_refs": [
+          "ev-cap-001"
+        ]
+      }
+    ],
+    "inventory_lots": [
+      {
+        "lot_id": "lot-flour-001",
+        "sku": "flour-grade-1",
+        "quantity": 800,
+        "unit": "kg",
+        "location": "warehouse-A",
+        "received_at": "2026-11-06T09:00:00Z",
+        "evidence_refs": [
+          "ev-stock-001"
+        ]
+      }
+    ],
+    "work_in_progress": [
+      {
+        "work_order_id": "wo-001",
+        "sku": "bread-standard",
+        "planned_quantity": 500,
+        "due_at": "2026-11-08T06:00:00Z"
+      }
+    ]
+  },
+  "commercial": {
+    "orders": [
+      {
+        "order_id": "ord-001",
+        "counterparty_cell_id": "KZ-KST-RETAIL-004",
+        "sku": "bread-standard",
+        "quantity": 400,
+        "unit": "loaf",
+        "status": "accepted",
+        "due_at": "2026-11-08T08:00:00Z",
+        "currency": "KZT"
+      }
+    ],
+    "supplier_links": [
+      {
+        "counterparty_cell_id": "KZ-KST-FARM-003",
+        "relationship": "supplier",
+        "status": "contracted"
+      }
+    ]
+  },
+  "financial": {
+    "cash_accounts": [
+      {
+        "account_id": "bank-kzt-001",
+        "currency": "KZT",
+        "balance": 2500000,
+        "as_of": "2026-11-07T12:00:00Z",
+        "evidence_refs": [
+          "ev-bank-001"
+        ]
+      }
+    ],
+    "receivables": [
+      {
+        "document_id": "inv-001",
+        "counterparty_cell_id": "KZ-KST-RETAIL-004",
+        "currency": "KZT",
+        "amount": 600000,
+        "due_at": "2026-11-15T00:00:00Z",
+        "status": "issued"
+      }
+    ],
+    "payables": [
+      {
+        "document_id": "ap-001",
+        "counterparty_cell_id": "KZ-KST-FARM-003",
+        "currency": "KZT",
+        "amount": 180000,
+        "due_at": "2026-11-10T00:00:00Z",
+        "status": "accepted"
+      }
+    ],
+    "debt_facilities": [
+      {
+        "facility_id": "loan-001",
+        "lender_id": "bank-001",
+        "currency": "KZT",
+        "principal_outstanding": 1000000,
+        "limit": 1500000,
+        "maturity_at": "2027-06-01T00:00:00Z",
+        "status": "drawn"
+      }
+    ]
+  },
+  "human": {
+    "skill_capacity_units": [
+      {
+        "skill": "food_technologist",
+        "available_units": 2,
+        "unit": "person-shift/day"
+      },
+      {
+        "skill": "operator",
+        "available_units": 6,
+        "unit": "person-shift/day"
+      }
+    ]
+  },
+  "risk": {
+    "status": "operating",
+    "concentration_flags": [],
+    "notes": []
+  },
+  "evidence": [
+    {
+      "evidence_id": "ev-cap-001",
+      "class": "observed",
+      "source_type": "maintenance_and_shift_log",
+      "recorded_at": "2026-11-07T10:00:00Z",
+      "issuer": "cell-operator"
+    },
+    {
+      "evidence_id": "ev-stock-001",
+      "class": "observed",
+      "source_type": "warehouse_count",
+      "recorded_at": "2026-11-06T18:00:00Z",
+      "issuer": "warehouse-manager"
+    },
+    {
+      "evidence_id": "ev-bank-001",
+      "class": "observed",
+      "source_type": "bank_statement",
+      "recorded_at": "2026-11-07T11:00:00Z",
+      "issuer": "bank"
+    }
+  ]
+}

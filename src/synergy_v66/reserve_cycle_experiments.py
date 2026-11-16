@@ -45,7 +45,7 @@ def _gini(values: list[float]) -> float:
     return max(0.0, min(1.0, (2.0 * weighted) / (n * total) - (n + 1) / n))
 
 
-def _paired_path(seed: int, cycles: int, shock_regime: str) -> tuple[dict[str, float], list[dict[str, float]], str]:
+def _paired_path(seed: int, cycles: int, shock_regime: str) -> tuple[dict[str, float], list[dict[str, float]], list[dict[str, str]], str]:
     rng = random.Random(seed)
     opening_cash = {cell.cell_id: round(rng.uniform(80.0, 120.0), 8) for cell in CELLS}
     low, high = SHOCK_RANGES[shock_regime]
@@ -53,11 +53,22 @@ def _paired_path(seed: int, cycles: int, shock_regime: str) -> tuple[dict[str, f
         {region: round(rng.uniform(low, high), 8) for region in REGIONS}
         for _ in range(cycles)
     ]
-    payload = {"opening_cash": opening_cash, "claims_by_day": shocks}
+    beneficiaries_by_day = [
+        {
+            region: sorted(cell.cell_id for cell in CELLS if cell.region == region)[day % sum(cell.region == region for cell in CELLS)]
+            for region in REGIONS
+        }
+        for day in range(cycles)
+    ]
+    payload = {
+        "opening_cash": opening_cash,
+        "claims_by_day": shocks,
+        "beneficiaries_by_day": beneficiaries_by_day,
+    }
     fingerprint = hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
     ).hexdigest()
-    return opening_cash, shocks, fingerprint
+    return opening_cash, shocks, beneficiaries_by_day, fingerprint
 
 
 def _new_ledger(opening_cash: dict[str, float]) -> CreditLedger:
@@ -77,6 +88,7 @@ def _run_one_path(
     allocation_rule: str,
     opening_cash: dict[str, float],
     shocks: list[dict[str, float]],
+    beneficiaries_by_day: list[dict[str, str]],
     path_fingerprint: str,
 ) -> dict[str, Any]:
     ledger = _new_ledger(opening_cash)
@@ -88,6 +100,8 @@ def _run_one_path(
     total_recovery_requested = 0.0
     total_recovery_unfunded = 0.0
     reserve_exhaustion_cycles = 0
+    regional_reserve_exhaustion_cycles = 0
+    federation_reserve_exhaustion_cycles = 0
     cycles_at_target_after_recovery = 0
     cash_floor_breach_count = 0
     max_cash_conservation_error = 0.0
@@ -102,7 +116,7 @@ def _run_one_path(
         day_paid = 0.0
         day_uncovered = 0.0
         for region in REGIONS:
-            beneficiary = f"{region}-MF1"
+            beneficiary = beneficiaries_by_day[day][region]
             claim = ledger.apply_exogenous_guarantee_claim(
                 claim_id=f"SEED-{seed}-{allocation_rule}-DAY-{day}-{region}",
                 region=region,
@@ -119,6 +133,10 @@ def _run_one_path(
             float(post_claim_snapshot["regional_pool_reserve_by_region"]["WEST"]),
             float(post_claim_snapshot["regional_pool_reserve_by_region"]["EAST"]),
             float(post_claim_snapshot["federation_pool_reserve_balance"]),
+        )
+        max_cash_conservation_error = max(
+            max_cash_conservation_error,
+            abs(float(post_claim_snapshot["cash_conservation_error"])),
         )
         day_replenished = 0.0
         day_recovery_requested = 0.0
@@ -173,8 +191,14 @@ def _run_one_path(
             max_period_cap_excess,
             max((period_used[key] - period_caps[key] for key in opening_cash), default=0.0),
         )
-        if any(value <= EPS for value in reserves_after_claim):
+        regional_exhausted = any(value <= EPS for value in reserves_after_claim[:2])
+        federation_exhausted = reserves_after_claim[2] <= EPS
+        if regional_exhausted or federation_exhausted:
             reserve_exhaustion_cycles += 1
+        if regional_exhausted:
+            regional_reserve_exhaustion_cycles += 1
+        if federation_exhausted:
+            federation_reserve_exhaustion_cycles += 1
         if (
             all(abs(snapshot["regional_pool_reserve_by_region"][region] - REGIONAL_TARGET) <= EPS for region in REGIONS)
             and abs(snapshot["federation_pool_reserve_balance"] - FEDERATION_TARGET) <= EPS
@@ -199,10 +223,22 @@ def _run_one_path(
             "regional_reserve_total": sum(snapshot["regional_pool_reserve_by_region"].values()),
             "federation_reserve": float(snapshot["federation_pool_reserve_balance"]),
             "cash_conservation_error": cash_error,
+            "claim_beneficiary_by_region": dict(beneficiaries_by_day[day]),
         })
 
     final = ledger.snapshot()
     final_cash = list(final["cash_by_cell"].values())
+    contribution_values = list(cumulative_contributions.values())
+    total_member_contributions = sum(contribution_values)
+    top_member_count = max(1, math.ceil(0.20 * len(contribution_values)))
+    top_contribution_share = (
+        sum(sorted(contribution_values, reverse=True)[:top_member_count]) / total_member_contributions
+        if total_member_contributions > EPS else 0.0
+    )
+    max_contribution_opening_cash_ratio = max(
+        (cumulative_contributions[cell_id] / opening_cash[cell_id] for cell_id in opening_cash),
+        default=0.0,
+    )
     # Opening cash is the total member funding before initial reserve allocations;
     # adding initial reserves again would double-count the same contributed money.
     total_initial_cash_and_reserves = sum(opening_cash.values())
@@ -222,6 +258,12 @@ def _run_one_path(
         "total_claim_uncovered": total_uncovered,
         "claim_coverage_ratio": total_paid / total_requested if total_requested > EPS else 1.0,
         "total_replenished": total_replenished,
+        "total_member_contributions": total_member_contributions,
+        "mean_member_cumulative_contribution": mean(contribution_values) if contribution_values else 0.0,
+        "max_member_cumulative_contribution": max(contribution_values, default=0.0),
+        "contribution_gini": _gini(contribution_values),
+        "top_20_percent_contribution_share": top_contribution_share,
+        "max_contribution_opening_cash_ratio": max_contribution_opening_cash_ratio,
         "total_recovery_requested": total_recovery_requested,
         "total_recovery_unfunded": total_recovery_unfunded,
         "recovery_funding_ratio": (
@@ -229,6 +271,8 @@ def _run_one_path(
             if total_recovery_requested > EPS else 1.0
         ),
         "reserve_exhaustion_cycles": reserve_exhaustion_cycles,
+        "regional_reserve_exhaustion_cycles": regional_reserve_exhaustion_cycles,
+        "federation_reserve_exhaustion_cycles": federation_reserve_exhaustion_cycles,
         "cycles_at_target_after_recovery": cycles_at_target_after_recovery,
         "cash_floor_breach_count": cash_floor_breach_count,
         "minimum_final_member_cash": min(final_cash),
@@ -242,7 +286,8 @@ def _run_one_path(
         "final_system_cash": final_cash_and_reserves,
         "system_cash_change": final_cash_and_reserves - total_initial_cash_and_reserves,
         "bank_draws": float(final["bank_draws"]),
-        "external_inflows": 0.0,
+        "external_inflows": float(final["customer_collections"]),
+        "external_outflows": float(final["external_supplier_payments"]),
         "cycle_rows": cycle_rows,
         "interpretation_guard": (
             "Synthetic exogenous claim stress only, not borrower-default simulation. Claims transfer "
@@ -275,11 +320,11 @@ def run_paired_reserve_recovery_experiment(
     observations: dict[str, list[dict[str, Any]]] = {rule: [] for rule in rules}
     paired_paths = []
     for seed in seed_list:
-        opening_cash, shocks, fingerprint = _paired_path(seed, cycles, shock_regime)
+        opening_cash, shocks, beneficiaries_by_day, fingerprint = _paired_path(seed, cycles, shock_regime)
         paired_paths.append({"seed": seed, "path_fingerprint": fingerprint})
         for rule in rules:
             observations[rule].append(
-                _run_one_path(seed, cycles, shock_regime, rule, opening_cash, shocks, fingerprint)
+                _run_one_path(seed, cycles, shock_regime, rule, opening_cash, shocks, beneficiaries_by_day, fingerprint)
             )
 
     scalar_metrics = (
@@ -288,8 +333,16 @@ def run_paired_reserve_recovery_experiment(
         "total_claim_uncovered",
         "claim_coverage_ratio",
         "total_replenished",
+        "total_member_contributions",
+        "mean_member_cumulative_contribution",
+        "max_member_cumulative_contribution",
+        "contribution_gini",
+        "top_20_percent_contribution_share",
+        "max_contribution_opening_cash_ratio",
         "total_recovery_unfunded",
         "reserve_exhaustion_cycles",
+        "regional_reserve_exhaustion_cycles",
+        "federation_reserve_exhaustion_cycles",
         "cycles_at_target_after_recovery",
         "cash_floor_breach_count",
         "minimum_final_member_cash",
@@ -299,6 +352,9 @@ def run_paired_reserve_recovery_experiment(
         "max_cash_conservation_error",
         "max_period_cap_excess",
         "system_cash_change",
+        "bank_draws",
+        "external_inflows",
+        "external_outflows",
     )
     summary = {
         rule: {
