@@ -180,3 +180,7 @@ PR #10 in `synergy_agentic_ai_economy` implements separate modeled bridge and AM
 - PR #10 CI runs `43802719900` and `43802719919` both failed with zero reported steps and unavailable log blobs, including after retry. The exact-head code is therefore not yet test-validated. The full historical replay has not been regenerated.
 - Metaverse PR #5 and PR #6 remain mergeable Drafts, but their latest CI attempts also failed before reporting any steps; log blobs are unavailable. Maps PR #1 has the same unresolved state.
 - Eurasian PR #20's retry `43802554827` is currently executing; checkout and Python setup completed and dependency installation is in progress at the time of this update. Its final result must be checked before relying on it.
+
+
+### CI dependency note — 2026-11-16
+PR #20 against main exposed the existing missing `synergy_v66.credit` import on main. The execution plan is stacked on PR #19's V6.6 recovery branch as PR #21. The base workflow's pull-request branch filter has been extended to validate stacked PRs against that candidate base; no tests were skipped or weakened.
