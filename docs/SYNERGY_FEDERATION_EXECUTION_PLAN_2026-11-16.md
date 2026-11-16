@@ -153,8 +153,13 @@ The plan is complete only when every workstream has:
 - Rebased the RF/GNSS/business-twin implementation onto the updated economic projection base in PR #6. The new branch preserves the RF/GNSS files and tests, reconciles CI branch filters and avoids cancelling runs while validation is pending. Closed old PR #3 as superseded; its branch remains intact. PR #6 is mergeable and remains Draft.
 - Maps PR #1 and Metaverse PR #5/#6 CI jobs were retried where GitHub allowed. The latest job records show failures with zero reported steps; log downloads return BlobNotFound. Treat these as unresolved Actions/runner or log-retention failures, not as successful code validation. The old Agentic AI runs are outside GitHub's 30-day rerun window and the API rejected retries.
 
-### Agentic AI accounting evidence correction
-The current main README describes the V4 gross bridge flow (84,911.06) as a modeled/calibrated reference unchanged from V3 and explicitly says it is not earned SYNERGY commission. It also says V5 should replace this with observed external flow and must not count general market volume as SYNERGY-earned commission. Therefore the earlier proposed "fix misclassification" is not yet substantiated. The correct next step is source-level accounting audit of the V4 calculation and its report, then add a regression test only if a real leakage into realized HardNAV is demonstrated.
+### Agentic AI accounting correction — confirmed and patched
+Source-level review confirmed a real V4 HardNAV leakage:
+- `closed_multimarket_hardnav_v4.py` divided the modeled V3 bridge volume (84,911.06) across 13,000 blocks and called `record_external_bridge_flow()`, which booked the configured bridge/swap fee as external protocol revenue.
+- The pre-correction report included 339.64424 bridge/swap fees and 7.808553 external AMM fee estimates in HardNAV, while the bridge volume was explicitly marked modeled and there were no transaction-level fee receipts.
+- The AMM fee was inferred from price-ratio arbitrage notional, not observed swap transactions.
+
+PR #10 in `synergy_agentic_ai_economy` implements separate modeled bridge and AMM fee counters, defaults AMM fee recognition to false, excludes modeled fee estimates from V4 HardNAV, adds regression tests, marks the previous report superseded and documents the audit. No replacement return/drawdown values are published until the corrected 13,000-block replay is rerun and exact-head tests pass. PR #10 remains Draft.
 
 ### Current open integration blockers
 1. Production Ed25519 producer verifier and independently governed key registry; producer-side marketplace event signing.
@@ -165,3 +170,13 @@ The current main README describes the V4 gross bridge flow (84,911.06) as a mode
 6. No production PostGIS, KMS/HSM, RF/GNSS hardware adapters, backup/restore, WORM anchoring or deployment evidence yet.
 
 **Status after this log:** planning and several branch-level changes are committed. No PR has been merged and no production deployment has been performed.
+
+
+### Additional implementation log — 2026-11-16 04:14 UTC
+- Agentic AI PR #10 created: [Exclude modeled bridge and AMM fee estimates from HardNAV V4](https://github.com/Shtenco/synergy_agentic_ai_economy/pull/10). Branch `fix/v4-exclude-modeled-fees-from-hardnav-20261116`.
+- The V4 historical report is preserved for traceability but now marked superseded. The README explicitly warns that the prior V4 HardNAV values included modeled fee estimates and must not be used as verified realized wealth.
+- Added `docs/HARDNAV_V4_ACCOUNTING_AUDIT_2026-11-16.md` documenting the source-level evidence and correction.
+- Added tests for modeled bridge fee exclusion and modeled AMM fee exclusion; existing tests retain the explicit observed-fee path.
+- PR #10 CI runs `43802719900` and `43802719919` both failed with zero reported steps and unavailable log blobs, including after retry. The exact-head code is therefore not yet test-validated. The full historical replay has not been regenerated.
+- Metaverse PR #5 and PR #6 remain mergeable Drafts, but their latest CI attempts also failed before reporting any steps; log blobs are unavailable. Maps PR #1 has the same unresolved state.
+- Eurasian PR #20's retry `43802554827` is currently executing; checkout and Python setup completed and dependency installation is in progress at the time of this update. Its final result must be checked before relying on it.
