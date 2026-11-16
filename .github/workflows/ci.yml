@@ -2,9 +2,9 @@ name: EIIOM CI
 
 on:
   push:
-    branches: [main, eiiom-masterplan-2045, eiiom-v4-federation-megasystem]
+    branches: [main, eiiom-masterplan-2045, eiiom-v4-federation-megasystem, integration/federation-execution-plan-v2-2026-11-16]
   pull_request:
-    branches: [main]
+    branches: [main, fix/v66-reserve-recovery-ci]
 
 permissions:
   contents: read
