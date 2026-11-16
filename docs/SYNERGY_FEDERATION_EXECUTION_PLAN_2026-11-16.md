@@ -29,11 +29,11 @@ The repositories remain independently deployable bounded contexts. Integration i
 The linked GitHub installation reports admin/push access to all five repositories. Default branch is `main` for each.
 
 ### Existing implementation candidates
-- Eurasian PR #19, `fix/v66-reserve-recovery-ci`, head `700af96a935dd267b57408ad129e1e4ee65f44c0`, restores the V6.6 module chain and reserve recovery regression tests. Its PR description records exact-head CI success, 231 passed tests and a passing federation audit. It remains Draft and unmerged. Treat the claims as PR evidence; rerun against current GitHub Actions before merge.
-- Economics PR #17 and #16 are near-duplicate Draft PRs for the Ed25519 canonical economic entity register, with the same five changed paths and the same base branch but different heads. Compare both diffs and histories; select one canonical candidate only after verifying unique changes and exact-head CI. Do not close either automatically.
+- Eurasian PR #19, `fix/v66-reserve-recovery-ci`, current head `0b1b40b678c6b8614a4233e2f19aef02e57429a8`, restores the V6.6 module chain and reserve recovery regression tests and includes this execution plan. An earlier head `700af96a935dd267b57408ad129e1e4ee65f44c0` had a successful CI run; the current head requires fresh exact-head CI. It remains Draft and unmerged.
+- Economics PR #16 and #17 contained byte-for-byte identical five-file patches. PR #16 was closed as superseded and its branch preserved; PR #17 remains the canonical candidate. Exact-head prototype/schema validation passed on the previously audited candidate commit; recheck current head before merge.
 - Economics PR #13 contains bank-deposit/credit constraints and is Draft. Preserve atomicity, cash/credit limits and double-entry invariants.
 - Agentic AI PR #5 is an input-data PR, not evidence of a production agent economy. Keep historical data provenance and TRAIN/OOS separation.
-- Metaverse PR #1 bootstraps spatial registry/contracts/observation security; PR #2 adds a read-only economic projection; PR #3 adds RF/GNSS and business-twin bindings. PR #2 currently reports non-mergeable; resolve its base/merge conflict before adding dependent changes.
+- Metaverse PR #1 bootstraps spatial registry/contracts/observation security; PR #2 was superseded by PR #5, which adds a fail-closed producer-verifier interface to the read-only economic projection. PR #3 was superseded by rebased PR #6 for RF/GNSS and business-twin bindings. Both current PRs are Draft and require exact-head CI plus a production verifier/key-registry implementation.
 - Maps PR #1 adds PostGIS/H3 ingestion, provenance and Cesium viewer. It remains Draft; its CI has reported failures. Retrieve current run logs and distinguish runner/infrastructure failure from code/test failure before changing implementation.
 
 ### Important correction to prior audit
@@ -59,7 +59,7 @@ The Eurasian V6.6 failure described in the earlier audit is no longer an unaddre
 - Identify the single authority for balances, liabilities, reserves, payments, fees and settlement. Do not let spatial or agentic projections own them.
 - Verify double-entry, balanced journal, currency/scale, idempotency, atomic loan/deposit creation, reserve floors, overdraft/credit limits, and reversal semantics.
 - Split NAV into independently reconciled components: external cash, verified external receivables, marked assets, liabilities, restricted funds, unrealized PnL, realized PnL, fees and gas.
-- For HardNAV, keep modelled bridge volume/fees and modelled gas units explicitly outside realized externally evidenced NAV. The Agentic AI Economy main README currently labels V4 gross bridge flow 84,911.06 as `MODELED_V5_CALIBRATED_REFERENCE_UNCHANGED_FROM_V3` and explicitly says it is not earned SYNERGY commission. Verify the actual accounting code and report before changing it; do not treat the documented classification as a confirmed bug. Include only independently evidenced and reconciled cashflows.
+- For HardNAV, keep modelled bridge volume/fees and modelled gas units explicitly outside realized externally evidenced NAV. Source-level audit confirmed V4 had booked modeled bridge/swap and inferred AMM fee estimates into HardNAV without transaction evidence. Agentic AI PR #10 separates modeled fees, defaults AMM fee recognition off, adds regression tests and marks the old report superseded. No corrected performance figures are valid until the replay and exact-head CI pass.
 - Add property-based tests for conservation, no double-entry drift, no duplicate posting and failure atomicity.
 **Exit:** all financial events reconcile to journals; modelled and verified values cannot be silently combined.
 
@@ -145,9 +145,9 @@ The plan is complete only when every workstream has:
 
 ## 8. Implementation log — 2026-11-16
 ### Completed repository actions
-- Created this plan as Draft PR #20 in `synergy_eurasian`; branch `integration/federation-execution-plan-2026-11-16`. Main remains unchanged.
+- The execution plan is included in Eurasian PR #19 on `fix/v66-reserve-recovery-ci`; main remains unchanged. Earlier docs-only PRs #20 and #21 were superseded/closed. A duplicate PR #22 was identified with the exact same head commit and changed-file set as PR #19; it is being closed in favour of the older PR #19.
 - Compared Economics PR #16 and #17: all five changed-file patches are byte-for-byte identical. Closed #16 as superseded; its branch remains intact. PR #17 is the canonical candidate, with successful prototype and schema validation runs on head `a4bc7a3e21d8bdee7cf35653b58c6f05ec637f1e`.
-- Eurasian PR #19 remains Draft/unmerged; exact head `700af96a935dd267b57408ad129e1e4ee65f44c0` has a recorded successful EIIOM CI run `43685160237`. Revalidation/review still required before merge.
+- Eurasian PR #19 remains Draft/unmerged; its earlier head `700af96a935dd267b57408ad129e1e4ee65f44c0` has a recorded successful EIIOM CI run `43685160237`. The current consolidated head `0b1b40b678c6b8614a4233e2f19aef02e57429a8` must be revalidated before merge.
 - Metaverse PR #2 was superseded by rebased PR #5; PR #2 closed, branch retained. PR #5 now contains the latest economic projection, tests and integration documentation.
 - Hardened the Metaverse economic projection: event ingestion now requires an injected trusted producer verifier and non-empty attestation, binds verification to audience `synergy.metaverse.economic-projection.v1` and the independently supplied expected tenant, and fails closed on absent verifier, verifier error or rejection. Added negative regression tests and documented that the test stub is not a production verifier. This closes the unsafe default-acceptance gap at the consumer boundary, but a production Ed25519 verifier/key-registry adapter and producer-side signing remain open.
 - Rebased the RF/GNSS/business-twin implementation onto the updated economic projection base in PR #6. The new branch preserves the RF/GNSS files and tests, reconciles CI branch filters and avoids cancelling runs while validation is pending. Closed old PR #3 as superseded; its branch remains intact. PR #6 is mergeable and remains Draft.
@@ -173,14 +173,21 @@ PR #10 in `synergy_agentic_ai_economy` implements separate modeled bridge and AM
 
 
 ### Additional implementation log — 2026-11-16 04:14 UTC
-- Agentic AI PR #10 created: [Exclude modeled bridge and AMM fee estimates from HardNAV V4](https://github.com/Shtenco/synergy_agentic_ai_economy/pull/10). Branch `fix/v4-exclude-modeled-fees-from-hardnav-20261116`.
+- Agentic AI PR #10 created: [Exclude modeled bridge and AMM fee estimates from HardNAV V4](https://github.com/Shtenco/synergy_agentic_ai_economy/pull/10). Branch `fix/v4-exclude-modeled-fees-from-hardnav-20261116`. It remains Draft and mergeable; current exact-head CI attempts failed before reporting any steps and logs are unavailable.
 - The V4 historical report is preserved for traceability but now marked superseded. The README explicitly warns that the prior V4 HardNAV values included modeled fee estimates and must not be used as verified realized wealth.
 - Added `docs/HARDNAV_V4_ACCOUNTING_AUDIT_2026-11-16.md` documenting the source-level evidence and correction.
 - Added tests for modeled bridge fee exclusion and modeled AMM fee exclusion; existing tests retain the explicit observed-fee path.
 - PR #10 CI runs `43802719900` and `43802719919` both failed with zero reported steps and unavailable log blobs, including after retry. The exact-head code is therefore not yet test-validated. The full historical replay has not been regenerated.
 - Metaverse PR #5 and PR #6 remain mergeable Drafts, but their latest CI attempts also failed before reporting any steps; log blobs are unavailable. Maps PR #1 has the same unresolved state.
-- Eurasian PR #20's retry `43802554827` is currently executing; checkout and Python setup completed and dependency installation is in progress at the time of this update. Its final result must be checked before relying on it.
+- Eurasian PR #20's retry `43802554827` failed during test collection with `ModuleNotFoundError: synergy_v66.credit` on main. The V6.6 recovery branch fixes this by restoring the missing module chain. The docs-only PRs #20/#21 were superseded; the plan is now included in PR #19.
 
 
 ### CI dependency note — 2026-11-16
 PR #20 against main exposed the existing missing `synergy_v66.credit` import on main. The execution plan is stacked on PR #19's V6.6 recovery branch as PR #21. The base workflow's pull-request branch filter has been extended to validate stacked PRs against that candidate base; no tests were skipped or weakened.
+
+
+### Consolidated PR state — 2026-11-16 04:17 UTC
+- Eurasian PR #19 now contains both the V6.6 recovery implementation and this plan at head `0b1b40b678c6b8614a4233e2f19aef02e57429a8`. PR #22 has the exact same head SHA, same base `main`, and the same 29 changed paths; it is a duplicate candidate and is closed in favour of PR #19. The earlier docs-only PRs #20 and #21 are also closed. No PR has been merged.
+- Latest observed PR #21 run `43803089079` was still executing the full invariant/schema test stage after compile and isolated V6.6 reserve recovery tests passed. Its branch is superseded; do not use it as the canonical PR.
+- Current exact-head validation is still required for PR #19's consolidated head; the earlier passing run is for a prior head only.
+- Agentic AI PR #10 and Metaverse PR #5/#6 remain Draft and unvalidated at their latest heads. Their failed Actions attempts reported no steps and the logs were unavailable; classify as unresolved CI evidence, not code failures or successes.
