@@ -204,7 +204,7 @@ PR #20 against main exposed the existing missing `synergy_v66.credit` import on 
 
 ### Economics / settlement
 - Economics PR #17 now contains a durable SQLite Ed25519 trust-key registry, live entity-authority resolver, domain-separated marketplace event signer, and a durable payment-settlement ledger with balanced debit/credit entries, replay protection and hash-chain audit proof.
-- The dedicated Economics trust/settlement workflow passed on the pinned branch head. The broad prototype workflow's prototype unit tests and all completed simulation steps passed; the workflow was still running at the time of this update.
+- The dedicated Economics trust/settlement workflow passed on the earlier a4d909 commit. After the subsequent stricter account-level settlement audit change at e85db, the exact-head trust/settlement workflow is running again. On that newer head, prototype unit tests and all completed simulation steps passed; the broad prototype workflow remains in progress.
 - The Economics cross-repository contract job is intentionally blocked because SYNERGY_CROSS_REPO_READ_TOKEN is not configured. It fails explicitly before external checkout; the E2E test has not yet run in CI.
 
 ### HardNAV
