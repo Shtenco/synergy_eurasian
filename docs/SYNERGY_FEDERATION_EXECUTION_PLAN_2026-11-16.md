@@ -191,3 +191,10 @@ PR #20 against main exposed the existing missing `synergy_v66.credit` import on 
 - Latest observed PR #21 run `43803089079` was still executing the full invariant/schema test stage after compile and isolated V6.6 reserve recovery tests passed. Its branch is superseded; do not use it as the canonical PR.
 - Current exact-head validation is still required for PR #19's consolidated head; the earlier passing run is for a prior head only.
 - Agentic AI PR #10 and Metaverse PR #5/#6 remain Draft and unvalidated at their latest heads. Their failed Actions attempts reported no steps and the logs were unavailable; classify as unresolved CI evidence, not code failures or successes.
+
+
+### CI follow-up — 2026-11-16 04:18 UTC
+- Superseded stacked PR #21 run `43803089079` completed successfully. All steps passed: V6.6 compile, isolated reserve recovery tests, full invariant/schema suite, federation authority audit, BASE-v2, seven-sector economy, dynamic productivity/Monte Carlo and sector optimizer V4.
+- The tested merge commit used V6.6 base `700af96a935dd267b57408ad129e1e4ee65f44c0` plus the plan-only PR #21. Comparing that base to consolidated PR #19 head `0b1b40b678c6b8614a4233e2f19aef02e57429a8` showed only the plan document added; no V6.6 runtime/test files differed. This is strong validation of the same code, but it is not a substitute for an exact-head run after the latest documentation/workflow commits.
+- Added the recovery branch to the workflow's push filter to request exact-head validation. GitHub has not yet exposed a run for the latest workflow commit `61ba471fdd67053f891f7fd9e6c6b9c01041a04e`; exact-head status remains pending.
+- PR #22 was confirmed as an exact duplicate of PR #19 (same head SHA, base and 29 changed files) and closed. PR #19 remains the single canonical Eurasian candidate.
