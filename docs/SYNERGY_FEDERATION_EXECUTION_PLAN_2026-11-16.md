@@ -59,7 +59,7 @@ The Eurasian V6.6 failure described in the earlier audit is no longer an unaddre
 - Identify the single authority for balances, liabilities, reserves, payments, fees and settlement. Do not let spatial or agentic projections own them.
 - Verify double-entry, balanced journal, currency/scale, idempotency, atomic loan/deposit creation, reserve floors, overdraft/credit limits, and reversal semantics.
 - Split NAV into independently reconciled components: external cash, verified external receivables, marked assets, liabilities, restricted funds, unrealized PnL, realized PnL, fees and gas.
-- For HardNAV, exclude modelled bridge volume/fees and modelled gas units from realized externally evidenced NAV. Report them in separate scenario columns. Include only independently evidenced and reconciled cashflows.
+- For HardNAV, keep modelled bridge volume/fees and modelled gas units explicitly outside realized externally evidenced NAV. The Agentic AI Economy main README currently labels V4 gross bridge flow 84,911.06 as `MODELED_V5_CALIBRATED_REFERENCE_UNCHANGED_FROM_V3` and explicitly says it is not earned SYNERGY commission. Verify the actual accounting code and report before changing it; do not treat the documented classification as a confirmed bug. Include only independently evidenced and reconciled cashflows.
 - Add property-based tests for conservation, no double-entry drift, no duplicate posting and failure atomicity.
 **Exit:** all financial events reconcile to journals; modelled and verified values cannot be silently combined.
 
@@ -141,3 +141,27 @@ The plan is complete only when every workstream has:
 - a clear research/staging/production classification.
 
 **Current status:** planning baseline documented; implementation gates remain open. This file itself does not claim any system is production-ready.
+
+
+## 8. Implementation log — 2026-11-16
+### Completed repository actions
+- Created this plan as Draft PR #20 in `synergy_eurasian`; branch `integration/federation-execution-plan-2026-11-16`. Main remains unchanged.
+- Compared Economics PR #16 and #17: all five changed-file patches are byte-for-byte identical. Closed #16 as superseded; its branch remains intact. PR #17 is the canonical candidate, with successful prototype and schema validation runs on head `a4bc7a3e21d8bdee7cf35653b58c6f05ec637f1e`.
+- Eurasian PR #19 remains Draft/unmerged; exact head `700af96a935dd267b57408ad129e1e4ee65f44c0` has a recorded successful EIIOM CI run `43685160237`. Revalidation/review still required before merge.
+- Metaverse PR #2 was superseded by rebased PR #5; PR #2 closed, branch retained. PR #5 now contains the latest economic projection, tests and integration documentation.
+- Hardened the Metaverse economic projection: event ingestion now requires an injected trusted producer verifier and non-empty attestation, binds verification to audience `synergy.metaverse.economic-projection.v1` and the independently supplied expected tenant, and fails closed on absent verifier, verifier error or rejection. Added negative regression tests and documented that the test stub is not a production verifier. This closes the unsafe default-acceptance gap at the consumer boundary, but a production Ed25519 verifier/key-registry adapter and producer-side signing remain open.
+- Rebased the RF/GNSS/business-twin implementation onto the updated economic projection base in PR #6. The new branch preserves the RF/GNSS files and tests, reconciles CI branch filters and avoids cancelling runs while validation is pending. Closed old PR #3 as superseded; its branch remains intact. PR #6 is mergeable and remains Draft.
+- Maps PR #1 and Metaverse PR #5/#6 CI jobs were retried where GitHub allowed. The latest job records show failures with zero reported steps; log downloads return BlobNotFound. Treat these as unresolved Actions/runner or log-retention failures, not as successful code validation. The old Agentic AI runs are outside GitHub's 30-day rerun window and the API rejected retries.
+
+### Agentic AI accounting evidence correction
+The current main README describes the V4 gross bridge flow (84,911.06) as a modeled/calibrated reference unchanged from V3 and explicitly says it is not earned SYNERGY commission. It also says V5 should replace this with observed external flow and must not count general market volume as SYNERGY-earned commission. Therefore the earlier proposed "fix misclassification" is not yet substantiated. The correct next step is source-level accounting audit of the V4 calculation and its report, then add a regression test only if a real leakage into realized HardNAV is demonstrated.
+
+### Current open integration blockers
+1. Production Ed25519 producer verifier and independently governed key registry; producer-side marketplace event signing.
+2. Authenticated remote resolver and tenant IAM between Economics and Metaverse.
+3. Maps and Metaverse CI evidence unavailable despite retries; need a fresh run with retrievable logs.
+4. Metaverse PR #6 exact-head CI and mergeability review.
+5. Agentic AI historical real-block workflow failure requires a new PR synchronization event or new workflow run; old run IDs cannot be retried after 30 days.
+6. No production PostGIS, KMS/HSM, RF/GNSS hardware adapters, backup/restore, WORM anchoring or deployment evidence yet.
+
+**Status after this log:** planning and several branch-level changes are committed. No PR has been merged and no production deployment has been performed.
