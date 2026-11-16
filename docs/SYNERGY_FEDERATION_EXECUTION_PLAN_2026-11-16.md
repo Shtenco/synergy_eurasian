@@ -198,3 +198,27 @@ PR #20 against main exposed the existing missing `synergy_v66.credit` import on 
 - The tested merge commit used V6.6 base `700af96a935dd267b57408ad129e1e4ee65f44c0` plus the plan-only PR #21. Comparing that base to consolidated PR #19 head `0b1b40b678c6b8614a4233e2f19aef02e57429a8` showed only the plan document added; no V6.6 runtime/test files differed. This is strong validation of the same code, but it is not a substitute for an exact-head run after the latest documentation/workflow commits.
 - Added the recovery branch to the workflow's push filter to request exact-head validation. GitHub has not yet exposed a run for the latest workflow commit `61ba471fdd67053f891f7fd9e6c6b9c01041a04e`; exact-head status remains pending.
 - PR #22 was confirmed as an exact duplicate of PR #19 (same head SHA, base and 29 changed files) and closed. PR #19 remains the single canonical Eurasian candidate.
+
+
+## Update 2026-11-16 — HardNAV, Ed25519 and cross-repository integration
+
+### Economics / settlement
+- Economics PR #17 now contains a durable SQLite Ed25519 trust-key registry, live entity-authority resolver, domain-separated marketplace event signer, and a durable payment-settlement ledger with balanced debit/credit entries, replay protection and hash-chain audit proof.
+- The dedicated Economics trust/settlement workflow passed on the pinned branch head. The broad prototype workflow's prototype unit tests and all completed simulation steps passed; the workflow was still running at the time of this update.
+- The Economics cross-repository contract job is intentionally blocked because SYNERGY_CROSS_REPO_READ_TOKEN is not configured. It fails explicitly before external checkout; the E2E test has not yet run in CI.
+
+### HardNAV
+- Agentic AI PR #10 now requires both a trusted receipt verifier and a file-backed durable journal before external fee booking.
+- Each receipt is posted atomically to an append-only SQLite journal with a unique chain/transaction/log identity and SHA-256 hash chain. Balanced USDC debit/credit lines separate principal from realized fee revenue; startup replay validates journal integrity and accounting reconciliation before restoring NAV.
+- Tests cover missing verifier/journal, rejected or malformed receipts, positive fee/principal bounds, replay across restart, append-only behavior, balance reconciliation and tamper detection.
+- Exact-head Actions jobs still terminate before reporting any steps; job logs are unavailable (BlobNotFound). This is unresolved CI infrastructure evidence, not a pass and not a diagnosed code failure. No corrected V4 performance metrics are published pending a usable exact-head run and replay.
+
+### Metaverse / Maps
+- Metaverse PRs #5/#6 and Maps PR #1 carry the shared Ed25519 key-registry contract, tenant/scope/audience-constrained live resolvers, and revocation lifecycle tests. Metaverse also verifies Economics marketplace event signatures and Maps verifies Metaverse spatial registry proofs.
+- The Business Twin integration branch contains the E2E contract test: canonical economic entity → signed marketplace event → Business Twin binding → spatial proof → tenant-scoped Maps API → verified payment adapter → balanced accounting journal → audit digest.
+- The PR-triggered E2E workflow is stored on the integration base branch. Both it and the Economics-side cross-repository workflow require the same SYNERGY_CROSS_REPO_READ_TOKEN Actions secret with read-only Contents access to the private repositories.
+- Metaverse and Maps CI attempts currently report failed jobs with zero steps and unavailable logs. They are not evidence of code-level failures or passes. PRs remain Draft and unmerged.
+
+### Production boundary
+- SQLite trust registries are interoperable durable prototypes, not a replicated trust control plane. KMS/HSM key custody, governed administrative IAM, revocation distribution, external/WORM audit anchoring and backup/restore remain open.
+- Payment receipt verification and PostGIS access in the E2E test are explicit test adapters; no live PSP/bank or production PostGIS is claimed.
